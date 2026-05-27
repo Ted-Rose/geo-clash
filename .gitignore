@@ -4,3 +4,8 @@ dist
 *.log
 .env
 terraform/terraform.tfvars
+terraform/.terraform/
+terraform/.terraform.lock.hcl
+terraform/*.tfstate
+terraform/*.tfstate.backup
+terraform/crash.log
