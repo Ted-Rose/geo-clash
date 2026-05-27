@@ -1,0 +1,12 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+html, body, #root { height: 100%; }
+body { margin: 0; overscroll-behavior: none; }
+
+/* Leaflet wants an explicit height */
+.leaflet-container { width: 100%; height: 100%; background: #0f172a; }
+
+/* keep map controls below our HUD overlay */
+.leaflet-top, .leaflet-bottom { z-index: 400; }
