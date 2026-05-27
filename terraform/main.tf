@@ -37,25 +37,6 @@ resource "google_artifact_registry_repository" "server" {
   location      = var.region
   format        = "DOCKER"
   description   = "Geo Clash server images"
-
-  # Keep only the 3 most recent image versions; delete everything else.
-  cleanup_policy_dry_run = false
-
-  cleanup_policies {
-    id     = "keep-3-latest"
-    action = "KEEP"
-    condition {
-      newer_version_count = 3
-    }
-  }
-
-  cleanup_policies {
-    id     = "delete-old"
-    action = "DELETE"
-    condition {
-      tag_state = "ANY"
-    }
-  }
 }
 
 locals {
