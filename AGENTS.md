@@ -1,4 +1,4 @@
-# Agent Onboarding — Park Wars
+# Agent Onboarding — Geo Clash
 
 A short, durable orientation for AI coding agents. Read this first before touching
 the code. For human-facing usage, see `README.md`.

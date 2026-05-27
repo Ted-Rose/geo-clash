@@ -1,4 +1,4 @@
-// Park Wars server entrypoint.
+// Geo Clash server entrypoint.
 // Express for /health + static if ever needed; Socket.io for realtime.
 
 import http from 'http';
@@ -23,5 +23,5 @@ const game = new GameState(io);
 registerSocketHandlers(io, game);
 
 server.listen(PORT, () => {
-  console.log(`[park-wars] server listening on :${PORT}`);
+  console.log(`[geo-clash] server listening on :${PORT}`);
 });

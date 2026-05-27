@@ -1,4 +1,4 @@
-# Park Wars
+# Geo Clash
 
 > **Capture the real world, one 5×5 m square at a time.**
 > A mobile-first, real-time multiplayer territory game played on top of OpenStreetMap.
