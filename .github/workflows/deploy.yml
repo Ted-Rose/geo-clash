@@ -36,6 +36,13 @@ jobs:
           docker push    ${{ env.IMAGE_BASE }}:${TAG}
           echo "IMAGE_TAG=${TAG}" >> $GITHUB_ENV
 
+      - name: Bootstrap GCP APIs
+        run: |
+          gcloud services enable cloudresourcemanager.googleapis.com
+          gcloud services enable iam.googleapis.com
+        env:
+          CLOUDSDK_CORE_PROJECT: ${{ env.PROJECT }}
+
       - name: Setup Terraform
         uses: hashicorp/setup-terraform@v3
         with:
