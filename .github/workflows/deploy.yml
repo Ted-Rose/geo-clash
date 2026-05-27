@@ -1,0 +1,56 @@
+name: Deploy
+
+on:
+  push:
+    branches: [main]
+
+env:
+  PROJECT: geo-clash-gc798
+  REGION: europe-north2        # update to match your chosen region
+  IMAGE_BASE: europe-north2-docker.pkg.dev/geo-clash-gc798/geo-clash/server
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Authenticate to GCP
+        uses: google-github-actions/auth@v2
+        with:
+          credentials_json: ${{ secrets.GCP_SA_KEY }}
+
+      - name: Configure Docker for Artifact Registry
+        run: >
+          gcloud auth configure-docker
+          ${{ env.REGION }}-docker.pkg.dev --quiet
+
+      - name: Build & push Docker image
+        run: |
+          TAG=$(git rev-parse --short HEAD)
+          docker build -t ${{ env.IMAGE_BASE }}:${TAG} ./server
+          docker push    ${{ env.IMAGE_BASE }}:${TAG}
+          echo "IMAGE_TAG=${TAG}" >> $GITHUB_ENV
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: "~> 1.7"
+
+      - name: Terraform init
+        run: terraform init
+        working-directory: terraform
+
+      - name: Terraform apply
+        run: >
+          terraform apply -auto-approve
+          -var="image_tag=${{ env.IMAGE_TAG }}"
+        working-directory: terraform
+        env:
+          TF_VAR_project: ${{ env.PROJECT }}
+          TF_VAR_region: ${{ env.REGION }}
+          TF_VAR_valkey_url: ${{ secrets.VALKEY_URL }}
+          TF_VAR_cors_origin: ${{ secrets.CORS_ORIGIN }}

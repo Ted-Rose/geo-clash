@@ -9,14 +9,15 @@ import { GameState } from './gameState.js';
 import { registerSocketHandlers } from './socketHandlers.js';
 
 const PORT = process.env.PORT || 3001;
+const CORS_ORIGIN = process.env.CORS_ORIGIN || true; // true = reflect all (dev)
 
 const app = express();
-app.use(cors());
+app.use(cors({ origin: CORS_ORIGIN }));
 app.get('/health', (_req, res) => res.json({ ok: true }));
 
 const server = http.createServer(app);
 const io = new IOServer(server, {
-  cors: { origin: true, credentials: false },
+  cors: { origin: CORS_ORIGIN, credentials: false },
 });
 
 const game = new GameState(io);

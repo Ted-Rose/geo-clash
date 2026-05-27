@@ -1,4 +1,8 @@
 import { io } from 'socket.io-client';
 
-// Same-origin in dev (vite proxy) and prod (server can host static).
-export const socket = io('/', { autoConnect: true, transports: ['websocket', 'polling'] });
+const SERVER_URL = import.meta.env.VITE_SERVER_URL || '/';
+
+export const socket = io(SERVER_URL, {
+  autoConnect: true,
+  transports: ['websocket', 'polling'],
+});

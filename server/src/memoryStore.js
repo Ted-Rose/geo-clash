@@ -2,6 +2,9 @@
 // later by re-implementing the same async-friendly surface (get/set/del/keys/all).
 // Calls are written as if they could be async so the consumer never changes.
 
+import { ValkeyStore } from './valkeyStore.js';
+import Redis from 'ioredis';
+
 export class MemoryStore {
   constructor() {
     this._map = new Map();
@@ -41,7 +44,23 @@ export class MemoryStore {
   }
 }
 
-// Singleton instances per logical "table". A real Redis swap would namespace these
-// with a key prefix (e.g. `players:${id}`) on a single connection.
-export const playerStore = new MemoryStore();
-export const gridStore = new MemoryStore();
+function makeStores() {
+  if (process.env.VALKEY_URL) {
+    const client = new Redis(process.env.VALKEY_URL, {
+      tls: {},            // Aiven requires TLS; ioredis honours rediss:// too
+      lazyConnect: false,
+    });
+    client.on('error', err => console.error('[valkey]', err.message));
+    return {
+      playerStore: new ValkeyStore('players', client),
+      gridStore:   new ValkeyStore('grid', client),
+    };
+  }
+  // Local dev: in-process Maps (no VALKEY_URL set)
+  return {
+    playerStore: new MemoryStore(),
+    gridStore:   new MemoryStore(),
+  };
+}
+
+export const { playerStore, gridStore } = makeStores();
