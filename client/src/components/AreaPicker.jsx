@@ -11,7 +11,7 @@ export default function AreaPicker({ onJoin, gpsReady, simulate, onToggleSim }) 
     <div className="absolute inset-0 z-[1000] bg-slate-900/95 backdrop-blur flex items-center justify-center p-6">
       <div className="bg-slate-800 rounded-2xl p-6 w-full max-w-sm shadow-2xl space-y-5">
         <div>
-          <h1 className="text-3xl font-extrabold tracking-tight">Park Wars</h1>
+          <h1 className="text-3xl font-extrabold tracking-tight">Parku Cīņas</h1>
           <p className="text-slate-400 text-sm mt-1">
             Stand in 5×5 m squares for 5 seconds to claim them. Most squares in 5
             minutes wins.
