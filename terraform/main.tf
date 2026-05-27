@@ -41,7 +41,11 @@ resource "google_artifact_registry_repository" "server" {
 
 locals {
   image_base = "${var.region}-docker.pkg.dev/${var.project}/geo-clash/server"
-  image      = "${local.image_base}:${var.image_tag}"
+  image = (
+    var.image_tag == "placeholder"
+    ? "us-docker.pkg.dev/cloudrun/container/hello:latest"
+    : "${local.image_base}:${var.image_tag}"
+  )
 }
 
 # ── Service account for Cloud Run ─────────────────────────────────────────────
