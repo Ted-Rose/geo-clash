@@ -38,6 +38,25 @@ resource "google_artifact_registry_repository" "server" {
   location      = var.region
   format        = "DOCKER"
   description   = "Geo Clash server images"
+
+  # Keep only the 3 most recent image versions; delete everything else.
+  cleanup_policy_dry_run = false
+
+  cleanup_policies {
+    id     = "keep-3-latest"
+    action = "KEEP"
+    most_recent_versions {
+      keep_count = 3
+    }
+  }
+
+  cleanup_policies {
+    id     = "delete-old"
+    action = "DELETE"
+    condition {
+      tag_state = "ANY"
+    }
+  }
 }
 
 locals {
@@ -88,6 +107,7 @@ resource "google_cloud_run_v2_service" "server" {
 
   template {
     service_account = google_service_account.cloud_run.email
+    timeout         = "3600s"  # allow long-lived Socket.io connections (up to 60 min)
 
     scaling {
       min_instance_count = 0  # scale to zero when idle — no cost at rest
@@ -121,6 +141,8 @@ resource "google_cloud_run_v2_service" "server" {
           cpu    = "1"
           memory = "512Mi"
         }
+        cpu_idle          = true  # bill CPU only while requests are in flight
+        startup_cpu_boost = true  # faster cold starts (free)
       }
     }
   }
