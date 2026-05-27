@@ -1,12 +1,13 @@
 {
-  "buildCommand": "npx expo export -p web",
-  "outputDirectory": "dist",
+  "installCommand": "npm --prefix client install",
+  "buildCommand": "npm --prefix client run build",
+  "outputDirectory": "client/dist",
   "cleanUrls": true,
   "framework": null,
   "rewrites": [
-    { 
-      "source": "/(.*)", 
-      "destination": "/" 
+    {
+      "source": "/(.*)",
+      "destination": "/index.html"
     }
   ]
 }
