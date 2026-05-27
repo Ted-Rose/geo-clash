@@ -3,7 +3,14 @@ import { useState } from 'react';
 // Pre-match screen. Lets the player set their name and (when GPS works) a
 // bounding side length in meters. The first `player-join` defines the arena
 // for everyone in this MVP — multi-arena rooms are out of scope.
-export default function AreaPicker({ onJoin, gpsReady, simulate, onToggleSim }) {
+export default function AreaPicker({
+  onJoin,
+  gpsReady,
+  simulate,
+  onToggleSim,
+  connected = true,
+  connectError = null,
+}) {
   const [name, setName] = useState('');
   const [side, setSide] = useState(120);
 
@@ -57,9 +64,18 @@ export default function AreaPicker({ onJoin, gpsReady, simulate, onToggleSim }) 
           </div>
         )}
 
+        {!connected && (
+          <div className="text-xs text-rose-300">
+            Not connected to game server
+            {connectError ? ` (${connectError})` : ''}. Check that
+            VITE_SERVER_URL points at your Cloud Run URL and that the server's
+            CORS_ORIGIN allows this site.
+          </div>
+        )}
+
         <button
           onClick={() => onJoin({ name: name.trim() || undefined, side })}
-          disabled={!gpsReady && !simulate}
+          disabled={(!gpsReady && !simulate) || !connected}
           className="w-full py-3 rounded-xl bg-cyan-500 disabled:bg-slate-600 text-slate-900 font-bold text-lg shadow active:scale-95 transition"
         >
           Enter the arena

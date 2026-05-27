@@ -31,6 +31,8 @@ export default function App() {
   // --- connection / identity ------------------------------------------------
   const [myId, setMyId] = useState(null);
   const [joined, setJoined] = useState(false);
+  const [connected, setConnected] = useState(socket.connected);
+  const [connectError, setConnectError] = useState(null);
 
   // --- server-driven state --------------------------------------------------
   const [grid, setGrid] = useState(null);
@@ -96,6 +98,23 @@ export default function App() {
       }, 400);
     }
 
+    function onConnect() {
+      setConnected(true);
+      setConnectError(null);
+    }
+    function onDisconnect() {
+      setConnected(false);
+    }
+    function onConnectError(err) {
+      setConnected(false);
+      setConnectError(err?.message || 'connect error');
+      // eslint-disable-next-line no-console
+      console.error('[geo-clash] socket connect_error:', err);
+    }
+
+    socket.on('connect', onConnect);
+    socket.on('disconnect', onDisconnect);
+    socket.on('connect_error', onConnectError);
     socket.on('snapshot', onSnapshot);
     socket.on('joined', onJoined);
     socket.on('players-update', onPlayers);
@@ -106,6 +125,9 @@ export default function App() {
     socket.on('player-attack', onAttack);
 
     return () => {
+      socket.off('connect', onConnect);
+      socket.off('disconnect', onDisconnect);
+      socket.off('connect_error', onConnectError);
       socket.off('snapshot', onSnapshot);
       socket.off('joined', onJoined);
       socket.off('players-update', onPlayers);
@@ -182,7 +204,18 @@ export default function App() {
 
   // --- actions ------------------------------------------------------------
   const handleJoin = ({ name }) => {
-    if (!position) return;
+    if (!position) {
+      // eslint-disable-next-line no-console
+      console.warn('[geo-clash] join blocked: no position yet');
+      return;
+    }
+    if (!socket.connected) {
+      // eslint-disable-next-line no-console
+      console.warn(
+        '[geo-clash] join blocked: socket not connected to server'
+      );
+      return;
+    }
     socket.emit('player-join', {
       name,
       lat: position.lat,
@@ -284,6 +317,8 @@ export default function App() {
           simulate={simulate}
           onToggleSim={() => setSimulate((s) => !s)}
           onJoin={handleJoin}
+          connected={connected}
+          connectError={connectError}
         />
       )}
     </div>

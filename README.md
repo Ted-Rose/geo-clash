@@ -30,6 +30,23 @@ npm run dev
 No GPS on desktop? Tick **Simulate Movement** in the UI and walk around with
 WASD. Spawn bots from the same panel to fill the arena.
 
+## Production deployment (Vercel + Cloud Run)
+The client and server are deployed to **different origins**, so two env vars are
+mandatory — without them, the realtime socket silently fails to handshake and
+the *Enter the arena* button does nothing.
+
+- **Vercel (client)** — set a Project env var:
+  - `VITE_SERVER_URL = https://<your-cloud-run-service>.run.app`
+  - It must be set for the *Production* (and *Preview*) build environment, then
+    redeploy. Without it, socket.io connects to the Vercel origin, the SPA
+    rewrite returns `index.html` for `/socket.io/...`, and the client stays
+    forever in a "connecting" state with no thrown error.
+- **Cloud Run (server)** — set:
+  - `CORS_ORIGIN = https://<your-vercel-domain>` (comma-separated list if you
+    have multiple, or a single value; the server reflects it for both Express
+    and Socket.io). Don't leave this unset in production — the dev default
+    reflects all origins, which you don't want in prod.
+
 ## Why it might be fun to build
 - Real-world gameplay without writing a single line of native code.
 - Tight, satisfying core loop — capture, shoot, shield, respawn.
