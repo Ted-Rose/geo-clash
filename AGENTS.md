@@ -115,5 +115,38 @@ Typical extension checklist:
 - Map rendering → client `MapView` component.
 - HUD / inputs → client `HUD`, `ControlPanel`, `SimPanel` components.
 
+## Feature Development, Planning, & Branch Management Workflow
+When instructed to implement a broader feature (anything requiring more than a
+few lines of code or necessitating multiple Git commits for proper tracking),
+strictly adhere to this multi-step workflow:
+
+**1. Planning Phase**
+Before writing any code, present a comprehensive implementation plan to the
+user for approval. Write the approved plan into a Markdown file (e.g.,
+`feature-plan.md`) at the project root. This file is the single source of
+truth and checklist for the implementation.
+
+**2. Branch Creation**
+Once the plan is finalized, create and switch to a new branch from `main`
+before making any code changes. Use a descriptive kebab-case name that
+reflects the feature (e.g., `feature/user-authentication`).
+
+**3. Incremental Implementation**
+Implement the feature step-by-step, strictly following the plan. Make
+frequent, atomic Git commits as each sub-task is completed. Each commit must
+represent a single cohesive change with a clear, descriptive message.
+
+**4. Review & Approval**
+Do not merge upon completing the code. Present the finished implementation to
+the user for final review and validation. Wait for explicit approval.
+
+**5. Integration & Cleanup**
+Once approved, perform all of the following in order:
+- Delete the temporary Markdown plan file from the project directory.
+- Squash-merge the development branch into `main` (one clean commit on `main`).
+- Delete the temporary development branch.
+
+---
+
 Keep this file short. If it gets long, that's a smell — push detail into code
 comments or `README.md`.
