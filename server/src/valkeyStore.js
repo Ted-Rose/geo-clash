@@ -1,5 +1,3 @@
-import Redis from 'ioredis';
-
 // Drop-in replacement for MemoryStore backed by Aiven Valkey.
 // Values are JSON-serialised since Valkey stores strings.
 export class ValkeyStore {
@@ -52,5 +50,45 @@ export class ValkeyStore {
   size() {
     // sync size not meaningful for a remote store; safe no-op
     return 0;
+  }
+}
+
+// Sorted-set wrapper. Score is numeric; member is a string. Used as the
+// persistent leaderboard backend so business code never touches ioredis
+// directly.
+export class ValkeyZSetStore {
+  constructor(key, client) {
+    this._key = key;
+    this._client = client;
+  }
+  async add(member, score) {
+    await this._client.zadd(this._key, score, member);
+  }
+  async addMany(pairs) {
+    if (!pairs.length) return;
+    const args = [];
+    for (const { member, score } of pairs) args.push(score, member);
+    await this._client.zadd(this._key, ...args);
+  }
+  async topRev(limit) {
+    const raw = await this._client.zrevrange(this._key, 0, limit - 1, 'WITHSCORES');
+    const out = [];
+    for (let i = 0; i < raw.length; i += 2) {
+      out.push({ member: raw[i], score: Number(raw[i + 1]) });
+    }
+    return out;
+  }
+  async members() {
+    return this._client.zrange(this._key, 0, -1);
+  }
+  async size() {
+    return this._client.zcard(this._key);
+  }
+  // Cap the set to `cap` highest-scoring entries by trimming the bottom.
+  async trimToCap(cap) {
+    return this._client.zremrangebyrank(this._key, 0, -1 - cap);
+  }
+  async clear() {
+    await this._client.del(this._key);
   }
 }

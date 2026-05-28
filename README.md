@@ -20,6 +20,34 @@ playtest it on a city block in five minutes.
   ready to swap when we outgrow a single process
 - **Geo** — Local equirectangular grid math (no heavy GIS deps)
 
+## Multi-room lobbies
+Geo Clash now supports concurrent matches in independent rooms.
+
+- On launch, the player lands on a **lobby** that lists every active room
+  (`name`, `playerCount/maxPlayers`, `status`). Long-press / right-click on the
+  in-game map drops a target marker for the deterministic-projectile attack.
+- Anyone can create a new room with a name, max capacity (default 8), and a
+  GPS-derived center point. Joining seeds the grid from the joiner's
+  location if the room hasn't picked one yet.
+- Matches are fully isolated: state, ticks, projectiles, and broadcasts are
+  scoped per-room via Socket.io rooms.
+- When the last player leaves a room (or the timer hits zero), the server
+  archives final per-player scores to a capped leaderboard store, purges all
+  runtime state, and removes the room.
+
+REST endpoints exposed by the server:
+- `GET  /api/rooms` — list active rooms
+- `POST /api/rooms` — create one (`{ name, centerLat, centerLng, maxPlayers }`)
+- `GET  /api/leaderboard?limit=N` — all-time top-N (capped, sorted desc)
+
+## Projectile model
+Attacks are committed by the server as small telemetry packets — `(origin,
+target, vMps, tSpawn, tArrival)` — and every client interpolates the arrow
+position locally. Clients run a one-shot `time-sync` round-trip to estimate
+their clock skew so the projection stays aligned with the server. Late
+joiners receive in-flight projectiles in the initial `snapshot` and pick up
+exactly where the existing players are watching.
+
 ## Run it locally
 ```bash
 npm run install:all

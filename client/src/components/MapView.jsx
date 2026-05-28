@@ -58,7 +58,8 @@ export default function MapView({
   me,
   myHeading,
   baseCellId,
-  arrows,
+  children,
+  onMapLongPress,
 }) {
   const center = useMemo(() => {
     if (me) return [me.lat, me.lng];
@@ -139,21 +140,27 @@ export default function MapView({
         </Marker>
       )}
 
-      {/* Arrow trails (briefly drawn after attacks) */}
-      {arrows?.map((a) => (
-        <Polygon
-          key={a.key}
-          positions={a.poly}
-          pathOptions={{
-            color: a.color,
-            weight: 2,
-            fillColor: a.color,
-            fillOpacity: 0.4,
-          }}
-        />
-      ))}
+      {/* Slot for transient overlays (projectile layer, target marker, …) */}
+      {children}
+
+      {onMapLongPress && <LongPressBinder onLongPress={onMapLongPress} />}
 
       <Recenter center={center} />
     </MapContainer>
   );
+}
+
+// Bind a long-press / right-click on the map to onLongPress({lat,lng}).
+// Plain Leaflet 'contextmenu' covers desktop right-click and mobile
+// long-press on most browsers via Leaflet's native handling.
+function LongPressBinder({ onLongPress }) {
+  const map = useMap();
+  useEffect(() => {
+    function handler(e) {
+      onLongPress({ lat: e.latlng.lat, lng: e.latlng.lng });
+    }
+    map.on('contextmenu', handler);
+    return () => { map.off('contextmenu', handler); };
+  }, [map, onLongPress]);
+  return null;
 }

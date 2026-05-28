@@ -3,7 +3,7 @@ import { useEffect, useState } from 'react';
 // Debug panel for localhost / desktop testing.
 // - WASD or arrow keys nudge a fake GPS position.
 // - "Add bot" spawns a roaming AI through a second socket connection.
-export default function SimPanel({ simPos, setSimPos, onSpawnBot, botCount }) {
+export default function SimPanel({ simPos, setSimPos, onSpawnBot, botCount, onAttackAtTarget, hasTarget }) {
   const [step, setStep] = useState(0.00005); // ~5.5m at the equator
 
   useEffect(() => {
@@ -52,6 +52,15 @@ export default function SimPanel({ simPos, setSimPos, onSpawnBot, botCount }) {
           + Bot ({botCount})
         </button>
       </div>
+      {onAttackAtTarget && (
+        <button
+          onClick={onAttackAtTarget}
+          disabled={!hasTarget}
+          className="w-full bg-rose-500 disabled:bg-slate-700 text-white font-semibold rounded px-2 py-1"
+        >
+          🏹 Attack at target {hasTarget ? '' : '(long-press map)'}
+        </button>
+      )}
       {simPos && (
         <div className="text-slate-500 tabular-nums">
           {simPos.lat.toFixed(6)}, {simPos.lng.toFixed(6)}
