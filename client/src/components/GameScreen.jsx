@@ -12,8 +12,8 @@ import PostMatchScreen from './PostMatchScreen.jsx';
 // In-game shell. All socket subscriptions are scoped to the lifetime of
 // this component (i.e. while a roomId is set). Leaving the room cleanly
 // unsubscribes and clears local state.
-export default function GameScreen({ roomId, position, simulate, simPos, setSimPos, onLeave }) {
-  const [myId, setMyId] = useState(null);
+export default function GameScreen({ roomId, position, simulate, simPos, setSimPos, initialSnapshot, onLeave }) {
+  const [myId, setMyId] = useState(() => socket.id);
   const [grid, setGrid] = useState(null);
   const [ownership, setOwnership] = useState([]);
   const [players, setPlayers] = useState([]);
@@ -27,6 +27,21 @@ export default function GameScreen({ roomId, position, simulate, simPos, setSimP
   const [matchEnded, setMatchEnded] = useState(false);
   const [finalLeaderboard, setFinalLeaderboard] = useState(null);
   const [globalTop, setGlobalTop] = useState(null);
+
+  // Apply the snapshot that arrived in the room-join ack (before this
+  // component mounted, so the socket events were already missed).
+  useEffect(() => {
+    if (!initialSnapshot) return;
+    const s = initialSnapshot;
+    if (s.grid) setGrid(s.grid);
+    if (s.ownership) setOwnership(s.ownership);
+    if (s.players) setPlayers(s.players);
+    if (s.scores) setScores(s.scores);
+    if (typeof s.remainingSeconds === 'number') setRemainingSeconds(s.remainingSeconds);
+    if (Array.isArray(s.projectiles)) setProjectiles(s.projectiles);
+    if (typeof s.serverNow === 'number') setSkewMs(s.serverNow - Date.now());
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // Wire socket events for the active room.
   useEffect(() => {

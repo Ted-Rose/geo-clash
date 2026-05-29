@@ -48,7 +48,7 @@ export default function LobbyScreen({
       },
       (ack) => {
         setBusy(false);
-        if (ack?.ok) onJoined({ roomId });
+        if (ack?.ok) onJoined({ roomId, snapshot: ack.snapshot });
         else setError(ack?.reason || 'join failed');
       }
     );
@@ -82,7 +82,7 @@ export default function LobbyScreen({
           },
           (jack) => {
             setBusy(false);
-            if (jack?.ok) onJoined({ roomId: ack.room.id });
+            if (jack?.ok) onJoined({ roomId: ack.room.id, snapshot: jack.snapshot });
             else setError(jack?.reason || 'join failed');
           }
         );

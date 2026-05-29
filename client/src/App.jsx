@@ -8,6 +8,7 @@ export default function App() {
   const [connected, setConnected] = useState(socket.connected);
   const [connectError, setConnectError] = useState(null);
   const [roomId, setRoomId] = useState(null);
+  const [initialSnapshot, setInitialSnapshot] = useState(null);
 
   // Lift sim/GPS state here so the Lobby and the Game share the same
   // position source. The Game also needs `simulate`/`simPos` to render the
@@ -49,7 +50,10 @@ export default function App() {
         simPos={simPos}
         setSimPos={setSimPos}
         position={position}
-        onJoined={({ roomId: id }) => setRoomId(id)}
+        onJoined={({ roomId: id, snapshot }) => {
+          setInitialSnapshot(snapshot || null);
+          setRoomId(id);
+        }}
       />
     );
   }
@@ -62,6 +66,7 @@ export default function App() {
       simulate={simulate}
       simPos={simPos}
       setSimPos={setSimPos}
+      initialSnapshot={initialSnapshot}
       onLeave={() => setRoomId(null)}
     />
   );
