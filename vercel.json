@@ -1,9 +1,33 @@
 {
   "installCommand": "npm --prefix client install",
-  "buildCommand": "npm --prefix client run build",
+  "buildCommand": "npm --prefix client run pwa-assets && npm --prefix client run build",
   "outputDirectory": "client/dist",
   "cleanUrls": true,
   "framework": null,
+  "headers": [
+    {
+      "source": "/sw.js",
+      "headers": [
+        {
+          "key": "Cache-Control",
+          "value": "no-cache, no-store, must-revalidate"
+        },
+        {
+          "key": "Service-Worker-Allowed",
+          "value": "/"
+        }
+      ]
+    },
+    {
+      "source": "/workbox-(.*).js",
+      "headers": [
+        {
+          "key": "Cache-Control",
+          "value": "no-cache, no-store, must-revalidate"
+        }
+      ]
+    }
+  ],
   "rewrites": [
     {
       "source": "/(.*)",

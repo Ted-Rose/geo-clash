@@ -6,7 +6,8 @@
   "scripts": {
     "dev": "vite --host",
     "build": "vite build",
-    "preview": "vite preview --host"
+    "preview": "vite preview --host",
+    "pwa-assets": "pwa-assets-generator --preset minimal public/favicon.svg"
   },
   "dependencies": {
     "leaflet": "^1.9.4",
@@ -17,9 +18,11 @@
   },
   "devDependencies": {
     "@vitejs/plugin-react": "^4.3.1",
+    "@vite-pwa/assets-generator": "^0.2.6",
     "autoprefixer": "^10.4.20",
     "postcss": "^8.4.47",
     "tailwindcss": "^3.4.13",
-    "vite": "^5.4.8"
+    "vite": "^5.4.8",
+    "vite-plugin-pwa": "^0.21.0"
   }
 }
