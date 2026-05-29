@@ -73,11 +73,17 @@ function playerIcon(color, heading, isMe, shieldActive, alive) {
     ? '0 0 5px rgba(0,0,0,0.6)'
     : '0 0 3px rgba(0,0,0,0.45)';
   const opacity = alive === false ? 0.35 : 1;
+  const ringSize = circleD + (isMe ? 14 : 10);
+  const ringOffset = half - ringSize / 2;
+  const shieldRing = shieldActive
+    ? `<div class="shield-pulse" style="position:absolute;top:${ringOffset}px;left:${ringOffset}px;width:${ringSize}px;height:${ringSize}px;border-radius:50%;border:2px solid #fde047;box-shadow:0 0 6px 1px #fde04799;pointer-events:none;"></div>`
+    : '';
   return L.divIcon({
     className: '',
     iconSize:   [size, size],
     iconAnchor: [half, half],
     html: `<div style="width:${size}px;height:${size}px;position:relative;transform:rotate(${heading || 0}deg);opacity:${opacity};">
+      ${shieldRing}
       <div style="position:absolute;top:0;left:50%;transform:translateX(-50%);width:0;height:0;border-left:${arrowW}px solid transparent;border-right:${arrowW}px solid transparent;border-bottom:${arrowH + 1}px solid ${color};"></div>
       <div style="position:absolute;top:${half - circleR}px;left:${half - circleR}px;width:${circleD}px;height:${circleD}px;border-radius:50%;background:${color};border:${borderW}px solid ${borderColor};box-shadow:${shadow};"></div>
     </div>`,

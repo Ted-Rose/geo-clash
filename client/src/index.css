@@ -10,3 +10,12 @@ body { margin: 0; overscroll-behavior: none; }
 
 /* keep map controls below our HUD overlay */
 .leaflet-top, .leaflet-bottom { z-index: 400; }
+
+/* Shield pulsing ring on player markers */
+@keyframes shield-pulse {
+  0%, 100% { opacity: 0.85; transform: scale(1); }
+  50%       { opacity: 0.2;  transform: scale(1.35); }
+}
+.shield-pulse {
+  animation: shield-pulse 1.2s ease-in-out infinite;
+}
