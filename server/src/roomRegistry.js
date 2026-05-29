@@ -34,6 +34,10 @@ class RoomIndex {
     if (this._redis) return this._redis.smembers(INDEX_KEY);
     return [...this._local];
   }
+  async clear() {
+    if (this._redis) await this._redis.del(INDEX_KEY);
+    else this._local.clear();
+  }
 }
 
 export class RoomRegistry {
@@ -49,6 +53,16 @@ export class RoomRegistry {
   }
 
   // ---- public API --------------------------------------------------------
+
+  // Purge any room meta/index left in Valkey from a previous server process.
+  // Must be called once on startup before accepting connections.
+  async init() {
+    const ids = await this._index.members();
+    for (const id of ids) {
+      await this._metaStore.del(id);
+    }
+    await this._index.clear();
+  }
 
   async list() {
     const ids = await this._index.members();

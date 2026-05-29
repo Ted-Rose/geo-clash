@@ -37,6 +37,7 @@ const io = new IOServer(server, {
 });
 
 const registry = new RoomRegistry(io);
+await registry.init();
 
 // ---- REST: lobby --------------------------------------------------------
 

@@ -11,11 +11,11 @@ import {
 import L from 'leaflet';
 
 // Auto-recenters the map when the local player's position changes meaningfully.
-function Recenter({ center }) {
+function Recenter({ center, mapLocked }) {
   const map = useMap();
   const last = useRef(null);
   useEffect(() => {
-    if (!center) return;
+    if (mapLocked || !center) return;
     const [lat, lng] = center;
     if (!last.current) {
       map.setView([lat, lng], 19);
@@ -25,7 +25,33 @@ function Recenter({ center }) {
       if (d > 0.00005) map.panTo([lat, lng], { animate: true });
     }
     last.current = [lat, lng];
-  }, [center, map]);
+  }, [center, map, mapLocked]);
+  return null;
+}
+
+// Fits the map to the arena bounding box and locks/unlocks interactions.
+function MapController({ grid, mapLocked }) {
+  const map = useMap();
+  useEffect(() => {
+    if (mapLocked && grid) {
+      const { south, north, west, east } = grid.bbox;
+      map.fitBounds(
+        [[south, west], [north, east]],
+        { padding: [16, 16], animate: true }
+      );
+      map.dragging.disable();
+      map.scrollWheelZoom.disable();
+      map.doubleClickZoom.disable();
+      map.touchZoom.disable();
+      map.boxZoom.disable();
+    } else {
+      map.dragging.enable();
+      map.scrollWheelZoom.enable();
+      map.doubleClickZoom.enable();
+      map.touchZoom.enable();
+      map.boxZoom.enable();
+    }
+  }, [mapLocked, grid, map]);
   return null;
 }
 
@@ -67,6 +93,7 @@ export default function MapView({
   baseCellId,
   children,
   onMapLongPress,
+  mapLocked,
 }) {
   const center = useMemo(() => {
     if (me) return [me.lat, me.lng];
@@ -146,7 +173,8 @@ export default function MapView({
 
       {onMapLongPress && <LongPressBinder onLongPress={onMapLongPress} />}
 
-      <Recenter center={center} />
+      <MapController grid={grid} mapLocked={mapLocked} />
+      <Recenter center={center} mapLocked={mapLocked} />
     </MapContainer>
   );
 }

@@ -27,6 +27,8 @@ export default function GameScreen({ roomId, position, simulate, simPos, setSimP
   const [matchEnded, setMatchEnded] = useState(false);
   const [finalLeaderboard, setFinalLeaderboard] = useState(null);
   const [globalTop, setGlobalTop] = useState(null);
+  const [mapLocked, setMapLocked] = useState(true);
+  const [menuOpen, setMenuOpen] = useState(false);
 
   // Apply the snapshot that arrived in the room-join ack (before this
   // component mounted, so the socket events were already missed).
@@ -242,6 +244,7 @@ export default function GameScreen({ roomId, position, simulate, simPos, setSimP
         myHeading={position?.heading ?? 0}
         baseCellId={grid?.baseCellId}
         onMapLongPress={(latlng) => setTarget(latlng)}
+        mapLocked={mapLocked}
       >
         <ProjectileLayer projectiles={projectiles} skewMs={skewMs} />
         {target && (
@@ -269,12 +272,43 @@ export default function GameScreen({ roomId, position, simulate, simPos, setSimP
         leaderboard={leaderboard}
       />
 
-      <button
-        onClick={onLeave}
-        className="absolute top-3 right-3 z-[600] bg-slate-900/85 backdrop-blur rounded-full px-3 py-1 text-xs text-slate-200 hover:bg-slate-800 active:scale-95 transition shadow-lg"
-      >
-        ⤺ Leave
-      </button>
+      {/* Click-outside overlay */}
+      {menuOpen && (
+        <div
+          className="fixed inset-0 z-[600]"
+          onClick={() => setMenuOpen(false)}
+        />
+      )}
+
+      {/* Burger menu */}
+      <div className="absolute top-3 left-3 z-[601]">
+        <button
+          onClick={() => setMenuOpen((o) => !o)}
+          className="w-11 h-11 flex items-center justify-center bg-slate-900/85 backdrop-blur rounded-xl shadow-lg text-slate-200 text-xl active:scale-95 transition"
+          aria-label="Menu"
+        >
+          ☰
+        </button>
+        {menuOpen && (
+          <div className="mt-2 bg-slate-900/95 backdrop-blur rounded-xl shadow-xl p-2 flex flex-col gap-1 min-w-[160px]">
+            <button
+              onClick={() => { setMenuOpen(false); onLeave(); }}
+              className="w-full text-left px-3 py-2 rounded-lg text-slate-200 hover:bg-slate-700 active:scale-95 transition text-sm"
+            >
+              ⤺ Leave
+            </button>
+            <label className="flex items-center gap-2 px-3 py-2 rounded-lg hover:bg-slate-700 cursor-pointer text-sm text-slate-200 select-none">
+              <input
+                type="checkbox"
+                checked={mapLocked}
+                onChange={(e) => setMapLocked(e.target.checked)}
+                className="w-4 h-4 accent-cyan-400"
+              />
+              Lock map view
+            </label>
+          </div>
+        )}
+      </div>
 
       <ControlPanel
         me={me}
@@ -299,7 +333,7 @@ export default function GameScreen({ roomId, position, simulate, simPos, setSimP
       {target && (
         <button
           onClick={() => setTarget(null)}
-          className="absolute top-3 left-3 z-[600] bg-yellow-400/90 text-slate-900 rounded-full px-3 py-1 text-xs font-semibold shadow-lg active:scale-95 transition"
+          className="absolute top-3 right-3 z-[600] bg-yellow-400/90 text-slate-900 rounded-full px-3 py-1 text-xs font-semibold shadow-lg active:scale-95 transition"
         >
           ✕ clear target
         </button>

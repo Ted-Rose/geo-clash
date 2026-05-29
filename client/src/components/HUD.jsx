@@ -2,7 +2,7 @@ export default function HUD({ remainingSeconds, me, mySquares, leaderboard }) {
   const mm = Math.floor((remainingSeconds || 0) / 60);
   const ss = Math.floor((remainingSeconds || 0) % 60).toString().padStart(2, '0');
   return (
-    <div className="pointer-events-none absolute top-0 left-0 right-0 z-[500] p-3 flex justify-between gap-3">
+    <div className="pointer-events-none absolute top-0 left-0 right-0 z-[500] pt-3 pr-3 pb-3 pl-14 flex justify-between gap-3">
       <div className="bg-slate-900/85 backdrop-blur rounded-xl px-3 py-2 shadow-lg">
         <div className="text-xs uppercase tracking-wider text-slate-400">Time</div>
         <div className="text-2xl font-bold tabular-nums">
