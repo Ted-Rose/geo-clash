@@ -65,7 +65,7 @@ export class RoomRegistry {
     return this._rooms.get(roomId) || null;
   }
 
-  async create({ name, hostId, centerLat, centerLng, maxPlayers = 8 }) {
+  async create({ name, hostId, centerLat, centerLng, maxPlayers = 8, cellSize = 10, squaresPerSide = 10 }) {
     return this._lock.withLock('create', async () => {
       const id = ulid();
       const meta = {
@@ -86,6 +86,8 @@ export class RoomRegistry {
         roomName: meta.name,
         stores,
         onEnd: () => { this.destroy(id).catch(() => {}); },
+        cellSize,
+        squaresPerSide,
       });
       if (typeof centerLat === 'number' && typeof centerLng === 'number') {
         await game.initGrid(centerLat, centerLng);

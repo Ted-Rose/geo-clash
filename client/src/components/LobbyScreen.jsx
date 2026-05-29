@@ -18,6 +18,8 @@ export default function LobbyScreen({
   const { rooms, loading, refresh } = useRooms();
   const [name, setName] = useState('');
   const [newRoomName, setNewRoomName] = useState('');
+  const [cellSize, setCellSize] = useState(10);
+  const [squaresPerSide, setSquaresPerSide] = useState(10);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState(null);
 
@@ -64,6 +66,8 @@ export default function LobbyScreen({
         name: newRoomName.trim() || undefined,
         centerLat: position.lat,
         centerLng: position.lng,
+        cellSize,
+        squaresPerSide,
       },
       (ack) => {
         if (!ack?.ok) {
@@ -191,6 +195,47 @@ export default function LobbyScreen({
               placeholder="Room name (optional)"
               className="w-full px-3 py-3 rounded-lg bg-slate-900 border border-slate-700 focus:outline-none focus:ring-2 focus:ring-cyan-500 text-base"
             />
+            <label className="block">
+              <div className="flex justify-between text-sm text-slate-300 mb-1">
+                <span>Square size</span>
+                <span className="font-mono text-cyan-400">{cellSize}×{cellSize} m</span>
+              </div>
+              <input
+                type="range"
+                min={5}
+                max={30}
+                step={5}
+                value={cellSize}
+                onChange={(e) => setCellSize(Number(e.target.value))}
+                className="w-full accent-cyan-500"
+              />
+              <div className="flex justify-between text-xs text-slate-500 mt-0.5">
+                <span>5 m</span>
+                <span>30 m</span>
+              </div>
+            </label>
+            <label className="block">
+              <div className="flex justify-between text-sm text-slate-300 mb-1">
+                <span>Square count</span>
+                <span className="font-mono text-cyan-400">
+                  {squaresPerSide}×{squaresPerSide} ={' '}
+                  {squaresPerSide * squaresPerSide} squares
+                </span>
+              </div>
+              <input
+                type="range"
+                min={5}
+                max={20}
+                step={1}
+                value={squaresPerSide}
+                onChange={(e) => setSquaresPerSide(Number(e.target.value))}
+                className="w-full accent-cyan-500"
+              />
+              <div className="flex justify-between text-xs text-slate-500 mt-0.5">
+                <span>5×5</span>
+                <span>20×20</span>
+              </div>
+            </label>
             <button
               onClick={createRoom}
               disabled={!ready}

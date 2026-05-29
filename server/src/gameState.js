@@ -44,7 +44,7 @@ export class GameState {
   // - `stores` is the per-room collection bundle from `makeRoomStores`. If
   //   omitted, a fresh bundle is minted for this roomId so older callers
   //   (e.g. unit tests) can still construct without plumbing stores.
-  constructor({ io, roomId, stores, roomName, onEnd } = {}) {
+  constructor({ io, roomId, stores, roomName, onEnd, cellSize = 10, squaresPerSide = 10 } = {}) {
     if (!io) throw new Error('GameState: io required');
     if (!roomId) throw new Error('GameState: roomId required');
     this.io = io;
@@ -56,6 +56,8 @@ export class GameState {
     this.projectileStore = s.projectileStore;
     this._onEnd = onEnd || null;
     this.status = 'lobby'; // 'lobby' | 'active' | 'ending' | 'ended'
+    this.cellSize = cellSize;
+    this.squaresPerSide = squaresPerSide;
     this.grid = null;
     this.baseCellId = null;
     this.matchActive = false;
@@ -71,9 +73,10 @@ export class GameState {
 
   // ---- bootstrap ---------------------------------------------------------
 
-  async initGrid(centerLat, centerLng, sideMeters = 120) {
-    const bbox = bboxAround(centerLat, centerLng, sideMeters);
-    this.grid = buildGrid(bbox);
+  async initGrid(centerLat, centerLng, sideMeters) {
+    const side = sideMeters ?? this.squaresPerSide * this.cellSize;
+    const bbox = bboxAround(centerLat, centerLng, side);
+    this.grid = buildGrid(bbox, this.cellSize);
     this.baseCellId = baseCellId(this.grid);
     await this.gridStore.clear();
     // Each cell entry: { ownerId, color, progress: { playerId, color, elapsedMs } | null }

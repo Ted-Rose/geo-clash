@@ -23,6 +23,8 @@ export function registerSocketHandlers(io, registry) {
           centerLat: payload?.centerLat,
           centerLng: payload?.centerLng,
           maxPlayers: payload?.maxPlayers,
+          cellSize: payload?.cellSize,
+          squaresPerSide: payload?.squaresPerSide,
         });
         if (typeof ack === 'function') ack({ ok: true, room });
       } catch (err) {
