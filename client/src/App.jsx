@@ -2,12 +2,19 @@ import { useEffect, useState } from 'react';
 import { socket } from './socket.js';
 import { useGeolocation } from './hooks/useGeolocation.js';
 import LobbyScreen from './components/LobbyScreen.jsx';
-import GameScreen from './components/GameScreen.jsx';
+import ClashGameScreen from './clash/GameScreen.jsx';
+import SnakeGameScreen from './snake/GameScreen.jsx';
+
+const GAME_SCREENS = {
+  clash: ClashGameScreen,
+  snake: SnakeGameScreen,
+};
 
 export default function App() {
   const [connected, setConnected] = useState(socket.connected);
   const [connectError, setConnectError] = useState(null);
   const [roomId, setRoomId] = useState(null);
+  const [room, setRoom] = useState(null);
   const [initialSnapshot, setInitialSnapshot] = useState(null);
 
   // Lift sim/GPS state here so the Lobby and the Game share the same
@@ -50,24 +57,27 @@ export default function App() {
         simPos={simPos}
         setSimPos={setSimPos}
         position={position}
-        onJoined={({ roomId: id, snapshot }) => {
+        onJoined={({ roomId: id, room: r, snapshot }) => {
           setInitialSnapshot(snapshot || null);
           setRoomId(id);
+          setRoom(r || null);
         }}
       />
     );
   }
 
+  const GameScreen = GAME_SCREENS[room?.gameType] || ClashGameScreen;
   return (
     <GameScreen
       key={roomId}
       roomId={roomId}
+      room={room}
       position={position}
       simulate={simulate}
       simPos={simPos}
       setSimPos={setSimPos}
       initialSnapshot={initialSnapshot}
-      onLeave={() => setRoomId(null)}
+      onLeave={() => { setRoomId(null); setRoom(null); }}
     />
   );
 }
