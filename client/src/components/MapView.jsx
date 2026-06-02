@@ -3,7 +3,6 @@ import {
   MapContainer,
   TileLayer,
   Polygon,
-  Tooltip,
   useMap,
   Marker,
   Popup,
@@ -58,10 +57,10 @@ function MapController({ grid, mapLocked }) {
 // Directional player icon: circle body (at icon centre) with an arrow tip
 // pointing in the heading direction. Rotation is around the circle centre so
 // the marker stays on the player's exact map position regardless of heading.
-function playerIcon(color, heading, isMe, shieldActive, alive) {
-  const size    = isMe ? 38 : 30;
+function playerIcon(color, heading, isMe, shieldActive, alive, lives) {
+  const size    = isMe ? 42 : 34;
   const half    = size / 2;
-  const circleD = isMe ? 20 : 14;
+  const circleD = isMe ? 26 : 20;
   const circleR = circleD / 2;
   const arrowH  = half - circleR;        // space above the circle
   const arrowW  = isMe ? 7 : 5;          // half-width of the arrow base
@@ -73,6 +72,15 @@ function playerIcon(color, heading, isMe, shieldActive, alive) {
     ? '0 0 5px rgba(0,0,0,0.6)'
     : '0 0 3px rgba(0,0,0,0.45)';
   const opacity = alive === false ? 0.35 : 1;
+  const livesRatio = alive === false
+    ? 0
+    : Math.max(0, Math.min(3, lives ?? 3)) / 3;
+  const degrees = livesRatio * 360;
+  const circleBg = livesRatio === 0
+    ? '#6b7280'
+    : livesRatio >= 1
+    ? color
+    : `conic-gradient(${color} ${degrees}deg, #374151 ${degrees}deg)`;
   const ringSize = circleD + (isMe ? 14 : 10);
   const ringOffset = half - ringSize / 2;
   const shieldRing = shieldActive
@@ -85,7 +93,7 @@ function playerIcon(color, heading, isMe, shieldActive, alive) {
     html: `<div style="width:${size}px;height:${size}px;position:relative;transform:rotate(${heading || 0}deg);opacity:${opacity};">
       ${shieldRing}
       <div style="position:absolute;top:0;left:50%;transform:translateX(-50%);width:0;height:0;border-left:${arrowW}px solid transparent;border-right:${arrowW}px solid transparent;border-bottom:${arrowH + 1}px solid ${color};"></div>
-      <div style="position:absolute;top:${half - circleR}px;left:${half - circleR}px;width:${circleD}px;height:${circleD}px;border-radius:50%;background:${color};border:${borderW}px solid ${borderColor};box-shadow:${shadow};"></div>
+      <div style="position:absolute;top:${half - circleR}px;left:${half - circleR}px;width:${circleD}px;height:${circleD}px;border-radius:50%;background:${circleBg};border:${borderW}px solid ${borderColor};box-shadow:${shadow};"></div>
     </div>`,
   });
 }
@@ -156,19 +164,15 @@ export default function MapView({
         <Marker
           key={p.id}
           position={[p.lat, p.lng]}
-          icon={playerIcon(p.color, p.heading, false, p.shieldActive, p.alive)}
-        >
-          <Tooltip permanent direction="top" offset={[0, -10]}>
-            <span className="text-xs">{p.name} ❤{p.lives}</span>
-          </Tooltip>
-        </Marker>
+          icon={playerIcon(p.color, p.heading, false, p.shieldActive, p.alive, p.lives)}
+        />
       ))}
 
       {/* Local player – larger icon, direction always current */}
       {me && (
         <Marker
           position={[me.lat, me.lng]}
-          icon={playerIcon(me.color || '#22d3ee', myHeading, true, me.shieldActive, me.alive)}
+          icon={playerIcon(me.color || '#22d3ee', myHeading, true, me.shieldActive, me.alive, me.lives)}
         >
           <Popup>You ({me.name})</Popup>
         </Marker>
