@@ -290,7 +290,7 @@ export default function GameScreen({ roomId, position, simulate, simPos, setSimP
           ☰
         </button>
         {menuOpen && (
-          <div className="mt-2 bg-slate-900/95 backdrop-blur rounded-xl shadow-xl p-2 flex flex-col gap-1 min-w-[160px]">
+          <div className="mt-2 bg-slate-900/95 backdrop-blur rounded-xl shadow-xl p-2 flex flex-col gap-1 min-w-[180px]">
             <button
               onClick={() => { setMenuOpen(false); onLeave(); }}
               className="w-full text-left px-3 py-2 rounded-lg text-slate-200 hover:bg-slate-700 active:scale-95 transition text-sm"
@@ -306,6 +306,22 @@ export default function GameScreen({ roomId, position, simulate, simPos, setSimP
               />
               Lock map view
             </label>
+            {players.length > 0 && (
+              <>
+                <div className="border-t border-slate-700 my-1" />
+                <div className="px-3 py-1 text-xs uppercase tracking-wider text-slate-500">Players</div>
+                {players.map((p) => (
+                  <div key={p.id} className="flex items-center gap-2 px-3 py-1.5 text-sm text-slate-200">
+                    <span
+                      className="inline-block w-3 h-3 rounded-full flex-shrink-0"
+                      style={{ background: p.color || '#94a3b8' }}
+                    />
+                    <span className={p.id === myId ? 'font-semibold' : ''}>{p.name}</span>
+                    {p.id === myId && <span className="ml-auto text-xs text-slate-400">(you)</span>}
+                  </div>
+                ))}
+              </>
+            )}
           </div>
         )}
       </div>
