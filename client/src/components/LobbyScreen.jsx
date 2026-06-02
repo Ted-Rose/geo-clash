@@ -23,6 +23,7 @@ export default function LobbyScreen({
   const [createGameType, setCreateGameType] = useState('clash');
   const [foodCount, setFoodCount] = useState(10);
   const [foodRespawnSec, setFoodRespawnSec] = useState(2);
+  const [arenaSideMeters, setArenaSideMeters] = useState(200);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState(null);
 
@@ -82,6 +83,7 @@ export default function LobbyScreen({
         ...(createGameType === 'snake' && {
           foodCountTarget: foodCount,
           foodRespawnIntervalMs: foodRespawnSec * 1000,
+          arenaSideMeters,
         }),
       },
       (ack) => {
@@ -197,7 +199,7 @@ export default function LobbyScreen({
                         <span className="text-xs text-slate-400">
                           {r.playerCount}/{r.maxPlayers} · {r.status}
                           {r.gameType === 'snake' && r.foodCountTarget != null && (
-                            <> · {r.foodCountTarget} food · respawn {r.foodRespawnIntervalMs / 1000} s</>
+                            <> · {r.arenaSideMeters ?? 200}m · {r.foodCountTarget} food · {r.foodRespawnIntervalMs / 1000}s</>
                           )}
                         </span>
                       </span>
@@ -286,6 +288,25 @@ export default function LobbyScreen({
             )}
             {createGameType === 'snake' && (
               <>
+                <label className="block">
+                  <div className="flex justify-between text-sm text-slate-300 mb-1">
+                    <span>Arena size</span>
+                    <span className="font-mono text-cyan-400">{arenaSideMeters} m²</span>
+                  </div>
+                  <input
+                    type="range"
+                    min={50}
+                    max={500}
+                    step={50}
+                    value={arenaSideMeters}
+                    onChange={(e) => setArenaSideMeters(Number(e.target.value))}
+                    className="w-full accent-cyan-500"
+                  />
+                  <div className="flex justify-between text-xs text-slate-500 mt-0.5">
+                    <span>50 m</span>
+                    <span>500 m</span>
+                  </div>
+                </label>
                 <label className="block">
                   <div className="flex justify-between text-sm text-slate-300 mb-1">
                     <span>Food pellets</span>

@@ -53,6 +53,9 @@ export class SnakeGameState {
     this._centerLat = typeof centerLat === 'number' ? centerLat : null;
     this._centerLng = typeof centerLng === 'number' ? centerLng : null;
     this._arenaSideMeters = arenaSideMeters;
+    if (this._centerLat !== null && this._centerLng !== null) {
+      this._initArena(this._centerLat, this._centerLng);
+    }
   }
 
   _emit(event, payload) {

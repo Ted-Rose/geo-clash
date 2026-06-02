@@ -107,6 +107,7 @@ export class RoomRegistry {
         ...(gameType === 'snake' && {
           foodCountTarget: foodCountTarget ?? 10,
           foodRespawnIntervalMs: foodRespawnIntervalMs ?? 2000,
+          arenaSideMeters: arenaSideMeters ?? 200,
         }),
       };
       const stores = makeRoomStores(id);
