@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { RoomRegistry } from '../src/roomRegistry.js';
-import { leaderboardStore } from '../src/memoryStore.js';
+import { leaderboardStore } from '../src/shared/memoryStore.js';
 
 function makeIoStub() {
   const events = [];

@@ -70,6 +70,25 @@ test('RoomRegistry.join enforces capacity', async (t) => {
   assert.equal(c.reason, 'room-full');
 });
 
+test('RoomRegistry.create with unknown gameType throws', async () => {
+  const io = makeIoStub();
+  const reg = new RoomRegistry(io);
+  await assert.rejects(
+    () => reg.create({ name: 'snakeTest', gameType: 'unknown-game' }),
+    /unsupported-game-type/
+  );
+});
+
+test('RoomRegistry.create with gameType snake succeeds', async (t) => {
+  const io = makeIoStub();
+  const reg = new RoomRegistry(io);
+  const meta = await reg.create({ name: 'SnakeRoom', gameType: 'snake' });
+  t.after(() => reg.destroy(meta.id));
+  assert.equal(meta.gameType, 'snake');
+  const game = reg.get(meta.id);
+  assert.ok(game, 'snake game instance created');
+});
+
 test('RoomRegistry.destroy removes from list', async () => {
   const io = makeIoStub();
   const reg = new RoomRegistry(io);

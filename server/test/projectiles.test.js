@@ -5,10 +5,10 @@ import {
   isExpired,
   targetFromHeading,
   PROJECTILE_VMPS,
-} from '../src/projectiles.js';
-import { distanceMeters } from '../src/gridUtils.js';
-import { GameState } from '../src/gameState.js';
-import { makeRoomStores } from '../src/memoryStore.js';
+} from '../src/clash/projectiles.js';
+import { distanceMeters } from '../src/shared/gridUtils.js';
+import { GameState } from '../src/clash/gameState.js';
+import { makeRoomStores } from '../src/shared/memoryStore.js';
 
 function makeIo() {
   const events = [];

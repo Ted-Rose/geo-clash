@@ -5,7 +5,7 @@ import {
   MemoryLeaderboardStore,
   makeRoomStores,
   leaderboardStore,
-} from '../src/memoryStore.js';
+} from '../src/shared/memoryStore.js';
 
 test('makeRoomStores returns three independent stores', async () => {
   const a = makeRoomStores('A');
@@ -21,7 +21,7 @@ test('MemoryLeaderboardStore archives, sorts, caps', async () => {
   for (const [id, score] of [['a', 5], ['b', 2], ['c', 9], ['d', 1]]) {
     await lb.archive({
       playerId: id, matchId: 'm', name: id, color: '#fff',
-      squaresCaptured: score, finishedAt: 0, roomName: 'r',
+      score, metric: 'squares', gameType: 'clash', finishedAt: 0, roomName: 'r',
     });
   }
   const top = await lb.top(10);

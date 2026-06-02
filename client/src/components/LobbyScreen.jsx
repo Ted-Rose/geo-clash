@@ -20,6 +20,7 @@ export default function LobbyScreen({
   const [newRoomName, setNewRoomName] = useState('');
   const [cellSize, setCellSize] = useState(10);
   const [squaresPerSide, setSquaresPerSide] = useState(10);
+  const [createGameType, setCreateGameType] = useState('clash');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState(null);
 
@@ -50,7 +51,11 @@ export default function LobbyScreen({
       },
       (ack) => {
         setBusy(false);
-        if (ack?.ok) onJoined({ roomId, snapshot: ack.snapshot });
+        if (ack?.ok) onJoined({
+          roomId,
+          room: ack.room || rooms.find((r) => r.id === roomId),
+          snapshot: ack.snapshot,
+        });
         else {
           setError(ack?.reason || 'join failed');
           if (ack?.reason === 'no-such-room' || ack?.reason === 'ended') refresh();
@@ -71,6 +76,7 @@ export default function LobbyScreen({
         centerLng: position.lng,
         cellSize,
         squaresPerSide,
+        gameType: createGameType,
       },
       (ack) => {
         if (!ack?.ok) {
@@ -89,7 +95,11 @@ export default function LobbyScreen({
           },
           (jack) => {
             setBusy(false);
-            if (jack?.ok) onJoined({ roomId: ack.room.id, snapshot: jack.snapshot });
+            if (jack?.ok) onJoined({
+              roomId: ack.room.id,
+              room: ack.room,
+              snapshot: jack.snapshot,
+            });
             else setError(jack?.reason || 'join failed');
           }
         );
@@ -176,11 +186,18 @@ export default function LobbyScreen({
                       onClick={() => joinRoom(r.id)}
                       className="w-full flex items-center justify-between gap-3 px-3 py-3 rounded-lg bg-slate-900 hover:bg-slate-700 disabled:opacity-50 disabled:cursor-not-allowed text-left"
                     >
-                      <span className="flex flex-col">
+                      <span className="flex flex-col gap-0.5">
                         <span className="font-semibold">{r.name}</span>
                         <span className="text-xs text-slate-400">
                           {r.playerCount}/{r.maxPlayers} · {r.status}
                         </span>
+                      </span>
+                      <span className={`text-xs font-bold px-1.5 py-0.5 rounded ${
+                        r.gameType === 'snake'
+                          ? 'bg-emerald-800 text-emerald-200'
+                          : 'bg-blue-900 text-blue-200'
+                      }`}>
+                        {r.gameType || 'clash'}
                       </span>
                       <span className="text-cyan-400 font-bold">→</span>
                     </button>
@@ -192,6 +209,21 @@ export default function LobbyScreen({
 
           <div className="bg-slate-800 rounded-2xl p-4 space-y-3 shadow-lg">
             <h2 className="text-lg font-bold">Create new room</h2>
+            <div className="flex gap-2">
+              {['clash', 'snake'].map((gt) => (
+                <button
+                  key={gt}
+                  onClick={() => setCreateGameType(gt)}
+                  className={`flex-1 py-2 rounded-lg text-sm font-semibold capitalize transition ${
+                    createGameType === gt
+                      ? 'bg-cyan-500 text-slate-900'
+                      : 'bg-slate-700 text-slate-300'
+                  }`}
+                >
+                  {gt === 'clash' ? 'Geo Clash' : 'Geo Snake'}
+                </button>
+              ))}
+            </div>
             <input
               value={newRoomName}
               onChange={(e) => setNewRoomName(e.target.value)}

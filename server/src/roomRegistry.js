@@ -3,14 +3,21 @@
 // that mirrors the schema in feature-plan.md §2.1.
 
 import { ulid } from 'ulid';
-import { GameState } from './gameState.js';
+import { GameState } from './clash/gameState.js';
+import { SnakeGameState } from './snake/gameState.js';
 import {
   MemoryStore,
   makeRoomStores,
   redisClient,
-} from './memoryStore.js';
-import { ValkeyStore } from './valkeyStore.js';
-import { RoomLock } from './roomLock.js';
+} from './shared/memoryStore.js';
+import { ValkeyStore } from './shared/valkeyStore.js';
+import { RoomLock } from './shared/roomLock.js';
+
+// Factory map — extend here when adding new game types.
+const GAME_FACTORIES = {
+  clash: (opts) => new GameState(opts),
+  snake: (opts) => new SnakeGameState(opts),
+};
 
 const META_PREFIX = 'rooms:meta';
 const INDEX_KEY = 'rooms:index';
@@ -81,8 +88,10 @@ export class RoomRegistry {
     return this._rooms.get(roomId) || null;
   }
 
-  async create({ name, hostId, centerLat, centerLng, maxPlayers = 8, cellSize = 10, squaresPerSide = 10 }) {
+  async create({ name, hostId, centerLat, centerLng, maxPlayers = 8, cellSize = 10, squaresPerSide = 10, gameType = 'clash', arenaSideMeters }) {
     return this._lock.withLock('create', async () => {
+      const factory = GAME_FACTORIES[gameType];
+      if (!factory) throw new Error(`unsupported-game-type:${gameType}`);
       const id = ulid();
       const meta = {
         id,
@@ -92,11 +101,12 @@ export class RoomRegistry {
         createdAt: this._now(),
         playerCount: 0,
         maxPlayers,
+        gameType,
         centerLat: typeof centerLat === 'number' ? centerLat : null,
         centerLng: typeof centerLng === 'number' ? centerLng : null,
       };
       const stores = makeRoomStores(id);
-      const game = new GameState({
+      const game = factory({
         io: this._io,
         roomId: id,
         roomName: meta.name,
@@ -104,9 +114,14 @@ export class RoomRegistry {
         onEnd: () => { this.destroy(id).catch(() => {}); },
         cellSize,
         squaresPerSide,
+        arenaSideMeters,
+        centerLat,
+        centerLng,
       });
       if (typeof centerLat === 'number' && typeof centerLng === 'number') {
-        await game.initGrid(centerLat, centerLng);
+        if (typeof game.initGrid === 'function') {
+          await game.initGrid(centerLat, centerLng);
+        }
       }
       this._rooms.set(id, game);
       await this._metaStore.set(id, meta);
@@ -157,21 +172,8 @@ export class RoomRegistry {
       shouldDestroy = meta.playerCount === 0;
     }
     this._broadcastList();
-    // Empty rooms are not destroyed immediately — a grace period lets mobile
-    // clients reconnect without losing the room. After EMPTY_ROOM_TTL_MS with
-    // no rejoins the room is cleaned up. Match-end destruction bypasses this
-    // path and goes directly through destroy().
-    if (shouldDestroy && !this._destroyTimers.has(roomId)) {
-      const timer = setTimeout(async () => {
-        this._destroyTimers.delete(roomId);
-        await this._lock.withLock(roomId, async () => {
-          const stillMeta = await this._metaStore.get(roomId);
-          if (stillMeta && stillMeta.playerCount === 0) {
-            await this.destroy(roomId);
-          }
-        });
-      }, EMPTY_ROOM_TTL_MS);
-      this._destroyTimers.set(roomId, timer);
+    if (shouldDestroy) {
+      await this.destroy(roomId);
     }
   }
 

@@ -1,6 +1,15 @@
-// Wires each Socket.io connection to the RoomRegistry. Handlers are thin:
-// validate input, look up the player's GameState by socket.data.roomId, and
-// delegate. Gameplay events refuse to act when the socket is not in a room.
+// Wires each Socket.io connection to the RoomRegistry. Thin top-level:
+// lobby + connection lifecycle. Gameplay events are dispatched to per-game
+// handlers based on the room's gameType.
+
+import { registerClashHandlers } from './clash/socketHandlers.js';
+import { registerSnakeHandlers } from './snake/socketHandlers.js';
+import { registerTimeSync } from './shared/timeSync.js';
+
+const GAME_HANDLERS = {
+  clash: registerClashHandlers,
+  snake: registerSnakeHandlers,
+};
 
 export function registerSocketHandlers(io, registry) {
   io.on('connection', async (socket) => {
@@ -25,6 +34,8 @@ export function registerSocketHandlers(io, registry) {
           maxPlayers: payload?.maxPlayers,
           cellSize: payload?.cellSize,
           squaresPerSide: payload?.squaresPerSide,
+          gameType: payload?.gameType || 'clash',
+          arenaSideMeters: payload?.arenaSideMeters,
         });
         if (typeof ack === 'function') ack({ ok: true, room });
       } catch (err) {
@@ -40,15 +51,18 @@ export function registerSocketHandlers(io, registry) {
       }
       const result = await registry.join(roomId, socket, name);
       if (result.ok) {
-        // Seed the grid from the joining player's location if it didn't
-        // exist yet (mirrors legacy single-room behaviour).
         const game = registry.get(roomId);
+        const meta = result.room;
         if (game && typeof lat === 'number' && typeof lng === 'number') {
-          await game.ensureGridFromPlayer(lat, lng);
+          if (typeof game.ensureGridFromPlayer === 'function') {
+            await game.ensureGridFromPlayer(lat, lng);
+          }
           await game.updateLocation(socket.id, lat, lng, 0);
-          // Re-snapshot now that the grid exists.
           result.snapshot = await game.snapshot();
         }
+        socket.data.gameType = meta?.gameType || 'clash';
+        const registerGameHandlers = GAME_HANDLERS[socket.data.gameType];
+        if (registerGameHandlers) registerGameHandlers(socket, game);
         socket.emit('joined', { id: socket.id, roomId });
         socket.emit('snapshot', result.snapshot);
         io.to(roomId).emit('player-joined', { id: socket.id });
@@ -61,49 +75,8 @@ export function registerSocketHandlers(io, registry) {
       if (roomId) await registry.leave(roomId, socket);
     });
 
-    // Clock skew measurement. Client emits with its local send timestamp;
-    // server replies with both, so the client can compute the skew without
-    // a second round-trip.
-    socket.on('time-sync', (clientSendMs, ack) => {
-      const serverNowMs = Date.now();
-      if (typeof ack === 'function') {
-        ack({ clientSendMs, serverNowMs });
-      } else {
-        socket.emit('time-sync', { clientSendMs, serverNowMs });
-      }
-    });
-
-    // ---- gameplay events (room-scoped) ---------------------------------
-    function gameOrNull() {
-      const id = socket.data.roomId;
-      if (!id) return null;
-      return registry.get(id);
-    }
-
-    socket.on('location-update', async ({ lat, lng, heading } = {}) => {
-      if (typeof lat !== 'number' || typeof lng !== 'number') return;
-      const game = gameOrNull();
-      if (!game) return;
-      await game.updateLocation(socket.id, lat, lng, heading);
-    });
-
-    socket.on('player-attack', async ({ heading, target } = {}) => {
-      const game = gameOrNull();
-      if (!game) return;
-      await game.attack(socket.id, { heading, target });
-    });
-
-    socket.on('player-shield', async () => {
-      const game = gameOrNull();
-      if (!game) return;
-      await game.activateShield(socket.id);
-    });
-
-    socket.on('player-respawn', async () => {
-      const game = gameOrNull();
-      if (!game) return;
-      await game.respawn(socket.id);
-    });
+    // Clock skew measurement.
+    registerTimeSync(socket);
 
     socket.on('disconnect', async () => {
       const roomId = socket.data.roomId;

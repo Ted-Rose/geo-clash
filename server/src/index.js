@@ -7,7 +7,7 @@ import cors from 'cors';
 import { Server as IOServer } from 'socket.io';
 import { RoomRegistry } from './roomRegistry.js';
 import { registerSocketHandlers } from './socketHandlers.js';
-import { leaderboardStore } from './memoryStore.js';
+import { leaderboardStore } from './shared/memoryStore.js';
 
 const PORT = process.env.PORT || 3001;
 
@@ -48,7 +48,8 @@ app.get('/api/rooms', async (_req, res) => {
 
 app.get('/api/leaderboard', async (req, res) => {
   const limit = Math.min(100, Math.max(1, parseInt(req.query.limit, 10) || 25));
-  const top = await leaderboardStore.top(limit);
+  const gameType = req.query.gameType || undefined;
+  const top = await leaderboardStore.top(limit, { gameType });
   res.json({ top });
 });
 
