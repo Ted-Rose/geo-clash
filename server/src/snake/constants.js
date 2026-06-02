@@ -16,7 +16,10 @@ export const COLLISION_RADIUS_M = 2.5;
 // When a player's head touches a food item within this radius, it eats it.
 export const EAT_RADIUS_M = 4.0;
 
-// Maximum tail history length (segment count) before trimming oldest.
+// Tail physical length = score * TAIL_METERS_PER_SCORE.
+export const TAIL_METERS_PER_SCORE = 5;
+
+// Hard cap on stored segment count (prevents unbounded memory).
 export const MAX_TAIL_SEGMENTS = 200;
 
 // Score points per food item eaten.

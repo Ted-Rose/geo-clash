@@ -12,6 +12,7 @@ import {
   TICK_MS,
   MIN_MOVE_M,
   MAX_TAIL_SEGMENTS,
+  TAIL_METERS_PER_SCORE,
   FOOD_COUNT_TARGET,
   FOOD_SCORE_PER_ITEM,
   SPAWN_GRACE_MS,
@@ -183,10 +184,27 @@ export class SnakeGameState {
       if (moved >= MIN_MOVE_M) {
         p.tailPoints = p.tailPoints || [];
         p.tailPoints.push({ lat: prevLat, lng: prevLng });
-        if (p.tailPoints.length > MAX_TAIL_SEGMENTS) {
-          p.tailPoints = p.tailPoints.slice(
-            p.tailPoints.length - MAX_TAIL_SEGMENTS
-          );
+        const maxTailLenM = p.score * TAIL_METERS_PER_SCORE;
+        if (maxTailLenM <= 0) {
+          p.tailPoints = [];
+        } else {
+          let totalLen = 0;
+          for (let i = 1; i < p.tailPoints.length; i++) {
+            totalLen += distanceMeters(
+              p.tailPoints[i - 1], p.tailPoints[i]
+            );
+          }
+          while (p.tailPoints.length > 1 && totalLen > maxTailLenM) {
+            totalLen -= distanceMeters(
+              p.tailPoints[0], p.tailPoints[1]
+            );
+            p.tailPoints.shift();
+          }
+          if (p.tailPoints.length > MAX_TAIL_SEGMENTS) {
+            p.tailPoints = p.tailPoints.slice(
+              p.tailPoints.length - MAX_TAIL_SEGMENTS
+            );
+          }
         }
       }
     }
