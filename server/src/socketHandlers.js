@@ -3,10 +3,12 @@
 // handlers based on the room's gameType.
 
 import { registerClashHandlers } from './clash/socketHandlers.js';
+import { registerSnakeHandlers } from './snake/socketHandlers.js';
 import { registerTimeSync } from './shared/timeSync.js';
 
 const GAME_HANDLERS = {
   clash: registerClashHandlers,
+  snake: registerSnakeHandlers,
 };
 
 export function registerSocketHandlers(io, registry) {

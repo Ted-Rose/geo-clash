@@ -4,6 +4,7 @@
 
 import { ulid } from 'ulid';
 import { GameState } from './clash/gameState.js';
+import { SnakeGameState } from './snake/gameState.js';
 import {
   MemoryStore,
   makeRoomStores,
@@ -15,6 +16,7 @@ import { RoomLock } from './shared/roomLock.js';
 // Factory map — extend here when adding new game types.
 const GAME_FACTORIES = {
   clash: (opts) => new GameState(opts),
+  snake: (opts) => new SnakeGameState(opts),
 };
 
 const META_PREFIX = 'rooms:meta';
