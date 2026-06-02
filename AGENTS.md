@@ -137,8 +137,13 @@ frequent, atomic Git commits as each sub-task is completed. Each commit must
 represent a single cohesive change with a clear, descriptive message.
 
 **4. Review & Approval**
-Do not merge upon completing the code. Present the finished implementation to
-the user for final review and validation. Wait for explicit approval.
+Do not merge upon completing the code. Open a GitHub PR targeting the correct
+base branch, using the `feature-plan.md` file as the PR body:
+```
+gh pr create --title "<title>" --body-file feature-plan.md --base <base> --head <branch>
+```
+Present the PR URL to the user for final review and validation. Wait for
+explicit approval before proceeding to step 5.
 
 **5. Integration & Cleanup**
 Once approved, perform all of the following in order:
