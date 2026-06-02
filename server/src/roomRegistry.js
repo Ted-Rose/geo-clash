@@ -14,6 +14,7 @@ import { RoomLock } from './roomLock.js';
 
 const META_PREFIX = 'rooms:meta';
 const INDEX_KEY = 'rooms:index';
+const EMPTY_ROOM_TTL_MS = 30_000; // grace period for mobile reconnects
 
 // Tiny SET facade so business code never touches ioredis directly. Mirrors
 // the MemoryStore async-friendly contract for in-process fallback.
@@ -45,6 +46,7 @@ export class RoomRegistry {
     this._io = io;
     this._now = now;
     this._rooms = new Map(); // roomId -> GameState
+    this._destroyTimers = new Map(); // roomId -> setTimeout handle
     this._lock = new RoomLock(redisClient);
     this._metaStore = redisClient
       ? new ValkeyStore(META_PREFIX, redisClient)
@@ -124,6 +126,11 @@ export class RoomRegistry {
       if (meta.playerCount >= meta.maxPlayers) {
         return { ok: false, reason: 'room-full' };
       }
+      const pending = this._destroyTimers.get(roomId);
+      if (pending) {
+        clearTimeout(pending);
+        this._destroyTimers.delete(roomId);
+      }
       await game.addPlayer(socket.id, name);
       socket.join(roomId);
       socket.data.roomId = roomId;
@@ -150,19 +157,30 @@ export class RoomRegistry {
       shouldDestroy = meta.playerCount === 0;
     }
     this._broadcastList();
-    // Empty rooms are tidied up to stop their tick + free the lobby slot.
-    // The per-room lock taken by `join` blocks reuse during destroy.
-    if (shouldDestroy) {
-      await this._lock.withLock(roomId, async () => {
-        const stillMeta = await this._metaStore.get(roomId);
-        if (stillMeta && stillMeta.playerCount === 0) {
-          await this.destroy(roomId);
-        }
-      });
+    // Empty rooms are not destroyed immediately — a grace period lets mobile
+    // clients reconnect without losing the room. After EMPTY_ROOM_TTL_MS with
+    // no rejoins the room is cleaned up. Match-end destruction bypasses this
+    // path and goes directly through destroy().
+    if (shouldDestroy && !this._destroyTimers.has(roomId)) {
+      const timer = setTimeout(async () => {
+        this._destroyTimers.delete(roomId);
+        await this._lock.withLock(roomId, async () => {
+          const stillMeta = await this._metaStore.get(roomId);
+          if (stillMeta && stillMeta.playerCount === 0) {
+            await this.destroy(roomId);
+          }
+        });
+      }, EMPTY_ROOM_TTL_MS);
+      this._destroyTimers.set(roomId, timer);
     }
   }
 
   async destroy(roomId) {
+    const pending = this._destroyTimers.get(roomId);
+    if (pending) {
+      clearTimeout(pending);
+      this._destroyTimers.delete(roomId);
+    }
     const game = this._rooms.get(roomId);
     // Re-entrancy guard: endMatch fires onEnd → destroy. The first call ends
     // the match (which already archives + purges runtime state); subsequent

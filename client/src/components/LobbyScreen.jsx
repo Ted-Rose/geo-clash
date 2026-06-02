@@ -51,7 +51,10 @@ export default function LobbyScreen({
       (ack) => {
         setBusy(false);
         if (ack?.ok) onJoined({ roomId, snapshot: ack.snapshot });
-        else setError(ack?.reason || 'join failed');
+        else {
+          setError(ack?.reason || 'join failed');
+          if (ack?.reason === 'no-such-room' || ack?.reason === 'ended') refresh();
+        }
       }
     );
   }
