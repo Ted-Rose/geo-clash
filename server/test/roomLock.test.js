@@ -3,7 +3,7 @@
 
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { RoomLock, LockTimeoutError } from '../src/roomLock.js';
+import { RoomLock, LockTimeoutError } from '../src/shared/roomLock.js';
 
 class FakeRedis {
   constructor() {

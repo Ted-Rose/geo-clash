@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { GameState } from '../src/gameState.js';
-import { makeRoomStores } from '../src/memoryStore.js';
+import { GameState } from '../src/clash/gameState.js';
+import { makeRoomStores } from '../src/shared/memoryStore.js';
 
 function makeIo() {
   const events = [];

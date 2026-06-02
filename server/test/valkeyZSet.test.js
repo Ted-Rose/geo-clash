@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { ValkeyZSetStore } from '../src/valkeyStore.js';
+import { ValkeyZSetStore } from '../src/shared/valkeyStore.js';
 
 // Minimal in-memory ZSET shim of the ioredis methods ValkeyZSetStore exercises.
 class FakeZRedis {
