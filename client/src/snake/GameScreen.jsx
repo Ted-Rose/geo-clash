@@ -22,7 +22,6 @@ export default function SnakeGameScreen({
   const [players, setPlayers] = useState([]);
   const [foods, setFoods] = useState([]);
   const [scores, setScores] = useState({});
-  const [remainingSeconds, setRemainingSeconds] = useState(300);
   const [matchActive, setMatchActive] = useState(false);
   const [matchOver, setMatchOver] = useState(false);
   const [finalLeaderboard, setFinalLeaderboard] = useState(null);
@@ -36,7 +35,6 @@ export default function SnakeGameScreen({
       setPlayers(initialSnapshot.players || []);
       setFoods(initialSnapshot.foods || []);
       setScores(initialSnapshot.scores || {});
-      setRemainingSeconds(initialSnapshot.remainingSeconds ?? 300);
       setMatchActive(initialSnapshot.matchActive ?? false);
       if (initialSnapshot.bbox) setBbox(initialSnapshot.bbox);
     }
@@ -49,7 +47,6 @@ export default function SnakeGameScreen({
       setPlayers(snap.players || []);
       setFoods(snap.foods || []);
       setScores(snap.scores || {});
-      setRemainingSeconds(snap.remainingSeconds ?? 300);
       setMatchActive(snap.matchActive ?? false);
       if (snap.bbox) setBbox(snap.bbox);
     }
@@ -58,7 +55,6 @@ export default function SnakeGameScreen({
       if (sc) setScores(sc);
     }
     function onFoodUpdate({ foods: fs }) { if (fs) setFoods(fs); }
-    function onTimer({ remainingSeconds: s }) { setRemainingSeconds(s); }
     function onMatchStart({ bbox: b, foods: fs }) {
       setMatchActive(true);
       if (b) setBbox(b);
@@ -74,7 +70,6 @@ export default function SnakeGameScreen({
     socket.on('snapshot', onSnapshot);
     socket.on('snake-update', onSnakeUpdate);
     socket.on('food-update', onFoodUpdate);
-    socket.on('timer', onTimer);
     socket.on('match-start', onMatchStart);
     socket.on('match-end', onMatchEnd);
     return () => {
@@ -82,7 +77,6 @@ export default function SnakeGameScreen({
       socket.off('snapshot', onSnapshot);
       socket.off('snake-update', onSnakeUpdate);
       socket.off('food-update', onFoodUpdate);
-      socket.off('timer', onTimer);
       socket.off('match-start', onMatchStart);
       socket.off('match-end', onMatchEnd);
     };
@@ -195,7 +189,7 @@ export default function SnakeGameScreen({
       </MapContainer>
 
       <SnakeHUD
-        remainingSeconds={remainingSeconds}
+        players={players}
         scores={scores}
         myId={myId}
       />

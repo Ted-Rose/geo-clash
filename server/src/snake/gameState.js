@@ -8,7 +8,7 @@ import { bboxAround, distanceMeters } from '../shared/gridUtils.js';
 import { spawnFood, replenishFood, isEaten } from './food.js';
 import { collidesWithTail } from './collisions.js';
 import {
-  MATCH_SECONDS,
+  FOOD_RESPAWN_INTERVAL_MS,
   TICK_MS,
   MIN_MOVE_M,
   MAX_TAIL_SEGMENTS,
@@ -29,6 +29,8 @@ export class SnakeGameState {
     centerLat,
     centerLng,
     arenaSideMeters = 200,
+    foodCountTarget = FOOD_COUNT_TARGET,
+    foodRespawnIntervalMs = FOOD_RESPAWN_INTERVAL_MS,
   } = {}) {
     if (!io) throw new Error('SnakeGameState: io required');
     if (!roomId) throw new Error('SnakeGameState: roomId required');
@@ -40,8 +42,10 @@ export class SnakeGameState {
     this._onEnd = onEnd || null;
     this.status = 'lobby';
     this.matchActive = false;
-    this.remainingSeconds = MATCH_SECONDS;
+    this._foodCountTarget = foodCountTarget;
+    this._foodRespawnIntervalMs = foodRespawnIntervalMs;
     this._tickHandle = null;
+    this._foodInterval = null;
     this._lastTick = Date.now();
     this._colorIdx = 0;
     this._foods = [];
@@ -57,7 +61,7 @@ export class SnakeGameState {
 
   _initArena(lat, lng) {
     this._bbox = bboxAround(lat, lng, this._arenaSideMeters);
-    this._foods = replenishFood([], this._bbox, FOOD_COUNT_TARGET);
+    this._foods = replenishFood([], this._bbox, this._foodCountTarget);
   }
 
   startMatch() {
@@ -65,13 +69,21 @@ export class SnakeGameState {
     if (this.status === 'ending' || this.status === 'ended') return;
     this.matchActive = true;
     this.status = 'active';
-    this.remainingSeconds = MATCH_SECONDS;
     this._lastTick = Date.now();
     if (!this._tickHandle) {
       this._tickHandle = setInterval(() => this._tick().catch(() => {}), TICK_MS);
     }
+    if (!this._foodInterval) {
+      this._foodInterval = setInterval(() => {
+        if (!this.matchActive || !this._bbox) return;
+        const before = this._foods.length;
+        this._foods = replenishFood(this._foods, this._bbox, this._foodCountTarget);
+        if (this._foods.length !== before) {
+          this._emit('food-update', { foods: this._foods });
+        }
+      }, this._foodRespawnIntervalMs);
+    }
     this._emit('match-start', {
-      remainingSeconds: this.remainingSeconds,
       bbox: this._bbox,
       foods: this._foods,
     });
@@ -84,6 +96,10 @@ export class SnakeGameState {
     if (this._tickHandle) {
       clearInterval(this._tickHandle);
       this._tickHandle = null;
+    }
+    if (this._foodInterval) {
+      clearInterval(this._foodInterval);
+      this._foodInterval = null;
     }
 
     let archived = [];
@@ -203,7 +219,6 @@ export class SnakeGameState {
     }
     if (eatenIds.size > 0) {
       this._foods = this._foods.filter((f) => !eatenIds.has(f.id));
-      this._foods = replenishFood(this._foods, this._bbox, FOOD_COUNT_TARGET);
       this._emit('food-update', { foods: this._foods });
     }
 
@@ -233,18 +248,19 @@ export class SnakeGameState {
       }
     }
 
-    // Broadcast
+    // Last-alive check
     const updatedPlayers = await this._allPlayers();
+    const stillAlive = updatedPlayers.filter((p) => p.alive);
+    if (this.matchActive && updatedPlayers.length > 1 && stillAlive.length <= 1) {
+      await this.endMatch();
+      return;
+    }
+
+    // Broadcast
     this._emit('snake-update', {
       players: updatedPlayers.map(publicPlayer),
       scores: this._scores(updatedPlayers),
     });
-
-    if (this.matchActive) {
-      this.remainingSeconds = Math.max(0, this.remainingSeconds - dt / 1000);
-      this._emit('timer', { remainingSeconds: this.remainingSeconds });
-      if (this.remainingSeconds <= 0) await this.endMatch();
-    }
   }
 
   async _killPlayer(victimId, killerId) {
@@ -286,7 +302,8 @@ export class SnakeGameState {
     return {
       gameType: 'snake',
       matchActive: this.matchActive,
-      remainingSeconds: this.remainingSeconds,
+      foodCountTarget: this._foodCountTarget,
+      foodRespawnIntervalMs: this._foodRespawnIntervalMs,
       bbox: this._bbox,
       foods: this._foods,
       players: players.map(publicPlayer),

@@ -11,37 +11,33 @@ function makeIo() {
   };
 }
 
-test('player scores when walking over food', async (t) => {
+test('last player alive triggers match-end', async () => {
   const io = makeIo();
   const game = new SnakeGameState({
     io,
-    roomId: 'eat-test',
+    roomId: 'last-alive-test',
     centerLat: 51.5,
     centerLng: -0.12,
     arenaSideMeters: 200,
     foodRespawnIntervalMs: 999_999,
   });
-  t.after(() => game.endMatch());
-  await game.addPlayer('p1', 'Alice');
 
-  // Initialise arena and place a food item directly on the player
+  await game.addPlayer('p1', 'Alice');
+  await game.addPlayer('p2', 'Bob');
+
   game._bbox = {
     south: 51.499, north: 51.501, west: -0.121, east: -0.119,
   };
-  game._foods = [{ id: 'food1', lat: 51.5, lng: -0.12 }];
+  game._foods = [];
   game.startMatch();
 
-  // Walk to the food location
-  await game.updateLocation('p1', 51.5, -0.12, 0);
+  // Kill p2 directly so p1 is the last snake standing
+  await game._killPlayer('p2', 'p1');
 
-  // Run tick manually
+  // Run tick — should detect 1 alive out of 2 total and call endMatch
   await game._tick();
 
-  const p = await game.playerStore.get('p1');
-  assert.ok(p.score >= 1, `expected score >= 1, got ${p.score}`);
-
-  const ate = io._events.find((e) => e.event === 'snake-ate');
-  assert.ok(ate, 'snake-ate event emitted');
-  assert.equal(ate.payload.playerId, 'p1');
-  assert.equal(ate.payload.foodId, 'food1');
+  const matchEnd = io._events.find((e) => e.event === 'match-end');
+  assert.ok(matchEnd, 'match-end event should be emitted');
+  assert.equal(game.status, 'ended', 'game status should be ended');
 });

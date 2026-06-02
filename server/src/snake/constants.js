@@ -1,6 +1,6 @@
 // Geo Snake gameplay constants. All distances in meters, times in seconds.
 
-export const MATCH_SECONDS = 5 * 60;
+export const FOOD_RESPAWN_INTERVAL_MS = 2000;
 export const TICK_MS = 500;
 
 // How far behind the head to leave a "neck gap" before recording tail points.
