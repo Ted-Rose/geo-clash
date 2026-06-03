@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
+import { useSound } from '../hooks/useSound.js';
 import { MapContainer, TileLayer } from 'react-leaflet';
 import { socket } from '../socket.js';
 import SnakeHUD from './HUD.jsx';
@@ -19,6 +20,9 @@ export default function SnakeGameScreen({
   onLeave,
 }) {
   const [myId, setMyId] = useState(myIdProp || socket.id);
+  const { playEat, playDie } = useSound();
+  const myIdRef = useRef(myId);
+  useEffect(() => { myIdRef.current = myId; }, [myId]);
   const [players, setPlayers] = useState([]);
   const [foods, setFoods] = useState([]);
   const [scores, setScores] = useState({});
@@ -55,6 +59,12 @@ export default function SnakeGameScreen({
       if (sc) setScores(sc);
     }
     function onFoodUpdate({ foods: fs }) { if (fs) setFoods(fs); }
+    function onSnakeAte({ playerId }) {
+      if (playerId === myIdRef.current) playEat();
+    }
+    function onSnakeDied({ victimId }) {
+      if (victimId === myIdRef.current) playDie();
+    }
     function onMatchStart({ bbox: b, foods: fs }) {
       setMatchActive(true);
       if (b) setBbox(b);
@@ -72,6 +82,8 @@ export default function SnakeGameScreen({
     socket.on('food-update', onFoodUpdate);
     socket.on('match-start', onMatchStart);
     socket.on('match-end', onMatchEnd);
+    socket.on('snake-ate', onSnakeAte);
+    socket.on('snake-died', onSnakeDied);
     return () => {
       socket.off('joined', onJoined);
       socket.off('snapshot', onSnapshot);
@@ -79,6 +91,8 @@ export default function SnakeGameScreen({
       socket.off('food-update', onFoodUpdate);
       socket.off('match-start', onMatchStart);
       socket.off('match-end', onMatchEnd);
+      socket.off('snake-ate', onSnakeAte);
+      socket.off('snake-died', onSnakeDied);
     };
   }, []);
 

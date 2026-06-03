@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
+import { useSound } from '../hooks/useSound.js';
 import { io } from 'socket.io-client';
 import { CircleMarker, Tooltip } from 'react-leaflet';
 import { socket } from '../socket.js';
@@ -14,6 +15,9 @@ import PostMatchScreen from './PostMatchScreen.jsx';
 // unsubscribes and clears local state.
 export default function GameScreen({ roomId, position, simulate, simPos, setSimPos, initialSnapshot, onLeave }) {
   const [myId, setMyId] = useState(() => socket.id);
+  const { playCaptureStart, playCaptureOwned } = useSound();
+  const myIdRef = useRef(myId);
+  useEffect(() => { myIdRef.current = myId; }, [myId]);
   const [grid, setGrid] = useState(null);
   const [ownership, setOwnership] = useState([]);
   const [players, setPlayers] = useState([]);
@@ -70,6 +74,10 @@ export default function GameScreen({ roomId, position, simulate, simPos, setSimP
         return [...m.values()];
       });
       if (sc) setScores(sc);
+      if (cells.some((c) => c.ownerId === myIdRef.current)) playCaptureOwned();
+    }
+    function onCaptureStart({ playerId }) {
+      if (playerId === myIdRef.current) playCaptureStart();
     }
     function onTimer({ remainingSeconds: rs }) { setRemainingSeconds(rs); }
     function onShield({ id, until }) {
@@ -99,6 +107,7 @@ export default function GameScreen({ roomId, position, simulate, simPos, setSimP
     socket.on('joined', onJoined);
     socket.on('players-update', onPlayers);
     socket.on('grid-update', onGrid);
+    socket.on('cell-capture-start', onCaptureStart);
     socket.on('timer', onTimer);
     socket.on('player-shield', onShield);
     socket.on('player-shield-end', onShieldEnd);
@@ -111,6 +120,7 @@ export default function GameScreen({ roomId, position, simulate, simPos, setSimP
       socket.off('joined', onJoined);
       socket.off('players-update', onPlayers);
       socket.off('grid-update', onGrid);
+      socket.off('cell-capture-start', onCaptureStart);
       socket.off('timer', onTimer);
       socket.off('player-shield', onShield);
       socket.off('player-shield-end', onShieldEnd);

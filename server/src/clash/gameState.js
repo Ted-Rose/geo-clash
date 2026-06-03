@@ -366,6 +366,7 @@ export class GameState {
             color: claimant.color,
             elapsedMs: 0,
           };
+          this._emit('cell-capture-start', { cellId: cid, playerId: claimant.id, color: claimant.color });
         }
         cell.progress.elapsedMs += dt;
         if (cell.progress.elapsedMs >= CAPTURE_SECONDS * 1000) {
