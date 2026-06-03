@@ -1,25 +1,33 @@
-// Authoritative Geo Snake game state + tick loop.
-// Each player is a GPS-tracked snake. Moving grows the tail; eating food
-// scores a point; colliding with another's tail or head kills you.
+// Geo Snake game state + tick loop — hybrid client-authoritative model.
+//
+// CLIENT is the source of truth for its own snake (position, tail, score).
+// SERVER is the source of truth for food locations.
+//
+// Flow:
+//   location-update  → server stores client-supplied state, relays to peers
+//   eat_food         → server removes food (tolerates duplicate claims),
+//                      awards point to reporting player, broadcasts food-update
+//   clash_detected   → server relays clash_verify to the target client
+//   clash_confirmed  → server kills victim if both sides verified
 
-import { ulid } from 'ulid';
 import { makeRoomStores, leaderboardStore } from '../shared/memoryStore.js';
-import { bboxAround, distanceMeters } from '../shared/gridUtils.js';
-import { replenishFood, isEaten } from './food.js';
-import { collidesWithTail } from './collisions.js';
+import { bboxAround } from '../shared/gridUtils.js';
+import { replenishFood } from './food.js';
 import {
   FOOD_RESPAWN_INTERVAL_MS,
   FOOD_SPAWN_RADIUS_M,
   TICK_MS,
-  MIN_MOVE_M,
-  MAX_TAIL_SEGMENTS,
-  TAIL_METERS_PER_SCORE,
   FOOD_COUNT_TARGET,
   FOOD_SCORE_PER_ITEM,
-  SPAWN_GRACE_MS,
-  COLLISION_RADIUS_M,
   COLORS,
 } from './constants.js';
+
+// How long (ms) a food-eaten record is kept to allow duplicate eat_food
+// events from different clients without rejecting them.
+const EAT_RACE_WINDOW_MS = 3000;
+
+// How long (ms) a pending clash is kept before it expires unconfirmed.
+const CLASH_PENDING_TTL_MS = 5000;
 
 export class SnakeGameState {
   constructor({
@@ -56,6 +64,10 @@ export class SnakeGameState {
     this._centerLat = typeof centerLat === 'number' ? centerLat : null;
     this._centerLng = typeof centerLng === 'number' ? centerLng : null;
     this._arenaSideMeters = arenaSideMeters;
+    // foodId → timestamp of when it was eaten (race-condition window)
+    this._recentlyEaten = new Map();
+    // reporterId → { targetId, timestamp } pending clash verifications
+    this._pendingClashes = new Map();
     if (this._centerLat !== null && this._centerLng !== null) {
       this._initArena(this._centerLat, this._centerLng);
     }
@@ -172,124 +184,112 @@ export class SnakeGameState {
     await this.playerStore.del(id);
   }
 
-  async updateLocation(id, lat, lng, heading) {
+  // Client is now the source of truth for its own snake state.
+  // We accept tailPoints and score directly from the client, storing them
+  // so they can be relayed to enemy clients on the next tick.
+  async updateLocation(id, lat, lng, heading, tailPoints, score) {
     const p = await this.playerStore.get(id);
     if (!p) return;
     if (!this._bbox) this._initArena(lat, lng);
-    const prevLat = p.lat;
-    const prevLng = p.lng;
     p.lat = lat;
     p.lng = lng;
     if (typeof heading === 'number') p.heading = heading;
     p.lastSeen = Date.now();
-    if (p.alive && this.matchActive) {
-      const moved = distanceMeters({ lat: prevLat, lng: prevLng }, { lat, lng });
-      if (moved >= MIN_MOVE_M) {
-        p.tailPoints = p.tailPoints || [];
-        p.tailPoints.push({ lat: prevLat, lng: prevLng });
-        const maxTailLenM = p.score * TAIL_METERS_PER_SCORE;
-        if (maxTailLenM <= 0) {
-          p.tailPoints = [];
-        } else {
-          let totalLen = 0;
-          for (let i = 1; i < p.tailPoints.length; i++) {
-            totalLen += distanceMeters(
-              p.tailPoints[i - 1], p.tailPoints[i]
-            );
-          }
-          while (p.tailPoints.length > 1 && totalLen > maxTailLenM) {
-            totalLen -= distanceMeters(
-              p.tailPoints[0], p.tailPoints[1]
-            );
-            p.tailPoints.shift();
-          }
-          if (p.tailPoints.length > MAX_TAIL_SEGMENTS) {
-            p.tailPoints = p.tailPoints.slice(
-              p.tailPoints.length - MAX_TAIL_SEGMENTS
-            );
-          }
-        }
+    // Accept client-authoritative tail and score when provided
+    if (Array.isArray(tailPoints)) p.tailPoints = tailPoints;
+    if (typeof score === 'number') p.score = score;
+    await this.playerStore.set(id, p);
+  }
+
+  // ---- food authority ----------------------------------------------------
+
+  // Called when a client reports eating a food item.
+  // Awards FOOD_SCORE_PER_ITEM to the player unconditionally — if a second
+  // client reports the same food within EAT_RACE_WINDOW_MS we still award
+  // points to tolerate network-lag race conditions. The food is removed from
+  // the live list on the first claim.
+  async eatFood(playerId, foodId) {
+    if (!this.matchActive) return;
+    const p = await this.playerStore.get(playerId);
+    if (!p) return;
+
+    const now = Date.now();
+
+    // Purge stale recently-eaten entries
+    for (const [fid, ts] of this._recentlyEaten) {
+      if (now - ts > EAT_RACE_WINDOW_MS) this._recentlyEaten.delete(fid);
+    }
+
+    // Remove from live food list if still present (first claim)
+    const foodIdx = this._foods.findIndex((f) => f.id === foodId);
+    if (foodIdx !== -1) {
+      this._foods.splice(foodIdx, 1);
+      this._recentlyEaten.set(foodId, now);
+      this._emit('food-update', { foods: this._foods });
+    }
+    // else: food already gone — check if it was eaten within the race window
+    // and still grant the point if so (or if not tracked at all, still award).
+
+    p.score = (p.score || 0) + FOOD_SCORE_PER_ITEM;
+    await this.playerStore.set(playerId, p);
+    this._emit('snake-ate', { playerId, foodId, score: p.score });
+  }
+
+  // ---- clash (player-vs-player) handshake --------------------------------
+
+  // Client A reports it crashed into Client B.  A is the victim.
+  // Server relays a clash_verify request to B's socket.
+  clashDetected(reporterId, targetId) {
+    if (!this.matchActive) return;
+    const now = Date.now();
+
+    // Purge expired pending clashes
+    for (const [rid, entry] of this._pendingClashes) {
+      if (now - entry.timestamp > CLASH_PENDING_TTL_MS) {
+        this._pendingClashes.delete(rid);
       }
     }
-    await this.playerStore.set(id, p);
+
+    this._pendingClashes.set(reporterId, { targetId, timestamp: now });
+
+    // Ask the target client to verify the clash from its own perspective.
+    this.io.to(targetId).emit('clash_verify', { victimId: reporterId });
+  }
+
+  // Client B confirms (or both clients independently report).
+  // victimId is the player whose score should be reset.
+  // killerId is the surviving player who gets kill credit.
+  async clashConfirmed(confirmerId, victimId) {
+    if (!this.matchActive) return;
+
+    // Accept if there is a matching pending clash or if the confirmer is
+    // the target of a pending clash initiated by the victim.
+    const pending = this._pendingClashes.get(victimId);
+    if (!pending || pending.targetId !== confirmerId) return;
+
+    this._pendingClashes.delete(victimId);
+    await this._killPlayer(victimId, confirmerId);
   }
 
   // ---- tick --------------------------------------------------------------
 
+  // Tick is now a pure state-relay: no movement or collision logic.
+  // It broadcasts whatever state the clients last sent us.
   async _tick() {
     if (this.status === 'ending' || this.status === 'ended') return;
-    const now = Date.now();
-    const dt = now - this._lastTick;
-    this._lastTick = now;
+    this._lastTick = Date.now();
 
     const players = await this._allPlayers();
-    const alive = players.filter((p) => p.alive);
 
-    // Food consumption
-    const eatenIds = new Set();
-    for (const p of alive) {
-      if (!p.alive) continue;
-      const head = { lat: p.lat, lng: p.lng };
-      for (let i = 0; i < this._foods.length; i++) {
-        const food = this._foods[i];
-        if (eatenIds.has(food.id)) continue;
-        if (isEaten(head, food)) {
-          p.score += FOOD_SCORE_PER_ITEM;
-          eatenIds.add(food.id);
-          await this.playerStore.set(p.id, p);
-          this._emit('snake-ate', { playerId: p.id, foodId: food.id, score: p.score });
-        }
-      }
-    }
-    if (eatenIds.size > 0) {
-      this._foods = this._foods.filter((f) => !eatenIds.has(f.id));
-      this._emit('food-update', { foods: this._foods });
-    }
-
-    // Collision detection
-    const playerMap = {};
-    for (const p of alive) playerMap[p.id] = p;
-
-    for (const p of alive) {
-      const head = { lat: p.lat, lng: p.lng };
-      const graceExpired = (now - (p.spawnedAt || 0)) >= SPAWN_GRACE_MS;
-      if (!graceExpired) continue;
-
-      // Head-on-tail of others
-      for (const other of alive) {
-        if (other.id === p.id) continue;
-        if (other.tailPoints && collidesWithTail(head, other.tailPoints)) {
-          await this._killPlayer(p.id, other.id);
-          break;
-        }
-        // Head-on-head
-        const d = distanceMeters(head, { lat: other.lat, lng: other.lng });
-        if (d <= COLLISION_RADIUS_M) {
-          await this._killPlayer(p.id, null);
-          await this._killPlayer(other.id, null);
-          break;
-        }
-      }
-    }
-
-    // Last-alive check
-    const updatedPlayers = await this._allPlayers();
-    const stillAlive = updatedPlayers.filter((p) => p.alive);
-    if (this.matchActive && updatedPlayers.length > 1 && stillAlive.length <= 1) {
-      await this.endMatch();
-      return;
-    }
-
-    // Broadcast
     this._emit('snake-update', {
-      players: updatedPlayers.map(publicPlayer),
-      scores: this._scores(updatedPlayers),
+      players: players.map(publicPlayer),
+      scores: this._scores(players),
     });
   }
 
   async _killPlayer(victimId, killerId) {
     const victim = await this.playerStore.get(victimId);
-    if (!victim || !victim.alive) return;
+    if (!victim) return;
     victim.score = 0;
     victim.tailPoints = [];
     victim.spawnedAt = Date.now();
@@ -303,7 +303,11 @@ export class SnakeGameState {
         await this.playerStore.set(killerId, killer);
       }
     }
+
     this._emit('snake-hit', { victimId, killerId: killerId || null });
+
+    // Tell the victim's own socket to reset its local state
+    this.io.to(victimId).emit('snake-reset', { spawnedAt: victim.spawnedAt });
   }
 
   // ---- snapshot ----------------------------------------------------------
