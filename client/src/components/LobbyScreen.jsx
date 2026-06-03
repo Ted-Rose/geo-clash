@@ -23,7 +23,7 @@ export default function LobbyScreen({
   const [createGameType, setCreateGameType] = useState('clash');
   const [foodCount, setFoodCount] = useState(10);
   const [foodRespawnSec, setFoodRespawnSec] = useState(2);
-  const [arenaSideMeters, setArenaSideMeters] = useState(200);
+  const [arenaSideMeters, setArenaSideMeters] = useState(1000);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState(null);
 
@@ -199,7 +199,7 @@ export default function LobbyScreen({
                         <span className="text-xs text-slate-400">
                           {r.playerCount}/{r.maxPlayers} · {r.status}
                           {r.gameType === 'snake' && r.foodCountTarget != null && (
-                            <> · {r.arenaSideMeters ?? 200}m · {r.foodCountTarget} food · {r.foodRespawnIntervalMs / 1000}s</>
+                            <> · {r.arenaSideMeters ?? 1000}m · {r.foodCountTarget} food · {r.foodRespawnIntervalMs / 1000}s</>
                           )}
                         </span>
                       </span>
@@ -296,7 +296,7 @@ export default function LobbyScreen({
                   <input
                     type="range"
                     min={50}
-                    max={500}
+                    max={1000}
                     step={50}
                     value={arenaSideMeters}
                     onChange={(e) => setArenaSideMeters(Number(e.target.value))}
@@ -304,7 +304,7 @@ export default function LobbyScreen({
                   />
                   <div className="flex justify-between text-xs text-slate-500 mt-0.5">
                     <span>50 m</span>
-                    <span>500 m</span>
+                    <span>1000 m</span>
                   </div>
                 </label>
                 <label className="block">
