@@ -1,5 +1,5 @@
 import { Fragment } from 'react';
-import { Marker, Polyline } from 'react-leaflet';
+import { Marker, CircleMarker } from 'react-leaflet';
 import L from 'leaflet';
 
 function lightenHex(hex, amount = 0.45) {
@@ -12,6 +12,45 @@ function lightenHex(hex, amount = 0.45) {
     `${Math.round(b + (255 - b) * amount)})`
   );
 }
+
+// Equirectangular distance between two [lat, lng] pairs (metres).
+const EARTH_R = 6378137;
+const DEG = Math.PI / 180;
+function distM(a, b) {
+  const dLat = (b[0] - a[0]) * DEG;
+  const dLng = (b[1] - a[1]) * DEG;
+  const s =
+    Math.sin(dLat / 2) ** 2 +
+    Math.cos(a[0] * DEG) * Math.cos(b[0] * DEG) *
+    Math.sin(dLng / 2) ** 2;
+  return 2 * EARTH_R * Math.asin(Math.sqrt(s));
+}
+
+// Sample `count` evenly-spaced positions along a geo path ([lat,lng][]).
+function sampleEvenPoints(path, count) {
+  if (!path || path.length === 0 || count <= 0) return [];
+  if (path.length === 1) return [path[0]];
+  const cumDist = [0];
+  for (let i = 1; i < path.length; i++) {
+    cumDist.push(cumDist[i - 1] + distM(path[i - 1], path[i]));
+  }
+  const totalLen = cumDist[cumDist.length - 1];
+  if (totalLen <= 0) return [path[0]];
+  const result = [];
+  let seg = 0;
+  for (let i = 0; i < count; i++) {
+    const target = count > 1 ? (i / (count - 1)) * totalLen : 0;
+    while (seg < cumDist.length - 2 && cumDist[seg + 1] < target) seg++;
+    const segLen = (cumDist[seg + 1] ?? cumDist[seg]) - cumDist[seg];
+    const t = segLen > 0 ? (target - cumDist[seg]) / segLen : 0;
+    const a = path[seg];
+    const b = path[seg + 1] ?? a;
+    result.push([a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t]);
+  }
+  return result;
+}
+
+const BALLS_PER_SCORE = 5;
 
 function makeSnakeHeadIcon(color, heading, isMe) {
   const scale = isMe ? 1.3 : 1;
@@ -42,9 +81,9 @@ function makeSnakeHeadIcon(color, heading, isMe) {
   });
 }
 
-// Renders each player as a snake-head DivIcon + a two-layer body polyline.
+// Renders each player as a snake-head DivIcon + tail balls (CircleMarkers).
 // `players` is the array from the server snapshot/update.
-// `myId` is highlighted with a larger head and thicker body.
+// `myId` is highlighted with a larger head and bigger balls.
 export default function SnakeLayer({ players = [], myId }) {
   return (
     <>
@@ -55,38 +94,54 @@ export default function SnakeLayer({ players = [], myId }) {
         const tailPositions = (p.tailPoints || []).map(
           (pt) => [pt.lat, pt.lng]
         );
-        const bodyPositions =
-          tailPositions.length > 0 ? [...tailPositions, headPos] : null;
+        const score = p.score || 0;
+        const ballCount = score * BALLS_PER_SCORE;
         const heading = p.heading ?? 0;
         const icon = makeSnakeHeadIcon(p.color, heading, isMe);
         const bellyColor = lightenHex(p.color);
 
+        // Full path: tail tip → head, sample ballCount+1 points then
+        // drop the last (head) so balls stay behind the head marker.
+        const fullPath =
+          tailPositions.length > 0
+            ? [...tailPositions, headPos]
+            : null;
+        const ballPositions =
+          fullPath && ballCount > 0
+            ? sampleEvenPoints(fullPath, ballCount + 1).slice(0, ballCount)
+            : [];
+
+        // Ball radius ≈ half the head pixel size (head ~28 px wide).
+        const outerR = isMe ? 9 : 7;
+        const innerR = isMe ? 4 : 3;
+
         return (
           <Fragment key={p.id}>
-            {bodyPositions && bodyPositions.length > 1 && (
-              <>
-                <Polyline
-                  positions={bodyPositions}
+            {ballPositions.map((pos, idx) => (
+              <Fragment key={idx}>
+                <CircleMarker
+                  center={pos}
+                  radius={outerR}
                   pathOptions={{
-                    color: p.color,
-                    weight: isMe ? 8 : 6,
-                    opacity: 0.9,
-                    lineCap: 'round',
-                    lineJoin: 'round',
+                    color: 'white',
+                    weight: 1.5,
+                    fillColor: p.color,
+                    fillOpacity: 0.92,
+                    opacity: 0.85,
                   }}
                 />
-                <Polyline
-                  positions={bodyPositions}
+                <CircleMarker
+                  center={pos}
+                  radius={innerR}
                   pathOptions={{
-                    color: bellyColor,
-                    weight: isMe ? 3 : 2,
-                    opacity: 0.7,
-                    lineCap: 'round',
-                    lineJoin: 'round',
+                    color: 'transparent',
+                    weight: 0,
+                    fillColor: bellyColor,
+                    fillOpacity: 0.55,
                   }}
                 />
-              </>
-            )}
+              </Fragment>
+            ))}
             <Marker position={headPos} icon={icon} />
           </Fragment>
         );
