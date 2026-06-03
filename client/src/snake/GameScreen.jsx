@@ -82,7 +82,7 @@ export default function SnakeGameScreen({
     };
   }, []);
 
-  // Send location updates
+  // Send location updates + keep map centred on the player
   useEffect(() => {
     if (!position || !roomId) return;
     socket.emit('location-update', {
@@ -90,6 +90,9 @@ export default function SnakeGameScreen({
       lng: position.lng,
       heading: position.heading ?? 0,
     });
+    if (mapRef.current) {
+      mapRef.current.panTo([position.lat, position.lng]);
+    }
   }, [position, roomId]);
 
   // Keyboard WASD movement in sim mode

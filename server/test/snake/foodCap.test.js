@@ -2,6 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { SnakeGameState } from '../../src/snake/gameState.js';
 import { replenishFood } from '../../src/snake/food.js';
+import { FOOD_SPAWN_RADIUS_M } from '../../src/snake/constants.js';
 
 function makeIo() {
   const events = [];
@@ -12,7 +13,7 @@ function makeIo() {
   };
 }
 
-const BBOX = { south: 51.499, north: 51.501, west: -0.121, east: -0.119 };
+const CENTER = { lat: 51.5, lng: -0.12 };
 
 test('foodCountTarget=2 never spawns more than 2 items', async (t) => {
   const io = makeIo();
@@ -27,7 +28,6 @@ test('foodCountTarget=2 never spawns more than 2 items', async (t) => {
   });
   t.after(() => game.endMatch());
 
-  game._bbox = BBOX;
   game._foods = [];
   game.startMatch();
 
@@ -38,10 +38,14 @@ test('foodCountTarget=2 never spawns more than 2 items', async (t) => {
 
   // Simulate the interval callback: replenish from empty to target
   game._foods = [];
-  game._foods = replenishFood(game._foods, game._bbox, game._foodCountTarget);
+  game._foods = replenishFood(
+    game._foods, game._foodSpawnCenter, FOOD_SPAWN_RADIUS_M, game._foodCountTarget,
+  );
   assert.equal(game._foods.length, 2, 'replenish from zero should produce exactly 2');
 
   // Replenishing when already at cap should not exceed cap
-  game._foods = replenishFood(game._foods, game._bbox, game._foodCountTarget);
+  game._foods = replenishFood(
+    game._foods, game._foodSpawnCenter, FOOD_SPAWN_RADIUS_M, game._foodCountTarget,
+  );
   assert.equal(game._foods.length, 2, 'replenish at cap should stay at 2');
 });

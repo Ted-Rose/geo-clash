@@ -291,7 +291,7 @@ export default function LobbyScreen({
                 <label className="block">
                   <div className="flex justify-between text-sm text-slate-300 mb-1">
                     <span>Arena size</span>
-                    <span className="font-mono text-cyan-400">{arenaSideMeters} m²</span>
+                    <span className="font-mono text-cyan-400">{arenaSideMeters} × {arenaSideMeters} m</span>
                   </div>
                   <input
                     type="range"

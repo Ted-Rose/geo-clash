@@ -36,6 +36,8 @@ export function registerSocketHandlers(io, registry) {
           squaresPerSide: payload?.squaresPerSide,
           gameType: payload?.gameType || 'clash',
           arenaSideMeters: payload?.arenaSideMeters,
+          foodCountTarget: payload?.foodCountTarget,
+          foodRespawnIntervalMs: payload?.foodRespawnIntervalMs,
         });
         if (typeof ack === 'function') ack({ ok: true, room });
       } catch (err) {

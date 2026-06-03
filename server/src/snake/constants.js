@@ -28,6 +28,9 @@ export const FOOD_SCORE_PER_ITEM = 1;
 // How many food items exist in the arena at any time.
 export const FOOD_COUNT_TARGET = 5;
 
+// Radius (meters) around the game-start center within which food may spawn.
+export const FOOD_SPAWN_RADIUS_M = 50;
+
 // Respawn grace period (ms) during which newly spawned player is collision-safe.
 export const SPAWN_GRACE_MS = 3000;
 

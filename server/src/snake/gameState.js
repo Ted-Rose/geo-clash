@@ -5,10 +5,11 @@
 import { ulid } from 'ulid';
 import { makeRoomStores, leaderboardStore } from '../shared/memoryStore.js';
 import { bboxAround, distanceMeters } from '../shared/gridUtils.js';
-import { spawnFood, replenishFood, isEaten } from './food.js';
+import { replenishFood, isEaten } from './food.js';
 import { collidesWithTail } from './collisions.js';
 import {
   FOOD_RESPAWN_INTERVAL_MS,
+  FOOD_SPAWN_RADIUS_M,
   TICK_MS,
   MIN_MOVE_M,
   MAX_TAIL_SEGMENTS,
@@ -51,6 +52,7 @@ export class SnakeGameState {
     this._colorIdx = 0;
     this._foods = [];
     this._bbox = null;
+    this._foodSpawnCenter = null;
     this._centerLat = typeof centerLat === 'number' ? centerLat : null;
     this._centerLng = typeof centerLng === 'number' ? centerLng : null;
     this._arenaSideMeters = arenaSideMeters;
@@ -65,7 +67,8 @@ export class SnakeGameState {
 
   _initArena(lat, lng) {
     this._bbox = bboxAround(lat, lng, this._arenaSideMeters);
-    this._foods = replenishFood([], this._bbox, this._foodCountTarget);
+    this._foodSpawnCenter = { lat, lng };
+    this._foods = replenishFood([], this._foodSpawnCenter, FOOD_SPAWN_RADIUS_M, this._foodCountTarget);
   }
 
   startMatch() {
@@ -79,9 +82,9 @@ export class SnakeGameState {
     }
     if (!this._foodInterval) {
       this._foodInterval = setInterval(() => {
-        if (!this.matchActive || !this._bbox) return;
+        if (!this.matchActive || !this._foodSpawnCenter) return;
         const before = this._foods.length;
-        this._foods = replenishFood(this._foods, this._bbox, this._foodCountTarget);
+        this._foods = replenishFood(this._foods, this._foodSpawnCenter, FOOD_SPAWN_RADIUS_M, this._foodCountTarget);
         if (this._foods.length !== before) {
           this._emit('food-update', { foods: this._foods });
         }
