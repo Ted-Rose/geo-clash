@@ -1,20 +1,27 @@
-import { CircleMarker } from 'react-leaflet';
+import { Marker } from 'react-leaflet';
+import L from 'leaflet';
 
-// Renders food items as small circular markers on the Leaflet map.
+const DEFAULT_EMOJI = '🍎';
+
+function makeFoodIcon(emoji) {
+  return L.divIcon({
+    html: `<span style="font-size:22px;line-height:1;display:block;text-align:center;">${emoji || DEFAULT_EMOJI}</span>`,
+    className: '',
+    iconSize: [28, 28],
+    iconAnchor: [14, 14],
+  });
+}
+
+// Renders food items as emoji markers on the Leaflet map.
 export default function FoodLayer({ foods = [] }) {
   return (
     <>
       {foods.map((f) => (
-        <CircleMarker
+        <Marker
           key={f.id}
-          center={[f.lat, f.lng]}
-          radius={6}
-          pathOptions={{
-            color: '#fef08a',
-            fillColor: '#fef08a',
-            fillOpacity: 0.9,
-            weight: 2,
-          }}
+          position={[f.lat, f.lng]}
+          icon={makeFoodIcon(f.emoji)}
+          interactive={false}
         />
       ))}
     </>

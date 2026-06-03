@@ -4,13 +4,19 @@ import { ulid } from 'ulid';
 import { distanceMeters, metersToDegLat, metersToDegLng } from '../shared/gridUtils.js';
 import { EAT_RADIUS_M, FOOD_COUNT_TARGET, FOOD_SPAWN_RADIUS_M } from './constants.js';
 
+const FOOD_EMOJIS = [
+  '🍎', '🍊', '🍋', '🍇', '🍓', '🍑', '🍌', '🍉', '🥝',
+  '🍕', '🍔', '🌮', '🍟', '🍩', '🍪', '🍫', '🧁', '🌯',
+];
+
 // Spawn a food item at a pseudo-random position within radiusM of center.
 export function spawnFood(center, radiusM = FOOD_SPAWN_RADIUS_M) {
   const angle = Math.random() * 2 * Math.PI;
   const dist = Math.sqrt(Math.random()) * radiusM;
   const lat = center.lat + metersToDegLat(dist * Math.cos(angle));
   const lng = center.lng + metersToDegLng(dist * Math.sin(angle), center.lat);
-  return { id: ulid(), lat, lng };
+  const emoji = FOOD_EMOJIS[Math.floor(Math.random() * FOOD_EMOJIS.length)];
+  return { id: ulid(), lat, lng, emoji };
 }
 
 // Return true if a player head is within EAT_RADIUS_M of the food item.
