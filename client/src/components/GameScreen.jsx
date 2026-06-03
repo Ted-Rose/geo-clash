@@ -15,9 +15,19 @@ import PostMatchScreen from './PostMatchScreen.jsx';
 // unsubscribes and clears local state.
 export default function GameScreen({ roomId, position, simulate, simPos, setSimPos, initialSnapshot, onLeave }) {
   const [myId, setMyId] = useState(() => socket.id);
-  const { playCaptureStart, playCaptureOwned } = useSound();
+  const {
+    playCaptureStart,
+    playCaptureOwned,
+    playShoot,
+    playEnemyShoot,
+    playShield,
+  } = useSound();
   const myIdRef = useRef(myId);
   useEffect(() => { myIdRef.current = myId; }, [myId]);
+  const positionRef = useRef(position);
+  useEffect(() => { positionRef.current = position; }, [position]);
+  const playersRef = useRef([]);
+  useEffect(() => { playersRef.current = players; }, [players]);
   const [grid, setGrid] = useState(null);
   const [ownership, setOwnership] = useState([]);
   const [players, setPlayers] = useState([]);
@@ -81,13 +91,26 @@ export default function GameScreen({ roomId, position, simulate, simPos, setSimP
     }
     function onTimer({ remainingSeconds: rs }) { setRemainingSeconds(rs); }
     function onShield({ id, until }) {
-      if (id === socket.id) setShieldUntil(until);
+      if (id === socket.id) {
+        setShieldUntil(until);
+        playShield();
+      }
     }
     function onShieldEnd({ id }) {
       if (id === socket.id) setShieldUntil(0);
     }
     function onProjectileSpawn(p) {
       setProjectiles((prev) => [...prev, p]);
+      if (p.attackerId === myIdRef.current) {
+        playShoot(p.attackerId);
+      } else {
+        const me = playersRef.current.find(
+          (pl) => pl.id === myIdRef.current
+        ) || positionRef.current;
+        if (me && distDeg(me, p.target) <= ENEMY_SHOT_NEAR_DEG) {
+          playEnemyShoot(p.attackerId);
+        }
+      }
     }
     function onProjectileResolved({ id }) {
       setProjectiles((prev) => prev.filter((p) => p.id !== id));
@@ -374,4 +397,12 @@ export default function GameScreen({ roomId, position, simulate, simPos, setSimP
       )}
     </div>
   );
+}
+
+const ENEMY_SHOT_NEAR_DEG = 0.00015; // ~15 m in degrees
+
+function distDeg(a, b) {
+  const dLat = a.lat - b.lat;
+  const dLng = a.lng - b.lng;
+  return Math.sqrt(dLat * dLat + dLng * dLng);
 }
