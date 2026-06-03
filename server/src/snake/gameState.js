@@ -290,7 +290,7 @@ export class SnakeGameState {
   async _killPlayer(victimId, killerId) {
     const victim = await this.playerStore.get(victimId);
     if (!victim || !victim.alive) return;
-    victim.alive = false;
+    victim.score = 0;
     victim.tailPoints = [];
     victim.spawnedAt = Date.now();
     await this.playerStore.set(victimId, victim);
@@ -303,20 +303,7 @@ export class SnakeGameState {
         await this.playerStore.set(killerId, killer);
       }
     }
-    this._emit('snake-died', { victimId, killerId: killerId || null });
-    // Auto-respawn after a short delay
-    setTimeout(async () => {
-      const p = await this.playerStore.get(victimId);
-      if (!p || this.status === 'ended') return;
-      const spawn = this._spawnPoint();
-      p.alive = true;
-      p.lat = spawn.lat;
-      p.lng = spawn.lng;
-      p.tailPoints = [];
-      p.spawnedAt = Date.now();
-      await this.playerStore.set(victimId, p);
-      this._emit('snake-respawn', { playerId: victimId });
-    }, 3000);
+    this._emit('snake-hit', { victimId, killerId: killerId || null });
   }
 
   // ---- snapshot ----------------------------------------------------------

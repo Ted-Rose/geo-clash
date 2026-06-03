@@ -62,7 +62,7 @@ export default function SnakeGameScreen({
     function onSnakeAte({ playerId }) {
       if (playerId === myIdRef.current) playEat();
     }
-    function onSnakeDied({ victimId }) {
+    function onSnakeHit({ victimId }) {
       if (victimId === myIdRef.current) playDie();
     }
     function onMatchStart({ bbox: b, foods: fs }) {
@@ -83,7 +83,7 @@ export default function SnakeGameScreen({
     socket.on('match-start', onMatchStart);
     socket.on('match-end', onMatchEnd);
     socket.on('snake-ate', onSnakeAte);
-    socket.on('snake-died', onSnakeDied);
+    socket.on('snake-hit', onSnakeHit);
     return () => {
       socket.off('joined', onJoined);
       socket.off('snapshot', onSnapshot);
@@ -92,7 +92,7 @@ export default function SnakeGameScreen({
       socket.off('match-start', onMatchStart);
       socket.off('match-end', onMatchEnd);
       socket.off('snake-ate', onSnakeAte);
-      socket.off('snake-died', onSnakeDied);
+      socket.off('snake-hit', onSnakeHit);
     };
   }, []);
 
