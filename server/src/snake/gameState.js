@@ -30,7 +30,7 @@ export class SnakeGameState {
     onEnd,
     centerLat,
     centerLng,
-    arenaSideMeters = 1000,
+    arenaSideMeters = 50,
     foodCountTarget = FOOD_COUNT_TARGET,
     foodRespawnIntervalMs = FOOD_RESPAWN_INTERVAL_MS,
   } = {}) {
