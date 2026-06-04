@@ -20,7 +20,13 @@ if (import.meta.env.PROD && SERVER_URL === '/') {
   );
 }
 
-export const socket = io(SERVER_URL, {
-  autoConnect: true,
-  transports: ['websocket', 'polling'],
-});
+let socketInstance = null;
+export function getSocket() {
+  if (!socketInstance) {
+    socketInstance = io(SERVER_URL, {
+      autoConnect: true,
+      transports: ['websocket', 'polling'],
+    });
+  }
+  return socketInstance;
+}

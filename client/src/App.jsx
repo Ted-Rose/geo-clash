@@ -1,8 +1,8 @@
 import { useEffect, useState } from 'react';
-import { socket } from './socket.js';
+import { getSocket } from './socket.js';
 import { useGeolocation } from './hooks/useGeolocation.js';
 import LobbyScreen from './components/LobbyScreen.jsx';
-import ClashGameScreen from './clash/GameScreen.jsx';
+import ClashGameScreen from './components/GameScreen.jsx';
 import SnakeGameScreen from './snake/GameScreen.jsx';
 
 const GAME_SCREENS = {
@@ -11,6 +11,7 @@ const GAME_SCREENS = {
 };
 
 export default function App() {
+  const socket = getSocket();
   const [connected, setConnected] = useState(socket.connected);
   const [connectError, setConnectError] = useState(null);
   const [roomId, setRoomId] = useState(null);

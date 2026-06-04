@@ -1,54 +1,13 @@
 import { useEffect, useRef, useState } from 'react';
 import { useSound } from '../hooks/useSound.js';
 import { MapContainer, TileLayer } from 'react-leaflet';
-import { socket, API_BASE } from '../socket.js';
+import { getSocket, API_BASE } from '../socket.js';
 import SnakeHUD from './HUD.jsx';
 import FoodLayer from './FoodLayer.jsx';
 import SnakeLayer from './SnakeLayer.jsx';
 import 'leaflet/dist/leaflet.css';
 
-// --- Geo math (equirectangular, accurate at <1 km) -----------------------
-const EARTH_R = 6378137;
-const DEG = Math.PI / 180;
-function distanceMeters(a, b) {
-  const dLat = (b.lat - a.lat) * DEG;
-  const dLng = (b.lng - a.lng) * DEG;
-  const s =
-    Math.sin(dLat / 2) ** 2 +
-    Math.cos(a.lat * DEG) * Math.cos(b.lat * DEG) *
-    Math.sin(dLng / 2) ** 2;
-  return 2 * EARTH_R * Math.asin(Math.sqrt(s));
-}
-
-// --- Snake gameplay constants (mirror server/src/snake/constants.js) ------
-const MIN_MOVE_M = 1.5;
-const TAIL_METERS_PER_SCORE = 5;
-const MAX_TAIL_SEGMENTS = 200;
-const EAT_RADIUS_M = 4.0;
-const SPAWN_GRACE_MS = 3000;
-
-const DEFAULT_ZOOM = 19;
-
-// Build a new tail array given the previous tail, where the player was, and
-// the current score. Mirrors the server-side logic removed from updateLocation.
-function buildTail(prevTail, prevPos, score) {
-  let tail = [...prevTail, prevPos];
-  const maxLenM = score * TAIL_METERS_PER_SCORE;
-  if (maxLenM <= 0) return [];
-  let totalLen = 0;
-  for (let i = 1; i < tail.length; i++) {
-    totalLen += distanceMeters(tail[i - 1], tail[i]);
-  }
-  while (tail.length > 1 && totalLen > maxLenM) {
-    totalLen -= distanceMeters(tail[0], tail[1]);
-    tail.shift();
-  }
-  if (tail.length > MAX_TAIL_SEGMENTS) {
-    tail = tail.slice(tail.length - MAX_TAIL_SEGMENTS);
-  }
-  return tail;
-}
-
+// ... (rest of imports)
 
 export default function SnakeGameScreen({
   roomId,
@@ -62,6 +21,7 @@ export default function SnakeGameScreen({
   initialSnapshot,
   onLeave,
 }) {
+  const socket = getSocket();
   const [myId, setMyId] = useState(myIdProp || socket.id);
   const { playEat, playDie } = useSound();
   const myIdRef = useRef(myId);

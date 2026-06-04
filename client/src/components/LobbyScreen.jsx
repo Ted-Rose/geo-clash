@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { socket } from '../socket.js';
+import { getSocket } from '../socket.js';
 import { useRooms } from '../hooks/useRooms.js';
 
 // Single mobile-first lobby screen. Lets the player set their name + GPS
@@ -8,9 +8,7 @@ import { useRooms } from '../hooks/useRooms.js';
 export default function LobbyScreen({
   onJoined,
   connected,
-  connectError,
   simulate,
-  setSimulate,
   simPos,
   setSimPos,
   maxImageryAge,
@@ -18,6 +16,9 @@ export default function LobbyScreen({
   maxNativeZoom,
   setMaxNativeZoom,
   position,
+  connectError,
+}) {
+  const socket = getSocket();
 }) {
   const { rooms, loading, refresh } = useRooms();
   const [name, setName] = useState('');

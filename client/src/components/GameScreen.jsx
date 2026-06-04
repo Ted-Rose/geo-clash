@@ -2,18 +2,15 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { useSound } from '../hooks/useSound.js';
 import { io } from 'socket.io-client';
 import { CircleMarker, Tooltip } from 'react-leaflet';
-import { socket, API_BASE } from '../socket.js';
+import { getSocket, API_BASE } from '../socket.js';
 import MapView from './MapView.jsx';
-import HUD from './HUD.jsx';
-import ControlPanel from './ControlPanel.jsx';
-import SimPanel from './SimPanel.jsx';
-import ProjectileLayer from './ProjectileLayer.jsx';
-import PostMatchScreen from './PostMatchScreen.jsx';
+// ... (rest of imports)
 
 // In-game shell. All socket subscriptions are scoped to the lifetime of
 // this component (i.e. while a roomId is set). Leaving the room cleanly
 // unsubscribes and clears local state.
 export default function GameScreen({ roomId, position, simulate, simPos, setSimPos, maxImageryAge, maxNativeZoom, initialSnapshot, onLeave }) {
+  const socket = getSocket();
   const [myId, setMyId] = useState(() => socket.id);
   const {
     playCaptureStart,
