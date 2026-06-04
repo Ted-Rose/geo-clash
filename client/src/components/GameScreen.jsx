@@ -3,7 +3,11 @@ import { useSound } from "../hooks/useSound.js";
 import { CircleMarker, Tooltip } from "react-leaflet";
 import { getSocket, API_BASE } from "../socket.js";
 import MapView from "./MapView.jsx";
-// ... (rest of imports)
+import ProjectileLayer from "./ProjectileLayer.jsx";
+import HUD from "./HUD.jsx";
+import ControlPanel from "./ControlPanel.jsx";
+import SimPanel from "./SimPanel.jsx";
+import PostMatchScreen from "./PostMatchScreen.jsx";
 
 // In-game shell. All socket subscriptions are scoped to the lifetime of
 // this component (i.e. while a roomId is set). Leaving the room cleanly
