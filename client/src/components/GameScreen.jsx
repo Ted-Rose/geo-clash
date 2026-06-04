@@ -28,18 +28,7 @@ export default function GameScreen({
     playEnemyShoot,
     playShield,
   } = useSound();
-  const myIdRef = useRef(myId);
-  useEffect(() => {
-    myIdRef.current = myId;
-  }, [myId]);
-  const positionRef = useRef(position);
-  useEffect(() => {
-    positionRef.current = position;
-  }, [position]);
-  const playersRef = useRef([]);
-  useEffect(() => {
-    playersRef.current = players;
-  }, [players]);
+  // State declarations first
   const [grid, setGrid] = useState(null);
   const [ownership, setOwnership] = useState([]);
   const [players, setPlayers] = useState([]);
@@ -55,6 +44,20 @@ export default function GameScreen({
   const [globalTop, setGlobalTop] = useState(null);
   const [mapLocked, setMapLocked] = useState(true);
   const [menuOpen, setMenuOpen] = useState(false);
+
+  // Refs and their effects
+  const myIdRef = useRef(myId);
+  useEffect(() => {
+    myIdRef.current = myId;
+  }, [myId]);
+  const positionRef = useRef(position);
+  useEffect(() => {
+    positionRef.current = position;
+  }, [position]);
+  const playersRef = useRef([]);
+  useEffect(() => {
+    playersRef.current = players;
+  }, [players]);
 
   // Apply the snapshot that arrived in the room-join ack (before this
   // component mounted, so the socket events were already missed).
