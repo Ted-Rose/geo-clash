@@ -22,12 +22,12 @@ export default function LobbyScreen({
   const { rooms, loading, refresh } = useRooms();
   const [name, setName] = useState('');
   const [newRoomName, setNewRoomName] = useState('');
-  const [cellSize, setCellSize] = useState(10);
+  const [cellSize, setCellSize] = useState(5);
   const [squaresPerSide, setSquaresPerSide] = useState(10);
   const [createGameType, setCreateGameType] = useState('clash');
-  const [foodCount, setFoodCount] = useState(10);
-  const [foodRespawnSec, setFoodRespawnSec] = useState(2);
-  const [arenaSideMeters, setArenaSideMeters] = useState(1000);
+  const [foodCount, setFoodCount] = useState(30);
+  const [foodRespawnSec, setFoodRespawnSec] = useState(1);
+  const [arenaSideMeters, setArenaSideMeters] = useState(50);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState(null);
 

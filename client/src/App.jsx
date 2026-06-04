@@ -35,7 +35,7 @@ export default function App() {
 
   const [maxNativeZoom, _setMaxNativeZoom] = useState(() => {
     const saved = localStorage.getItem('maxNativeZoom');
-    return saved ? parseInt(saved, 10) : 19;
+    return saved ? parseInt(saved, 10) : 18;
   });
 
   const setMaxNativeZoom = (val) => {
