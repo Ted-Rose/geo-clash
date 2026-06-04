@@ -16,17 +16,10 @@ export function registerSnakeHandlers(socket, game) {
     await game.eatFood(socket.id, foodId);
   });
 
-  // Client A detected it crashed into Client B (A is the victim).
-  // Server relays a clash_verify event to B for dual-client confirmation.
-  socket.on('clash_detected', ({ targetId } = {}) => {
-    if (typeof targetId !== 'string') return;
-    game.clashDetected(socket.id, targetId);
-  });
-
-  // Client B (the target) confirms or denies the clash reported by Client A.
-  // Only a confirmed response triggers a score reset on the victim.
-  socket.on('clash_confirmed', async ({ victimId, confirmed } = {}) => {
-    if (typeof victimId !== 'string' || confirmed !== true) return;
-    await game.clashConfirmed(socket.id, victimId);
+  // Client ACKs a clash_verify from the server, proving it is still connected.
+  // Both participants in a clash must ACK before the server commits the kill.
+  socket.on('clash_ack', async ({ clashId } = {}) => {
+    if (typeof clashId !== 'string') return;
+    await game.clashAck(socket.id, clashId);
   });
 }

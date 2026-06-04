@@ -25,8 +25,6 @@ const MIN_MOVE_M = 1.5;
 const TAIL_METERS_PER_SCORE = 5;
 const MAX_TAIL_SEGMENTS = 200;
 const EAT_RADIUS_M = 4.0;
-const COLLISION_RADIUS_M = 2.5;
-const NECK_GAP_M = 2.0;
 const SPAWN_GRACE_MS = 3000;
 
 const DEFAULT_ZOOM = 19;
@@ -51,16 +49,6 @@ function buildTail(prevTail, prevPos, score) {
   return tail;
 }
 
-// Returns true if head collides with any tail segment (skips inner NECK_GAP).
-function collidesWithTail(head, tailPoints) {
-  if (!tailPoints || tailPoints.length === 0) return false;
-  for (let i = tailPoints.length - 1; i >= 0; i--) {
-    const d = distanceMeters(head, tailPoints[i]);
-    if (d < NECK_GAP_M) continue;
-    if (d <= COLLISION_RADIUS_M) return true;
-  }
-  return false;
-}
 
 export default function SnakeGameScreen({
   roomId,
@@ -179,19 +167,11 @@ export default function SnakeGameScreen({
       setMatchActive(false);
       setFinalLeaderboard(leaderboard || []);
     }
-    // Server asks me to verify a clash: did the reported victim hit my snake?
-    function onClashVerify({ victimId }) {
-      const victim = enemyPlayersRef.current.find((p) => p.id === victimId);
-      if (!victim) return;
-      const victimHead = { lat: victim.lat, lng: victim.lng };
-      const hitMyTail = collidesWithTail(victimHead, myTailRef.current);
-      const myHead = lastPosRef.current;
-      const headCollide = myHead
-        ? distanceMeters(victimHead, myHead) <= COLLISION_RADIUS_M
-        : false;
-      if (hitMyTail || headCollide) {
-        socket.emit('clash_confirmed', { victimId, confirmed: true });
-      }
+    // Server detected a collision and asks both participants to prove liveness.
+    // No geometry check — just ACK immediately to confirm this socket is alive.
+    function onClashVerify({ clashId }) {
+      if (typeof clashId !== 'string') return;
+      socket.emit('clash_ack', { clashId });
     }
 
     socket.on('joined', onJoined);
@@ -250,20 +230,9 @@ export default function SnakeGameScreen({
         }
       }
 
-      // 3. Local player-vs-player collision — trigger server handshake
-      for (const enemy of enemyPlayersRef.current) {
-        if (!enemy.alive) continue;
-        if (
-          collidesWithTail(head, enemy.tailPoints) ||
-          distanceMeters(head, { lat: enemy.lat, lng: enemy.lng }) <= COLLISION_RADIUS_M
-        ) {
-          socket.emit('clash_detected', { targetId: enemy.id });
-          break;
-        }
-      }
     }
 
-    // 4. Emit full authoritative state to server for relay to peers
+    // 3. Emit full authoritative state to server for relay to peers
     socket.emit('location-update', {
       lat: position.lat,
       lng: position.lng,
@@ -272,7 +241,7 @@ export default function SnakeGameScreen({
       score: myScoreRef.current,
     });
 
-    // 5. Keep map centred
+    // 4. Keep map centred
     if (mapRef.current) mapRef.current.panTo([position.lat, position.lng]);
   }, [position, roomId]);
 

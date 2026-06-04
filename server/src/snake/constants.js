@@ -34,6 +34,10 @@ export const FOOD_SPAWN_RADIUS_M = 50;
 // Respawn grace period (ms) during which newly spawned player is collision-safe.
 export const SPAWN_GRACE_MS = 3000;
 
+// How long (ms) the server waits for both clash participants to ACK before
+// cancelling the pending clash (no kill if either side is unresponsive).
+export const CLASH_ACK_TIMEOUT_MS = 2000;
+
 // How many kills a player needs to win (0 = time-based only).
 export const KILL_WIN_THRESHOLD = 0;
 

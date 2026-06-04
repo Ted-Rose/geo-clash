@@ -1,33 +1,34 @@
-// Geo Snake game state + tick loop — hybrid client-authoritative model.
+// Geo Snake game state + tick loop — server-authoritative clash model.
 //
 // CLIENT is the source of truth for its own snake (position, tail, score).
-// SERVER is the source of truth for food locations.
+// SERVER is the source of truth for food locations and ALL clash decisions.
 //
 // Flow:
 //   location-update  → server stores client-supplied state, relays to peers
 //   eat_food         → server removes food (tolerates duplicate claims),
 //                      awards point to reporting player, broadcasts food-update
-//   clash_detected   → server relays clash_verify to the target client
-//   clash_confirmed  → server kills victim if both sides verified
+//   _tick            → server detects collisions from stored positions;
+//                      emits clash_verify to both participants
+//   clash_ack        → both clients must ACK within CLASH_ACK_TIMEOUT_MS;
+//                      only then does the server commit the kill
 
 import { makeRoomStores, leaderboardStore } from '../shared/memoryStore.js';
 import { bboxAround } from '../shared/gridUtils.js';
 import { replenishFood } from './food.js';
+import { resolveCollisions } from './collisions.js';
 import {
   FOOD_RESPAWN_INTERVAL_MS,
   FOOD_SPAWN_RADIUS_M,
   TICK_MS,
   FOOD_COUNT_TARGET,
   FOOD_SCORE_PER_ITEM,
+  CLASH_ACK_TIMEOUT_MS,
   COLORS,
 } from './constants.js';
 
 // How long (ms) a food-eaten record is kept to allow duplicate eat_food
 // events from different clients without rejecting them.
 const EAT_RACE_WINDOW_MS = 3000;
-
-// How long (ms) a pending clash is kept before it expires unconfirmed.
-const CLASH_PENDING_TTL_MS = 5000;
 
 export class SnakeGameState {
   constructor({
@@ -66,7 +67,7 @@ export class SnakeGameState {
     this._arenaSideMeters = arenaSideMeters;
     // foodId → timestamp of when it was eaten (race-condition window)
     this._recentlyEaten = new Map();
-    // reporterId → { targetId, timestamp } pending clash verifications
+    // clashId → { victimId, killerId, acksNeeded: Set, timestamp }
     this._pendingClashes = new Map();
     if (this._centerLat !== null && this._centerLng !== null) {
       this._initArena(this._centerLat, this._centerLng);
@@ -181,6 +182,7 @@ export class SnakeGameState {
   }
 
   async removePlayer(id) {
+    this.cancelClashesFor(id);
     await this.playerStore.del(id);
   }
 
@@ -235,49 +237,40 @@ export class SnakeGameState {
     this._emit('snake-ate', { playerId, foodId, score: p.score });
   }
 
-  // ---- clash (player-vs-player) handshake --------------------------------
+  // ---- clash (player-vs-player) server-authoritative handshake -----------
 
-  // Client A reports it crashed into Client B.  A is the victim.
-  // Server relays a clash_verify request to B's socket.
-  clashDetected(reporterId, targetId) {
+  // Called when a socket ACKs a pending clash_verify.
+  // The kill only executes once every participant has ACKed.
+  async clashAck(socketId, clashId) {
     if (!this.matchActive) return;
-    const now = Date.now();
+    const pending = this._pendingClashes.get(clashId);
+    if (!pending) return;
 
-    // Purge expired pending clashes
-    for (const [rid, entry] of this._pendingClashes) {
-      if (now - entry.timestamp > CLASH_PENDING_TTL_MS) {
-        this._pendingClashes.delete(rid);
-      }
+    pending.acksNeeded.delete(socketId);
+
+    if (pending.acksNeeded.size === 0) {
+      this._pendingClashes.delete(clashId);
+      await this._killPlayer(pending.victimId, pending.killerId);
     }
-
-    this._pendingClashes.set(reporterId, { targetId, timestamp: now });
-
-    // Ask the target client to verify the clash from its own perspective.
-    this.io.to(targetId).emit('clash_verify', { victimId: reporterId });
   }
 
-  // Client B confirms (or both clients independently report).
-  // victimId is the player whose score should be reset.
-  // killerId is the surviving player who gets kill credit.
-  async clashConfirmed(confirmerId, victimId) {
-    if (!this.matchActive) return;
-
-    // Accept if there is a matching pending clash or if the confirmer is
-    // the target of a pending clash initiated by the victim.
-    const pending = this._pendingClashes.get(victimId);
-    if (!pending || pending.targetId !== confirmerId) return;
-
-    this._pendingClashes.delete(victimId);
-    await this._killPlayer(victimId, confirmerId);
+  // Called on socket disconnect — cancel any pending clashes where the
+  // disconnected player was a required participant (no kill for ghost clash).
+  cancelClashesFor(socketId) {
+    for (const [clashId, entry] of this._pendingClashes) {
+      if (entry.acksNeeded.has(socketId)) {
+        this._pendingClashes.delete(clashId);
+      }
+    }
   }
 
   // ---- tick --------------------------------------------------------------
 
-  // Tick is now a pure state-relay: no movement or collision logic.
-  // It broadcasts whatever state the clients last sent us.
+  // Tick relays state to all clients and runs server-side collision detection.
   async _tick() {
     if (this.status === 'ending' || this.status === 'ended') return;
-    this._lastTick = Date.now();
+    const now = Date.now();
+    this._lastTick = now;
 
     const players = await this._allPlayers();
 
@@ -285,6 +278,41 @@ export class SnakeGameState {
       players: players.map(publicPlayer),
       scores: this._scores(players),
     });
+
+    // Expire pending clashes whose ACK window has closed without all ACKs.
+    for (const [clashId, entry] of this._pendingClashes) {
+      if (now - entry.timestamp > CLASH_ACK_TIMEOUT_MS) {
+        this._pendingClashes.delete(clashId);
+      }
+    }
+
+    // Server-authoritative collision detection.
+    const playersMap = {};
+    for (const p of players) playersMap[p.id] = p;
+    const kills = resolveCollisions(playersMap);
+
+    for (const { killerId, victimId } of kills) {
+      // Dedup: skip if a pending clash already exists for this victim.
+      const alreadyPending = [...this._pendingClashes.values()].some(
+        (e) => e.victimId === victimId,
+      );
+      if (alreadyPending) continue;
+
+      const clashId = `${victimId}:${now}`;
+      const acksNeeded = new Set([victimId]);
+      if (killerId) acksNeeded.add(killerId);
+
+      this._pendingClashes.set(clashId, {
+        victimId,
+        killerId: killerId || null,
+        acksNeeded,
+        timestamp: now,
+      });
+
+      // Notify all participants — each must ACK to prove liveness.
+      this.io.to(victimId).emit('clash_verify', { clashId });
+      if (killerId) this.io.to(killerId).emit('clash_verify', { clashId });
+    }
   }
 
   async _killPlayer(victimId, killerId) {
