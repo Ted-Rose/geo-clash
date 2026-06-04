@@ -358,7 +358,7 @@ export default function LobbyScreen({
                   <input
                     type="range"
                     min={3}
-                    max={30}
+                    max={100}
                     step={1}
                     value={foodCount}
                     onChange={(e) => setFoodCount(Number(e.target.value))}
