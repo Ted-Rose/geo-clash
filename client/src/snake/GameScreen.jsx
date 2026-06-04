@@ -150,12 +150,14 @@ export default function SnakeGameScreen({
       if (victimId === myIdRef.current) playDie();
     }
     // Server-confirmed reset after a clash kill — wipe local snake state
-    function onSnakeReset({ spawnedAt }) {
+    function onSnakeReset({ playerId, spawnedAt }) {
+      if (playerId && playerId !== myIdRef.current) return;
       myTailRef.current = [];
       myScoreRef.current = 0;
       setMyScore(0);
       mySpawnedAtRef.current = spawnedAt || Date.now();
       lastPosRef.current = null;
+      eatenIdsRef.current.clear();
     }
     function onMatchStart({ bbox: b, foods: fs }) {
       setMatchActive(true);
