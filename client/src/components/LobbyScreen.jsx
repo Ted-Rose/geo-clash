@@ -13,6 +13,8 @@ export default function LobbyScreen({
   setSimulate,
   simPos,
   setSimPos,
+  maxImageryAge,
+  setMaxImageryAge,
   position,
 }) {
   const { rooms, loading, refresh } = useRooms();
@@ -148,6 +150,26 @@ export default function LobbyScreen({
                 className="w-5 h-5"
               />
               Simulate movement (desktop / no GPS)
+            </label>
+
+            <label className="block border-t border-slate-700 pt-3">
+              <div className="flex justify-between text-sm text-slate-300 mb-1">
+                <span>Max Imagery Age</span>
+                <span className="font-mono text-cyan-400">{maxImageryAge} years</span>
+              </div>
+              <input
+                type="range"
+                min={1}
+                max={20}
+                step={1}
+                value={maxImageryAge}
+                onChange={(e) => setMaxImageryAge(Number(e.target.value))}
+                className="w-full accent-cyan-500"
+              />
+              <div className="text-[10px] text-slate-500 mt-1 leading-tight">
+                Blocks high-res imagery older than {maxImageryAge} years.
+                The map will "overzoom" newer, lower-res tiles instead.
+              </div>
             </label>
 
             {!position && !simulate && (

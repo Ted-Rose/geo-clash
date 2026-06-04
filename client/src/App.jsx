@@ -19,10 +19,22 @@ export default function App() {
 
   // Lift sim/GPS state here so the Lobby and the Game share the same
   // position source. The Game also needs `simulate`/`simPos` to render the
-  // Sim panel. The Lobby drives the toggle.
+  // Lobby drives the toggle.
   const [simulate, setSimulate] = useState(false);
   const [simPos, setSimPos] = useState(null);
+
+  const [maxImageryAge, _setMaxImageryAge] = useState(() => {
+    const saved = localStorage.getItem('maxImageryAge');
+    return saved ? parseInt(saved, 10) : 3;
+  });
+
+  const setMaxImageryAge = (val) => {
+    _setMaxImageryAge(val);
+    localStorage.setItem('maxImageryAge', val);
+  };
+
   const { position: gpsPos } = useGeolocation({
+
     enabled: !simulate,
     simulated: simulate ? simPos : null,
   });
@@ -56,6 +68,8 @@ export default function App() {
         setSimulate={setSimulate}
         simPos={simPos}
         setSimPos={setSimPos}
+        maxImageryAge={maxImageryAge}
+        setMaxImageryAge={setMaxImageryAge}
         position={position}
         onJoined={({ roomId: id, room: r, snapshot }) => {
           setInitialSnapshot(snapshot || null);
@@ -76,6 +90,7 @@ export default function App() {
       simulate={simulate}
       simPos={simPos}
       setSimPos={setSimPos}
+      maxImageryAge={maxImageryAge}
       initialSnapshot={initialSnapshot}
       onLeave={() => { setRoomId(null); setRoom(null); }}
     />

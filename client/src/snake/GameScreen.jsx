@@ -69,6 +69,7 @@ export default function SnakeGameScreen({
   simulate,
   simPos,
   setSimPos,
+  maxImageryAge,
   initialSnapshot,
   onLeave,
 }) {
@@ -398,10 +399,11 @@ export default function SnakeGameScreen({
         ref={mapRef}
       >
         <TileLayer
-          url="https://clarity.maptiles.arcgis.com/arcgis/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}"
+          url={`/api/map/tiles/{z}/{y}/{x}?maxAge=${maxImageryAge}`}
           attribution='Tiles &copy; Esri &mdash; Source: Esri, Maxar, GeoEye, Earthstar Geographics, CNES/Airbus DS, USDA, USGS, AeroGRID, IGN, and the GIS User Community'
           maxZoom={22}
           maxNativeZoom={19}
+          key={maxImageryAge}
         />
         <FoodLayer foods={foods} />
         <SnakeLayer players={allPlayers} myId={myId} />

@@ -108,6 +108,7 @@ export default function MapView({
   children,
   onMapLongPress,
   mapLocked,
+  maxImageryAge = 3,
 }) {
   const center = useMemo(() => {
     if (me) return [me.lat, me.lng];
@@ -134,9 +135,10 @@ export default function MapView({
     >
       <TileLayer
         attribution='Tiles &copy; Esri &mdash; Source: Esri, Maxar, GeoEye, Earthstar Geographics, CNES/Airbus DS, USDA, USGS, AeroGRID, IGN, and the GIS User Community'
-        url="https://clarity.maptiles.arcgis.com/arcgis/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}"
+        url={`/api/map/tiles/{z}/{y}/{x}?maxAge=${maxImageryAge}`}
         maxNativeZoom={19}
         maxZoom={22}
+        key={maxImageryAge}
       />
 
       {/* Grid cells */}

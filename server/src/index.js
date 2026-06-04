@@ -8,6 +8,7 @@ import { Server as IOServer } from 'socket.io';
 import { RoomRegistry } from './roomRegistry.js';
 import { registerSocketHandlers } from './socketHandlers.js';
 import { leaderboardStore } from './shared/memoryStore.js';
+import tileProxy from './tileProxy.js';
 
 const PORT = process.env.PORT || 3001;
 
@@ -29,6 +30,7 @@ console.log('[geo-clash] CORS origin:', CORS_ORIGIN);
 const app = express();
 app.use(cors({ origin: CORS_ORIGIN }));
 app.use(express.json());
+app.use('/api/map/tiles', tileProxy);
 app.get('/health', (_req, res) => res.json({ ok: true }));
 
 const server = http.createServer(app);
