@@ -1,11 +1,12 @@
 import { useCallback, useEffect, useState } from 'react';
-import { socket } from '../socket.js';
+import { getSocket } from '../socket.js';
 
 // Subscribes to `rooms-updated` broadcasts and exposes a refresh() that
 // asks the server for the current room list. Returns a stable shape
 // regardless of socket state so the lobby can render an empty list during
 // reconnects without flashing errors.
 export function useRooms() {
+  const socket = getSocket();
   const [rooms, setRooms] = useState([]);
   const [loading, setLoading] = useState(true);
 
@@ -15,7 +16,7 @@ export function useRooms() {
       if (resp && Array.isArray(resp.rooms)) setRooms(resp.rooms);
       setLoading(false);
     });
-  }, []);
+  }, [socket]);
 
   useEffect(() => {
     function onUpdate({ rooms: next }) {
@@ -28,7 +29,7 @@ export function useRooms() {
       socket.off('rooms-updated', onUpdate);
       socket.off('connect', refresh);
     };
-  }, [refresh]);
+  }, [socket, refresh]);
 
   return { rooms, loading, refresh };
 }

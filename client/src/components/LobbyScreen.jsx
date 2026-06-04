@@ -19,7 +19,6 @@ export default function LobbyScreen({
   connectError,
 }) {
   const socket = getSocket();
-}) {
   const { rooms, loading, refresh } = useRooms();
   const [name, setName] = useState('');
   const [newRoomName, setNewRoomName] = useState('');
