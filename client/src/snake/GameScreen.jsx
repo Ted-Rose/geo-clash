@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { useSound } from '../hooks/useSound.js';
 import { MapContainer, TileLayer } from 'react-leaflet';
-import { socket } from '../socket.js';
+import { socket, API_BASE } from '../socket.js';
 import SnakeHUD from './HUD.jsx';
 import FoodLayer from './FoodLayer.jsx';
 import SnakeLayer from './SnakeLayer.jsx';
@@ -399,7 +399,7 @@ export default function SnakeGameScreen({
         ref={mapRef}
       >
         <TileLayer
-          url={`/api/map/tiles/{z}/{y}/{x}?maxAge=${maxImageryAge}`}
+          url={`${API_BASE}/api/map/tiles/{z}/{y}/{x}?maxAge=${maxImageryAge}`}
           attribution='Tiles &copy; Esri &mdash; Source: Esri, Maxar, GeoEye, Earthstar Geographics, CNES/Airbus DS, USDA, USGS, AeroGRID, IGN, and the GIS User Community'
           maxZoom={22}
           maxNativeZoom={19}

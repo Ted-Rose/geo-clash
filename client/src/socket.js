@@ -4,7 +4,12 @@ import { io } from 'socket.io-client';
 // In production (Vercel SPA + GCP Cloud Run server), VITE_SERVER_URL must be
 // set at build time to the Cloud Run HTTPS URL — otherwise socket.io connects
 // to the Vercel origin, hits the SPA rewrite, and silently never handshakes.
-const SERVER_URL = import.meta.env.VITE_SERVER_URL || '/';
+export const SERVER_URL = import.meta.env.VITE_SERVER_URL || '/';
+
+// API_BASE is used for fetch() and Leaflet tile URLs.
+// If SERVER_URL is '/', we want empty string so '/api' stays relative.
+// If SERVER_URL is 'https://...', we use it as the base.
+export const API_BASE = SERVER_URL === '/' ? '' : SERVER_URL;
 
 if (import.meta.env.PROD && SERVER_URL === '/') {
   // eslint-disable-next-line no-console

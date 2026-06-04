@@ -8,6 +8,7 @@ import {
   Popup,
 } from 'react-leaflet';
 import L from 'leaflet';
+import { API_BASE } from '../socket.js';
 
 // Auto-recenters the map when the local player's position changes meaningfully.
 function Recenter({ center, mapLocked }) {
@@ -135,7 +136,7 @@ export default function MapView({
     >
       <TileLayer
         attribution='Tiles &copy; Esri &mdash; Source: Esri, Maxar, GeoEye, Earthstar Geographics, CNES/Airbus DS, USDA, USGS, AeroGRID, IGN, and the GIS User Community'
-        url={`/api/map/tiles/{z}/{y}/{x}?maxAge=${maxImageryAge}`}
+        url={`${API_BASE}/api/map/tiles/{z}/{y}/{x}?maxAge=${maxImageryAge}`}
         maxNativeZoom={19}
         maxZoom={22}
         key={maxImageryAge}

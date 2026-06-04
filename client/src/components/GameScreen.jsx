@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { useSound } from '../hooks/useSound.js';
 import { io } from 'socket.io-client';
 import { CircleMarker, Tooltip } from 'react-leaflet';
-import { socket } from '../socket.js';
+import { socket, API_BASE } from '../socket.js';
 import MapView from './MapView.jsx';
 import HUD from './HUD.jsx';
 import ControlPanel from './ControlPanel.jsx';
@@ -120,7 +120,7 @@ export default function GameScreen({ roomId, position, simulate, simPos, setSimP
       if (Array.isArray(leaderboard)) setFinalLeaderboard(leaderboard);
       // Pull the global top-N so the post-match screen can show where this
       // match sits in the all-time list.
-      fetch('/api/leaderboard?limit=10')
+      fetch(`${API_BASE}/api/leaderboard?limit=10`)
         .then((r) => (r.ok ? r.json() : { top: [] }))
         .then((data) => setGlobalTop(data.top || []))
         .catch(() => setGlobalTop([]));
