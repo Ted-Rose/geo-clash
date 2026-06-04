@@ -7,7 +7,7 @@ import FoodLayer from './FoodLayer.jsx';
 import SnakeLayer from './SnakeLayer.jsx';
 import 'leaflet/dist/leaflet.css';
 
-// ... (rest of imports)
+const DEFAULT_ZOOM = 19;
 
 export default function SnakeGameScreen({
   roomId,
