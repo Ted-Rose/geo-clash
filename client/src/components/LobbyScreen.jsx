@@ -15,6 +15,8 @@ export default function LobbyScreen({
   setSimPos,
   maxImageryAge,
   setMaxImageryAge,
+  maxNativeZoom,
+  setMaxNativeZoom,
   position,
 }) {
   const { rooms, loading, refresh } = useRooms();
@@ -168,6 +170,25 @@ export default function LobbyScreen({
               />
               <div className="text-[10px] text-slate-500 mt-1 leading-tight">
                 Blocks high-res imagery older than {maxImageryAge} years.
+              </div>
+            </label>
+
+            <label className="block border-t border-slate-700 pt-3">
+              <div className="flex justify-between text-sm text-slate-300 mb-1">
+                <span>Max Map Detail</span>
+                <span className="font-mono text-cyan-400">Zoom {maxNativeZoom}</span>
+              </div>
+              <input
+                type="range"
+                min={15}
+                max={19}
+                step={1}
+                value={maxNativeZoom}
+                onChange={(e) => setMaxNativeZoom(Number(e.target.value))}
+                className="w-full accent-cyan-500"
+              />
+              <div className="text-[10px] text-slate-500 mt-1 leading-tight">
+                Lower this if high-res imagery is outdated.
                 The map will "overzoom" newer, lower-res tiles instead.
               </div>
             </label>

@@ -70,6 +70,7 @@ export default function SnakeGameScreen({
   simPos,
   setSimPos,
   maxImageryAge,
+  maxNativeZoom,
   initialSnapshot,
   onLeave,
 }) {
@@ -402,8 +403,8 @@ export default function SnakeGameScreen({
           url={`${API_BASE}/api/map/tiles/{z}/{y}/{x}?maxAge=${maxImageryAge}`}
           attribution='Tiles &copy; Esri &mdash; Source: Esri, Maxar, GeoEye, Earthstar Geographics, CNES/Airbus DS, USDA, USGS, AeroGRID, IGN, and the GIS User Community'
           maxZoom={22}
-          maxNativeZoom={19}
-          key={maxImageryAge}
+          maxNativeZoom={maxNativeZoom}
+          key={`${maxImageryAge}-${maxNativeZoom}`}
         />
         <FoodLayer foods={foods} />
         <SnakeLayer players={allPlayers} myId={myId} />

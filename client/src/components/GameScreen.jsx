@@ -13,7 +13,7 @@ import PostMatchScreen from './PostMatchScreen.jsx';
 // In-game shell. All socket subscriptions are scoped to the lifetime of
 // this component (i.e. while a roomId is set). Leaving the room cleanly
 // unsubscribes and clears local state.
-export default function GameScreen({ roomId, position, simulate, simPos, setSimPos, maxImageryAge, initialSnapshot, onLeave }) {
+export default function GameScreen({ roomId, position, simulate, simPos, setSimPos, maxImageryAge, maxNativeZoom, initialSnapshot, onLeave }) {
   const [myId, setMyId] = useState(() => socket.id);
   const {
     playCaptureStart,
@@ -279,6 +279,7 @@ export default function GameScreen({ roomId, position, simulate, simPos, setSimP
         onMapLongPress={(latlng) => setTarget(latlng)}
         mapLocked={mapLocked}
         maxImageryAge={maxImageryAge}
+        maxNativeZoom={maxNativeZoom}
       >
         <ProjectileLayer projectiles={projectiles} skewMs={skewMs} />
         {target && (

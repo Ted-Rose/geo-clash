@@ -33,6 +33,16 @@ export default function App() {
     localStorage.setItem('maxImageryAge', val);
   };
 
+  const [maxNativeZoom, _setMaxNativeZoom] = useState(() => {
+    const saved = localStorage.getItem('maxNativeZoom');
+    return saved ? parseInt(saved, 10) : 19;
+  });
+
+  const setMaxNativeZoom = (val) => {
+    _setMaxNativeZoom(val);
+    localStorage.setItem('maxNativeZoom', val);
+  };
+
   const { position: gpsPos } = useGeolocation({
 
     enabled: !simulate,
@@ -70,6 +80,8 @@ export default function App() {
         setSimPos={setSimPos}
         maxImageryAge={maxImageryAge}
         setMaxImageryAge={setMaxImageryAge}
+        maxNativeZoom={maxNativeZoom}
+        setMaxNativeZoom={setMaxNativeZoom}
         position={position}
         onJoined={({ roomId: id, room: r, snapshot }) => {
           setInitialSnapshot(snapshot || null);
@@ -91,6 +103,7 @@ export default function App() {
       simPos={simPos}
       setSimPos={setSimPos}
       maxImageryAge={maxImageryAge}
+      maxNativeZoom={maxNativeZoom}
       initialSnapshot={initialSnapshot}
       onLeave={() => { setRoomId(null); setRoom(null); }}
     />
