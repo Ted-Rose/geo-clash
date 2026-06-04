@@ -1,15 +1,24 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
-import { useSound } from '../hooks/useSound.js';
-import { io } from 'socket.io-client';
-import { CircleMarker, Tooltip } from 'react-leaflet';
-import { getSocket, API_BASE } from '../socket.js';
-import MapView from './MapView.jsx';
+import { useEffect, useMemo, useRef, useState } from "react";
+import { useSound } from "../hooks/useSound.js";
+import { CircleMarker, Tooltip } from "react-leaflet";
+import { getSocket, API_BASE } from "../socket.js";
+import MapView from "./MapView.jsx";
 // ... (rest of imports)
 
 // In-game shell. All socket subscriptions are scoped to the lifetime of
 // this component (i.e. while a roomId is set). Leaving the room cleanly
 // unsubscribes and clears local state.
-export default function GameScreen({ roomId, position, simulate, simPos, setSimPos, maxImageryAge, maxNativeZoom, initialSnapshot, onLeave }) {
+export default function GameScreen({
+  roomId,
+  position,
+  simulate,
+  simPos,
+  setSimPos,
+  maxImageryAge,
+  maxNativeZoom,
+  initialSnapshot,
+  onLeave,
+}) {
   const socket = getSocket();
   const [myId, setMyId] = useState(() => socket.id);
   const {
@@ -20,11 +29,17 @@ export default function GameScreen({ roomId, position, simulate, simPos, setSimP
     playShield,
   } = useSound();
   const myIdRef = useRef(myId);
-  useEffect(() => { myIdRef.current = myId; }, [myId]);
+  useEffect(() => {
+    myIdRef.current = myId;
+  }, [myId]);
   const positionRef = useRef(position);
-  useEffect(() => { positionRef.current = position; }, [position]);
+  useEffect(() => {
+    positionRef.current = position;
+  }, [position]);
   const playersRef = useRef([]);
-  useEffect(() => { playersRef.current = players; }, [players]);
+  useEffect(() => {
+    playersRef.current = players;
+  }, [players]);
   const [grid, setGrid] = useState(null);
   const [ownership, setOwnership] = useState([]);
   const [players, setPlayers] = useState([]);
@@ -50,10 +65,11 @@ export default function GameScreen({ roomId, position, simulate, simPos, setSimP
     if (s.ownership) setOwnership(s.ownership);
     if (s.players) setPlayers(s.players);
     if (s.scores) setScores(s.scores);
-    if (typeof s.remainingSeconds === 'number') setRemainingSeconds(s.remainingSeconds);
+    if (typeof s.remainingSeconds === "number")
+      setRemainingSeconds(s.remainingSeconds);
     if (Array.isArray(s.projectiles)) setProjectiles(s.projectiles);
-    if (typeof s.serverNow === 'number') setSkewMs(s.serverNow - Date.now());
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+    if (typeof s.serverNow === "number") setSkewMs(s.serverNow - Date.now());
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // Wire socket events for the active room.
@@ -63,17 +79,21 @@ export default function GameScreen({ roomId, position, simulate, simPos, setSimP
       if (s.ownership) setOwnership(s.ownership);
       if (s.players) setPlayers(s.players);
       if (s.scores) setScores(s.scores);
-      if (typeof s.remainingSeconds === 'number') {
+      if (typeof s.remainingSeconds === "number") {
         setRemainingSeconds(s.remainingSeconds);
       }
       if (Array.isArray(s.projectiles)) setProjectiles(s.projectiles);
-      if (typeof s.serverNow === 'number') {
+      if (typeof s.serverNow === "number") {
         // First-cut skew estimate from the snapshot, refined by `time-sync`.
         setSkewMs(s.serverNow - Date.now());
       }
     }
-    function onJoined({ id }) { setMyId(id); }
-    function onPlayers({ players: ps }) { setPlayers(ps); }
+    function onJoined({ id }) {
+      setMyId(id);
+    }
+    function onPlayers({ players: ps }) {
+      setPlayers(ps);
+    }
     function onGrid({ cells, scores: sc }) {
       setOwnership((prev) => {
         const m = new Map(prev.map((c) => [c.id, c]));
@@ -86,7 +106,9 @@ export default function GameScreen({ roomId, position, simulate, simPos, setSimP
     function onCaptureStart({ playerId }) {
       if (playerId === myIdRef.current) playCaptureStart();
     }
-    function onTimer({ remainingSeconds: rs }) { setRemainingSeconds(rs); }
+    function onTimer({ remainingSeconds: rs }) {
+      setRemainingSeconds(rs);
+    }
     function onShield({ id, until }) {
       if (id === socket.id) {
         setShieldUntil(until);
@@ -101,9 +123,9 @@ export default function GameScreen({ roomId, position, simulate, simPos, setSimP
       if (p.attackerId === myIdRef.current) {
         playShoot(p.attackerId);
       } else {
-        const me = playersRef.current.find(
-          (pl) => pl.id === myIdRef.current
-        ) || positionRef.current;
+        const me =
+          playersRef.current.find((pl) => pl.id === myIdRef.current) ||
+          positionRef.current;
         if (me && distDeg(me, p.target) <= ENEMY_SHOT_NEAR_DEG) {
           playEnemyShoot(p.attackerId);
         }
@@ -123,30 +145,30 @@ export default function GameScreen({ roomId, position, simulate, simPos, setSimP
         .catch(() => setGlobalTop([]));
     }
 
-    socket.on('snapshot', onSnapshot);
-    socket.on('joined', onJoined);
-    socket.on('players-update', onPlayers);
-    socket.on('grid-update', onGrid);
-    socket.on('cell-capture-start', onCaptureStart);
-    socket.on('timer', onTimer);
-    socket.on('player-shield', onShield);
-    socket.on('player-shield-end', onShieldEnd);
-    socket.on('projectile-spawn', onProjectileSpawn);
-    socket.on('projectile-resolved', onProjectileResolved);
-    socket.on('match-end', onMatchEnd);
+    socket.on("snapshot", onSnapshot);
+    socket.on("joined", onJoined);
+    socket.on("players-update", onPlayers);
+    socket.on("grid-update", onGrid);
+    socket.on("cell-capture-start", onCaptureStart);
+    socket.on("timer", onTimer);
+    socket.on("player-shield", onShield);
+    socket.on("player-shield-end", onShieldEnd);
+    socket.on("projectile-spawn", onProjectileSpawn);
+    socket.on("projectile-resolved", onProjectileResolved);
+    socket.on("match-end", onMatchEnd);
 
     return () => {
-      socket.off('snapshot', onSnapshot);
-      socket.off('joined', onJoined);
-      socket.off('players-update', onPlayers);
-      socket.off('grid-update', onGrid);
-      socket.off('cell-capture-start', onCaptureStart);
-      socket.off('timer', onTimer);
-      socket.off('player-shield', onShield);
-      socket.off('player-shield-end', onShieldEnd);
-      socket.off('projectile-spawn', onProjectileSpawn);
-      socket.off('projectile-resolved', onProjectileResolved);
-      socket.off('match-end', onMatchEnd);
+      socket.off("snapshot", onSnapshot);
+      socket.off("joined", onJoined);
+      socket.off("players-update", onPlayers);
+      socket.off("grid-update", onGrid);
+      socket.off("cell-capture-start", onCaptureStart);
+      socket.off("timer", onTimer);
+      socket.off("player-shield", onShield);
+      socket.off("player-shield-end", onShieldEnd);
+      socket.off("projectile-spawn", onProjectileSpawn);
+      socket.off("projectile-resolved", onProjectileResolved);
+      socket.off("match-end", onMatchEnd);
     };
   }, [roomId]);
 
@@ -154,7 +176,7 @@ export default function GameScreen({ roomId, position, simulate, simPos, setSimP
   useEffect(() => {
     function syncOnce() {
       const send = Date.now();
-      socket.emit('time-sync', send, (resp) => {
+      socket.emit("time-sync", send, (resp) => {
         if (!resp) return;
         const recv = Date.now();
         const rtt = recv - send;
@@ -164,8 +186,10 @@ export default function GameScreen({ roomId, position, simulate, simPos, setSimP
       });
     }
     if (socket.connected) syncOnce();
-    socket.on('connect', syncOnce);
-    return () => { socket.off('connect', syncOnce); };
+    socket.on("connect", syncOnce);
+    return () => {
+      socket.off("connect", syncOnce);
+    };
   }, []);
 
   // Stream our position to the server (rate-limited).
@@ -175,7 +199,7 @@ export default function GameScreen({ roomId, position, simulate, simPos, setSimP
     const now = Date.now();
     if (now - lastSentRef.current < 250) return;
     lastSentRef.current = now;
-    socket.emit('location-update', {
+    socket.emit("location-update", {
       lat: position.lat,
       lng: position.lng,
       heading: position.heading ?? 0,
@@ -184,7 +208,7 @@ export default function GameScreen({ roomId, position, simulate, simPos, setSimP
 
   const me = useMemo(
     () => players.find((p) => p.id === myId) || null,
-    [players, myId]
+    [players, myId],
   );
 
   const mySquares = useMemo(() => {
@@ -208,33 +232,37 @@ export default function GameScreen({ roomId, position, simulate, simPos, setSimP
     const east = b[1];
     const north = d[0];
     return (
-      position.lat >= south && position.lat <= north &&
-      position.lng >= west && position.lng <= east
+      position.lat >= south &&
+      position.lat <= north &&
+      position.lng >= west &&
+      position.lng <= east
     );
   }, [grid, position]);
 
   const attack = () => {
-    socket.emit('player-attack', {
+    socket.emit("player-attack", {
       heading: position?.heading ?? 0,
       target: target || undefined,
     });
   };
-  const shield = () => socket.emit('player-shield');
-  const respawn = () => socket.emit('player-respawn');
+  const shield = () => socket.emit("player-shield");
+  const respawn = () => socket.emit("player-respawn");
 
   // Bots: extra socket.io connections from this tab — convenient for testing.
-  const spawnBot = () => {
+  const spawnBot = async () => {
     if (!grid) return;
+    const { io } = await import("socket.io-client");
     const { bbox } = grid;
-    const botSocket = io('/', { transports: ['websocket', 'polling'] });
+    const botSocket = io("/", { transports: ["websocket", "polling"] });
     let lat = bbox.south + Math.random() * (bbox.north - bbox.south);
     let lng = bbox.west + Math.random() * (bbox.east - bbox.west);
     let heading = Math.random() * 360;
-    botSocket.on('connect', () => {
-      botSocket.emit('room-join', {
+    botSocket.on("connect", () => {
+      botSocket.emit("room-join", {
         roomId,
         name: `Bot-${bots.length + 1}`,
-        lat, lng,
+        lat,
+        lng,
       });
     });
     const interval = setInterval(() => {
@@ -242,12 +270,16 @@ export default function GameScreen({ roomId, position, simulate, simPos, setSimP
       const φ = (lat * Math.PI) / 180;
       const stepM = 2 + Math.random() * 3;
       const dLat = (stepM / 111320) * Math.cos((heading * Math.PI) / 180);
-      const dLng = (stepM / (111320 * Math.cos(φ))) * Math.sin((heading * Math.PI) / 180);
-      lat = Math.min(bbox.north - 1e-6, Math.max(bbox.south + 1e-6, lat + dLat));
+      const dLng =
+        (stepM / (111320 * Math.cos(φ))) * Math.sin((heading * Math.PI) / 180);
+      lat = Math.min(
+        bbox.north - 1e-6,
+        Math.max(bbox.south + 1e-6, lat + dLat),
+      );
       lng = Math.min(bbox.east - 1e-6, Math.max(bbox.west + 1e-6, lng + dLng));
-      botSocket.emit('location-update', { lat, lng, heading });
-      if (Math.random() < 0.02) botSocket.emit('player-attack', { heading });
-      if (Math.random() < 0.01) botSocket.emit('player-shield');
+      botSocket.emit("location-update", { lat, lng, heading });
+      if (Math.random() < 0.02) botSocket.emit("player-attack", { heading });
+      if (Math.random() < 0.01) botSocket.emit("player-shield");
     }, 500);
     setBots((b) => [...b, { socket: botSocket, interval }]);
   };
@@ -255,7 +287,7 @@ export default function GameScreen({ roomId, position, simulate, simPos, setSimP
   // Cleanup bots + leave room on unmount.
   useEffect(() => {
     return () => {
-      socket.emit('room-leave');
+      socket.emit("room-leave");
       for (const b of bots) {
         clearInterval(b.interval);
         b.socket.disconnect();
@@ -284,9 +316,9 @@ export default function GameScreen({ roomId, position, simulate, simPos, setSimP
             center={[target.lat, target.lng]}
             radius={6}
             pathOptions={{
-              color: '#facc15',
+              color: "#facc15",
               weight: 2,
-              fillColor: '#facc15',
+              fillColor: "#facc15",
               fillOpacity: 0.6,
             }}
           >
@@ -324,7 +356,10 @@ export default function GameScreen({ roomId, position, simulate, simPos, setSimP
         {menuOpen && (
           <div className="mt-2 bg-slate-900/95 backdrop-blur rounded-xl shadow-xl p-2 flex flex-col gap-1 min-w-[180px]">
             <button
-              onClick={() => { setMenuOpen(false); onLeave(); }}
+              onClick={() => {
+                setMenuOpen(false);
+                onLeave();
+              }}
               className="w-full text-left px-3 py-2 rounded-lg text-slate-200 hover:bg-slate-700 active:scale-95 transition text-sm"
             >
               ⤺ Leave
@@ -341,15 +376,26 @@ export default function GameScreen({ roomId, position, simulate, simPos, setSimP
             {players.length > 0 && (
               <>
                 <div className="border-t border-slate-700 my-1" />
-                <div className="px-3 py-1 text-xs uppercase tracking-wider text-slate-500">Players</div>
+                <div className="px-3 py-1 text-xs uppercase tracking-wider text-slate-500">
+                  Players
+                </div>
                 {players.map((p) => (
-                  <div key={p.id} className="flex items-center gap-2 px-3 py-1.5 text-sm text-slate-200">
+                  <div
+                    key={p.id}
+                    className="flex items-center gap-2 px-3 py-1.5 text-sm text-slate-200"
+                  >
                     <span
                       className="inline-block w-3 h-3 rounded-full flex-shrink-0"
-                      style={{ background: p.color || '#94a3b8' }}
+                      style={{ background: p.color || "#94a3b8" }}
                     />
-                    <span className={p.id === myId ? 'font-semibold' : ''}>{p.name}</span>
-                    {p.id === myId && <span className="ml-auto text-xs text-slate-400">(you)</span>}
+                    <span className={p.id === myId ? "font-semibold" : ""}>
+                      {p.name}
+                    </span>
+                    {p.id === myId && (
+                      <span className="ml-auto text-xs text-slate-400">
+                        (you)
+                      </span>
+                    )}
                   </div>
                 ))}
               </>
