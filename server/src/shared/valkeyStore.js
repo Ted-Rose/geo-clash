@@ -35,9 +35,12 @@ export class ValkeyStore {
   async all() {
     const ks = await this.keys();
     const entries = await Promise.all(
-      ks.map(async k => [k, await this.get(k)])
+      ks.map(async (k) => {
+        const val = await this.get(k);
+        return val !== undefined ? [k, val] : null;
+      }),
     );
-    return entries;
+    return entries.filter((e) => e !== null);
   }
 
   async clear() {

@@ -165,23 +165,25 @@ export class RoomRegistry {
   }
 
   async leave(roomId, socket) {
-    const game = this._rooms.get(roomId);
-    if (!game) return;
-    await game.removePlayer(socket.id);
-    socket.leave(roomId);
-    socket.data.roomId = null;
-    this._io.to(roomId).emit('player-left', { id: socket.id });
-    let shouldDestroy = false;
-    const meta = await this._metaStore.get(roomId);
-    if (meta) {
-      meta.playerCount = Math.max(0, (meta.playerCount || 1) - 1);
-      await this._metaStore.set(roomId, meta);
-      shouldDestroy = meta.playerCount === 0;
-    }
-    this._broadcastList();
-    if (shouldDestroy) {
-      await this.destroy(roomId);
-    }
+    return this._lock.withLock(roomId, async () => {
+      const game = this._rooms.get(roomId);
+      if (!game) return;
+      await game.removePlayer(socket.id);
+      socket.leave(roomId);
+      socket.data.roomId = null;
+      this._io.to(roomId).emit('player-left', { id: socket.id });
+      let shouldDestroy = false;
+      const meta = await this._metaStore.get(roomId);
+      if (meta) {
+        meta.playerCount = Math.max(0, (meta.playerCount || 1) - 1);
+        await this._metaStore.set(roomId, meta);
+        shouldDestroy = meta.playerCount === 0;
+      }
+      this._broadcastList();
+      if (shouldDestroy) {
+        await this.destroy(roomId);
+      }
+    });
   }
 
   async destroy(roomId) {

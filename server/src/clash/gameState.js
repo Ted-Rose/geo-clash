@@ -91,7 +91,10 @@ export class GameState {
     this.status = 'active';
     this.remainingSeconds = MATCH_SECONDS;
     this._lastTick = Date.now();
-    if (!this._tickHandle) this._tickHandle = setInterval(() => this.tick(), TICK_MS);
+    if (!this._tickHandle) this._tickHandle = setInterval(() => this.tick().catch((err) => {
+      // eslint-disable-next-line no-console
+      console.error('[clash/gameState] tick error:', err.message);
+    }), TICK_MS);
     this._emit('match-start', { remainingSeconds: this.remainingSeconds });
   }
 
@@ -183,7 +186,7 @@ export class GameState {
     if (!p) return;
     await this.playerStore.del(id);
     for (const [cid, cell] of await this.gridStore.all()) {
-      if (cell.progress?.playerId === id) {
+      if (cell && cell.progress?.playerId === id) {
         cell.progress = null;
         await this.gridStore.set(cid, cell);
       }
@@ -392,7 +395,7 @@ export class GameState {
     }
 
     this._emit('players-update', {
-      players: (await this.playerStore.all()).map(([, p]) => publicPlayer(p)),
+      players: (await this.playerStore.all()).map(([, p]) => publicPlayer(p)).filter(Boolean),
     });
 
     if (this.matchActive) {
@@ -406,7 +409,7 @@ export class GameState {
 
   async snapshot() {
     await this._recountScores();
-    const players = (await this.playerStore.all()).map(([, p]) => publicPlayer(p));
+    const players = (await this.playerStore.all()).map(([, p]) => publicPlayer(p)).filter(Boolean);
     const cells = (await this.gridStore.all()).map(([id, c]) => ({
       id,
       ownerId: c.ownerId,
@@ -449,20 +452,31 @@ export class GameState {
 
   _scores() {
     const tally = {};
-    for (const [, p] of this._lastPlayersCache || []) tally[p.id] = { name: p.name, color: p.color, squares: 0 };
+    for (const [, p] of this._lastPlayersCache || []) {
+      if (!p) continue;
+      tally[p.id] = { name: p.name, color: p.color, squares: 0 };
+    }
     for (const [, c] of this._lastCellsCache || []) {
-      if (c.ownerId && tally[c.ownerId]) tally[c.ownerId].squares += 1;
+      if (c && c.ownerId && tally[c.ownerId]) {
+        tally[c.ownerId].squares += 1;
+      }
     }
     return tally;
   }
 
   async _recountScores() {
-    this._lastPlayersCache = await this.playerStore.all();
-    this._lastCellsCache = await this.gridStore.all();
+    try {
+      this._lastPlayersCache = await this.playerStore.all();
+      this._lastCellsCache = await this.gridStore.all();
+    } catch (err) {
+      // eslint-disable-next-line no-console
+      console.error('[clash/gameState] recountScores error:', err.message);
+    }
   }
 }
 
 function publicPlayer(p) {
+  if (!p) return null;
   return {
     id: p.id,
     name: p.name,

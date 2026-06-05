@@ -36,7 +36,7 @@ export class MemoryStore {
   }
 
   async all() {
-    return [...this._map.entries()];
+    return [...this._map.entries()].filter(([, v]) => v !== undefined);
   }
 
   async clear() {

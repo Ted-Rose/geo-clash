@@ -275,7 +275,7 @@ export class SnakeGameState {
     const players = await this._allPlayers();
 
     this._emit('snake-update', {
-      players: players.map(publicPlayer),
+      players: players.map(publicPlayer).filter(Boolean),
       scores: this._scores(players),
     });
 
@@ -349,7 +349,7 @@ export class SnakeGameState {
       foodRespawnIntervalMs: this._foodRespawnIntervalMs,
       bbox: this._bbox,
       foods: this._foods,
-      players: players.map(publicPlayer),
+      players: players.map(publicPlayer).filter(Boolean),
       scores: this._scores(players),
       serverNow: Date.now(),
     };
@@ -381,6 +381,7 @@ export class SnakeGameState {
 }
 
 function publicPlayer(p) {
+  if (!p) return null;
   return {
     id: p.id,
     name: p.name,
