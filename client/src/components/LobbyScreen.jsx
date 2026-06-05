@@ -9,6 +9,7 @@ export default function LobbyScreen({
   onJoined,
   connected,
   simulate,
+  setSimulate,
   simPos,
   setSimPos,
   maxImageryAge,
