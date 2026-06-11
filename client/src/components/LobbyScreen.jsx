@@ -21,7 +21,9 @@ export default function LobbyScreen({
 }) {
   const socket = getSocket();
   const { rooms, loading, refresh } = useRooms();
-  const [name, setName] = useState('');
+  const [name, setName] = useState(
+    () => localStorage.getItem('playerName') || ''
+  );
   const [newRoomName, setNewRoomName] = useState('');
   const [cellSize, setCellSize] = useState(5);
   const [squaresPerSide, setSquaresPerSide] = useState(10);
@@ -139,7 +141,10 @@ export default function LobbyScreen({
               <span className="text-sm text-slate-300">Your name</span>
               <input
                 value={name}
-                onChange={(e) => setName(e.target.value)}
+                onChange={(e) => {
+                  setName(e.target.value);
+                  localStorage.setItem('playerName', e.target.value);
+                }}
                 placeholder="Anonymous"
                 className="mt-1 w-full px-3 py-3 rounded-lg bg-slate-900 border border-slate-700 focus:outline-none focus:ring-2 focus:ring-cyan-500 text-base"
               />
