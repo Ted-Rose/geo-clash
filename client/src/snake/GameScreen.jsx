@@ -82,6 +82,8 @@ export default function SnakeGameScreen({
   const [matchActive, setMatchActive] = useState(false);
   const [matchOver, setMatchOver] = useState(false);
   const [finalLeaderboard, setFinalLeaderboard] = useState(null);
+  const [timeLimitMs, setTimeLimitMs] = useState(0);
+  const [matchStartAt, setMatchStartAt] = useState(null);
   const [bbox, setBbox] = useState(null);
   const mapRef = useRef(null);
   const simStepRef = useRef(0.00005);
@@ -106,6 +108,8 @@ export default function SnakeGameScreen({
     foodsRef.current = initialSnapshot.foods || [];
     setScores(initialSnapshot.scores || {});
     setMatchActive(initialSnapshot.matchActive ?? false);
+    if (initialSnapshot.timeLimitMs) setTimeLimitMs(initialSnapshot.timeLimitMs);
+    if (initialSnapshot.matchStartAt) setMatchStartAt(initialSnapshot.matchStartAt);
     if (initialSnapshot.bbox) setBbox(initialSnapshot.bbox);
     const me = allPlayers.find((p) => p.id === myIdRef.current);
     if (me) myInfoRef.current = { color: me.color, name: me.name };
@@ -160,10 +164,12 @@ export default function SnakeGameScreen({
       lastPosRef.current = null;
       eatenIdsRef.current.clear();
     }
-    function onMatchStart({ bbox: b, foods: fs }) {
+    function onMatchStart({ bbox: b, foods: fs, timeLimitMs: tl, matchStartAt: ms }) {
       setMatchActive(true);
       if (b) setBbox(b);
       if (fs) { setFoods(fs); foodsRef.current = fs; eatenIdsRef.current.clear(); }
+      if (typeof tl === 'number') setTimeLimitMs(tl);
+      if (typeof ms === 'number') setMatchStartAt(ms);
     }
     function onMatchEnd({ leaderboard }) {
       setMatchOver(true);
@@ -386,6 +392,8 @@ export default function SnakeGameScreen({
         players={allPlayers}
         scores={mergedScores}
         myId={myId}
+        timeLimitMs={timeLimitMs}
+        matchStartAt={matchStartAt}
       />
 
       {simulate && simPos && (

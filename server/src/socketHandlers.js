@@ -38,6 +38,7 @@ export function registerSocketHandlers(io, registry) {
           arenaSideMeters: payload?.arenaSideMeters,
           foodCountTarget: payload?.foodCountTarget,
           foodRespawnIntervalMs: payload?.foodRespawnIntervalMs,
+          timeLimitMs: payload?.timeLimitMs ?? 0,
           maxAmmo: payload?.maxAmmo ?? null,
           ammoRenewalMs: payload?.ammoRenewalMs ?? 5000,
         });

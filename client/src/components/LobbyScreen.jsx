@@ -33,6 +33,7 @@ export default function LobbyScreen({
   const [foodCount, setFoodCount] = useState(30);
   const [foodRespawnSec, setFoodRespawnSec] = useState(1);
   const [arenaSideMeters, setArenaSideMeters] = useState(50);
+  const [timeLimitSec, setTimeLimitSec] = useState(0);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState(null);
 
@@ -100,6 +101,7 @@ export default function LobbyScreen({
           foodCountTarget: foodCount,
           foodRespawnIntervalMs: foodRespawnSec * 1000,
           arenaSideMeters,
+          timeLimitMs: timeLimitSec > 0 ? timeLimitSec * 1000 : 0,
         }),
       },
       (ack) => {
@@ -260,7 +262,7 @@ export default function LobbyScreen({
                         <span className="text-xs text-slate-400">
                           {r.playerCount}/{r.maxPlayers} · {r.status}
                           {r.gameType === 'snake' && r.foodCountTarget != null && (
-                            <> · {r.arenaSideMeters ?? 1000}m · {r.foodCountTarget} food · {r.foodRespawnIntervalMs / 1000}s</>
+                            <> · {r.arenaSideMeters ?? 1000}m · {r.foodCountTarget} food · {r.foodRespawnIntervalMs / 1000}s{r.timeLimitMs > 0 ? ` · ${r.timeLimitMs / 60000}m limit` : ''}</>
                           )}
                         </span>
                       </span>
@@ -425,6 +427,25 @@ export default function LobbyScreen({
                   <div className="flex justify-between text-xs text-slate-500 mt-0.5">
                     <span>3</span>
                     <span>30</span>
+                  </div>
+                </label>
+                <label className="block border-t border-slate-700 pt-3">
+                  <div className="text-sm text-slate-300 mb-2">Time limit</div>
+                  <div className="flex gap-2 flex-wrap">
+                    {[0, 120, 300, 600].map((v) => (
+                      <button
+                        key={v}
+                        type="button"
+                        onClick={() => setTimeLimitSec(v)}
+                        className={`flex-1 py-2 rounded-lg text-sm font-semibold transition ${
+                          timeLimitSec === v
+                            ? 'bg-cyan-500 text-slate-900'
+                            : 'bg-slate-700 text-slate-300'
+                        }`}
+                      >
+                        {v === 0 ? '∞ No limit' : v === 120 ? '2 min' : v === 300 ? '5 min' : '10 min'}
+                      </button>
+                    ))}
                   </div>
                 </label>
                 <label className="block">

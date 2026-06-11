@@ -42,6 +42,7 @@ export class SnakeGameState {
     arenaSideMeters = 50,
     foodCountTarget = FOOD_COUNT_TARGET,
     foodRespawnIntervalMs = FOOD_RESPAWN_INTERVAL_MS,
+    timeLimitMs = 0,
   } = {}) {
     if (!io) throw new Error('SnakeGameState: io required');
     if (!roomId) throw new Error('SnakeGameState: roomId required');
@@ -65,6 +66,8 @@ export class SnakeGameState {
     this._centerLat = typeof centerLat === 'number' ? centerLat : null;
     this._centerLng = typeof centerLng === 'number' ? centerLng : null;
     this._arenaSideMeters = arenaSideMeters;
+    this._timeLimitMs = typeof timeLimitMs === 'number' && timeLimitMs > 0 ? timeLimitMs : 0;
+    this._matchStartAt = null;
     // foodId → timestamp of when it was eaten (race-condition window)
     this._recentlyEaten = new Map();
     // clashId → { victimId, killerId, acksNeeded: Set, timestamp }
@@ -89,7 +92,8 @@ export class SnakeGameState {
     if (this.status === 'ending' || this.status === 'ended') return;
     this.matchActive = true;
     this.status = 'active';
-    this._lastTick = Date.now();
+    this._matchStartAt = Date.now();
+    this._lastTick = this._matchStartAt;
     if (!this._tickHandle) {
       this._tickHandle = setInterval(() => this._tick().catch(() => {}), TICK_MS);
     }
@@ -106,6 +110,8 @@ export class SnakeGameState {
     this._emit('match-start', {
       bbox: this._bbox,
       foods: this._foods,
+      timeLimitMs: this._timeLimitMs,
+      matchStartAt: this._matchStartAt,
     });
   }
 
@@ -272,6 +278,14 @@ export class SnakeGameState {
     const now = Date.now();
     this._lastTick = now;
 
+    // Time-limit check — end the match when the clock runs out.
+    if (this._timeLimitMs > 0 && this._matchStartAt !== null) {
+      if (now - this._matchStartAt >= this._timeLimitMs) {
+        await this.endMatch();
+        return;
+      }
+    }
+
     const players = await this._allPlayers();
 
     this._emit('snake-update', {
@@ -347,6 +361,8 @@ export class SnakeGameState {
       matchActive: this.matchActive,
       foodCountTarget: this._foodCountTarget,
       foodRespawnIntervalMs: this._foodRespawnIntervalMs,
+      timeLimitMs: this._timeLimitMs,
+      matchStartAt: this._matchStartAt,
       bbox: this._bbox,
       foods: this._foods,
       players: players.map(publicPlayer).filter(Boolean),
