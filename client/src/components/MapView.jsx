@@ -55,47 +55,70 @@ function MapController({ grid, mapLocked }) {
   return null;
 }
 
-// Directional player icon: circle body (at icon centre) with an arrow tip
-// pointing in the heading direction. Rotation is around the circle centre so
-// the marker stays on the player's exact map position regardless of heading.
+// Fighter-jet player icon: top-down SVG warplane whose nose points north
+// (heading 0). The whole div is rotated by heading so the marker stays on
+// the player's exact map position regardless of direction.
 function playerIcon(color, heading, isMe, shieldActive, alive, lives) {
-  const size    = isMe ? 42 : 34;
+  const size    = isMe ? 44 : 36;
   const half    = size / 2;
-  const circleD = isMe ? 26 : 20;
-  const circleR = circleD / 2;
-  const arrowH  = half - circleR;        // space above the circle
-  const arrowW  = isMe ? 7 : 5;          // half-width of the arrow base
-  const borderColor = shieldActive ? '#fde047' : '#ffffff';
-  const borderW     = shieldActive ? 3 : isMe ? 2.5 : 1.5;
-  const shadow      = shieldActive
-    ? '0 0 7px 2px #fde04799'
-    : isMe
-    ? '0 0 5px rgba(0,0,0,0.6)'
-    : '0 0 3px rgba(0,0,0,0.45)';
   const opacity = alive === false ? 0.35 : 1;
+
+  const strokeColor = shieldActive ? '#fde047' : '#ffffff';
+  const strokeW     = shieldActive ? 2.5 : 1.8;
+
   const livesRatio = alive === false
     ? 0
     : Math.max(0, Math.min(3, lives ?? 3)) / 3;
-  const degrees = livesRatio * 360;
-  const circleBg = livesRatio === 0
-    ? '#6b7280'
-    : livesRatio >= 1
-    ? color
-    : `conic-gradient(${color} ${degrees}deg, #374151 ${degrees}deg)`;
-  const ringSize = circleD + (isMe ? 14 : 10);
+  const engineColor = livesRatio >= 1
+    ? '#ff6820'
+    : livesRatio >= 0.67
+    ? '#facc15'
+    : livesRatio > 0
+    ? '#ef4444'
+    : '#374151';
+  const engineOpacity = livesRatio > 0 ? 0.9 : 0.4;
+
+  const ringSize   = size + (isMe ? 14 : 10);
   const ringOffset = half - ringSize / 2;
   const shieldRing = shieldActive
     ? `<div class="shield-pulse" style="position:absolute;top:${ringOffset}px;left:${ringOffset}px;width:${ringSize}px;height:${ringSize}px;border-radius:50%;border:2px solid #fde047;box-shadow:0 0 6px 1px #fde04799;pointer-events:none;"></div>`
     : '';
+
+  const sw2 = (strokeW * 0.67).toFixed(1);
+  const sw3 = (strokeW * 0.5).toFixed(1);
+  const svg =
+    `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 40 40" ` +
+    `width="${size}" height="${size}" style="display:block;">` +
+    // Fuselage
+    `<path d="M20,2 L23,12 L24,30 L22,37 L20,39 L18,37 L16,30 L17,12 Z" ` +
+    `fill="${color}" stroke="${strokeColor}" stroke-width="${strokeW}" stroke-linejoin="round"/>` +
+    // Left swept wing
+    `<path d="M17,12 L2,28 L16,22 Z" ` +
+    `fill="${color}" stroke="${strokeColor}" stroke-width="${sw2}" stroke-linejoin="round"/>` +
+    // Right swept wing
+    `<path d="M23,12 L38,28 L24,22 Z" ` +
+    `fill="${color}" stroke="${strokeColor}" stroke-width="${sw2}" stroke-linejoin="round"/>` +
+    // Left horizontal stabilizer
+    `<path d="M16,30 L10,39 L17,34 Z" ` +
+    `fill="${color}" stroke="${strokeColor}" stroke-width="${sw3}" stroke-linejoin="round"/>` +
+    // Right horizontal stabilizer
+    `<path d="M24,30 L30,39 L23,34 Z" ` +
+    `fill="${color}" stroke="${strokeColor}" stroke-width="${sw3}" stroke-linejoin="round"/>` +
+    // Cockpit canopy
+    `<ellipse cx="20" cy="16" rx="2.5" ry="5" ` +
+    `fill="rgba(150,220,255,0.75)" stroke="rgba(200,240,255,0.6)" stroke-width="0.5"/>` +
+    // Engine exhaust glow – colour reflects remaining lives
+    `<ellipse cx="20" cy="37" rx="2.2" ry="1.5" fill="${engineColor}" opacity="${engineOpacity}"/>` +
+    `</svg>`;
+
   return L.divIcon({
     className: '',
     iconSize:   [size, size],
     iconAnchor: [half, half],
-    html: `<div style="width:${size}px;height:${size}px;position:relative;transform:rotate(${heading || 0}deg);opacity:${opacity};">
-      ${shieldRing}
-      <div style="position:absolute;top:0;left:50%;transform:translateX(-50%);width:0;height:0;border-left:${arrowW}px solid transparent;border-right:${arrowW}px solid transparent;border-bottom:${arrowH + 1}px solid ${color};"></div>
-      <div style="position:absolute;top:${half - circleR}px;left:${half - circleR}px;width:${circleD}px;height:${circleD}px;border-radius:50%;background:${circleBg};border:${borderW}px solid ${borderColor};box-shadow:${shadow};"></div>
-    </div>`,
+    html:
+      `<div style="width:${size}px;height:${size}px;position:relative;` +
+      `transform:rotate(${heading || 0}deg);opacity:${opacity};">` +
+      `${shieldRing}${svg}</div>`,
   });
 }
 
