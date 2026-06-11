@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 
 // Bottom action bar:
-// - SWING ATTACK: tap, or shake the phone 3x (DeviceMotion) to fire an arrow.
+// - FIRE ROCKET: tap, or shake the phone 3x (DeviceMotion) to launch a rocket.
 // - SHIELD: tap, or draw a circle gesture on the map area to raise shield.
 // - RESPAWN: appears when player has 0 lives; only succeeds if at base cell.
 export default function ControlPanel({
@@ -93,7 +93,7 @@ export default function ControlPanel({
             disabled={dead}
             className="flex-1 max-w-[200px] h-20 rounded-2xl bg-rose-500 disabled:bg-slate-600 text-white font-bold text-lg shadow-lg active:scale-95 transition"
           >
-            🏹 SWING ATTACK
+            🚀 FIRE ROCKET
           </button>
         )}
       </div>
