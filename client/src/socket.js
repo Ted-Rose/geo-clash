@@ -20,6 +20,15 @@ if (import.meta.env.PROD && SERVER_URL === '/') {
   );
 }
 
+export function getSessionId() {
+  let id = sessionStorage.getItem('geo-clash-session');
+  if (!id) {
+    id = crypto.randomUUID();
+    sessionStorage.setItem('geo-clash-session', id);
+  }
+  return id;
+}
+
 let socketInstance = null;
 export function getSocket() {
   if (!socketInstance) {

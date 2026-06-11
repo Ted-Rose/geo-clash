@@ -46,13 +46,13 @@ export function registerSocketHandlers(io, registry) {
     });
 
     socket.on('room-join', async (payload, ack) => {
-      const { roomId, name, lat, lng } = payload || {};
+      const { roomId, name, lat, lng, sessionId } = payload || {};
       if (!roomId) {
         if (typeof ack === 'function') ack({ ok: false, reason: 'no-room-id' });
         return;
       }
-      const result = await registry.join(roomId, socket, name);
-      if (result.ok) {
+      const result = await registry.join(roomId, socket, name, sessionId);
+      if (result.ok && !result.reconnected) {
         const game = registry.get(roomId);
         const meta = result.room;
         if (game && typeof lat === 'number' && typeof lng === 'number') {
@@ -82,7 +82,7 @@ export function registerSocketHandlers(io, registry) {
 
     socket.on('disconnect', async () => {
       const roomId = socket.data.roomId;
-      if (roomId) await registry.leave(roomId, socket);
+      if (roomId) await registry.softDisconnect(roomId, socket);
     });
   });
 }

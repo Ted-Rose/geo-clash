@@ -21,6 +21,7 @@ export default function GameScreen({
   maxImageryAge,
   maxNativeZoom,
   initialSnapshot,
+  connected,
   onLeave,
 }) {
   const socket = getSocket();
@@ -438,6 +439,17 @@ export default function GameScreen({
         >
           ✕ clear target
         </button>
+      )}
+
+      {!connected && !matchEnded && (
+        <div className="fixed inset-0 z-[700] bg-slate-900/60
+                        backdrop-blur-sm flex items-center justify-center">
+          <div className="bg-slate-800 rounded-2xl px-6 py-4 text-white
+                          text-center shadow-2xl">
+            <div className="text-lg font-semibold mb-1">Reconnecting…</div>
+            <div className="text-sm text-slate-400">Your game is saved</div>
+          </div>
+        </div>
       )}
 
       {matchEnded && (

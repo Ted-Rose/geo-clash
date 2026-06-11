@@ -1,5 +1,5 @@
-import { useEffect, useState } from 'react';
-import { getSocket } from './socket.js';
+import { useEffect, useRef, useState } from 'react';
+import { getSocket, getSessionId } from './socket.js';
 import { useGeolocation } from './hooks/useGeolocation.js';
 import LobbyScreen from './components/LobbyScreen.jsx';
 import ClashGameScreen from './components/GameScreen.jsx';
@@ -17,6 +17,7 @@ export default function App() {
   const [roomId, setRoomId] = useState(null);
   const [room, setRoom] = useState(null);
   const [initialSnapshot, setInitialSnapshot] = useState(null);
+  const rejoinRef = useRef(null);
 
   // Lift sim/GPS state here so the Lobby and the Game share the same
   // position source. The Game also needs `simulate`/`simPos` to render the
@@ -52,7 +53,27 @@ export default function App() {
   const position = simulate ? simPos : gpsPos;
 
   useEffect(() => {
-    function onConnect() { setConnected(true); setConnectError(null); }
+    function onConnect() {
+      setConnected(true);
+      setConnectError(null);
+      // If we were in a game when the connection dropped, auto-rejoin.
+      const rj = rejoinRef.current;
+      if (rj) {
+        socket.emit(
+          'room-join',
+          { roomId: rj.roomId, name: rj.name, sessionId: rj.sessionId },
+          (result) => {
+            if (!result?.ok) {
+              // Game ended or room gone — go back to lobby.
+              rejoinRef.current = null;
+              setRoomId(null);
+              setRoom(null);
+              setInitialSnapshot(null);
+            }
+          },
+        );
+      }
+    }
     function onDisconnect() { setConnected(false); }
     function onError(err) {
       setConnected(false);
@@ -84,7 +105,9 @@ export default function App() {
         maxNativeZoom={maxNativeZoom}
         setMaxNativeZoom={setMaxNativeZoom}
         position={position}
-        onJoined={({ roomId: id, room: r, snapshot }) => {
+        onJoined={({ roomId: id, room: r, snapshot, name }) => {
+          const sessionId = getSessionId();
+          rejoinRef.current = { roomId: id, name, sessionId, room: r };
           setInitialSnapshot(snapshot || null);
           setRoomId(id);
           setRoom(r || null);
@@ -106,7 +129,12 @@ export default function App() {
       maxImageryAge={maxImageryAge}
       maxNativeZoom={maxNativeZoom}
       initialSnapshot={initialSnapshot}
-      onLeave={() => { setRoomId(null); setRoom(null); }}
+      connected={connected}
+      onLeave={() => {
+        rejoinRef.current = null;
+        setRoomId(null);
+        setRoom(null);
+      }}
     />
   );
 }

@@ -160,7 +160,7 @@ export class GameState {
 
   // ---- players -----------------------------------------------------------
 
-  async addPlayer(id, name) {
+  async addPlayer(id, name, sessionId) {
     const color = COLORS[this._colorIdx++ % COLORS.length];
     const spawn = this._baseCenter() || { lat: 0, lng: 0 };
     const player = {
@@ -175,10 +175,41 @@ export class GameState {
       shieldUntil: 0,
       score: 0,
       alive: true,
+      connected: true,
       lastSeen: Date.now(),
+      sessionId: sessionId || null,
     };
     await this.playerStore.set(id, player);
     return player;
+  }
+
+  async getPlayerBySessionId(sessionId) {
+    if (!sessionId) return null;
+    for (const [socketId, p] of await this.playerStore.all()) {
+      if (p.sessionId === sessionId) return { player: p, socketId };
+    }
+    return null;
+  }
+
+  async swapSocketId(oldId, newId) {
+    const p = await this.playerStore.get(oldId);
+    if (!p) return;
+    p.id = newId;
+    p.connected = true;
+    await this.playerStore.set(newId, p);
+    await this.playerStore.del(oldId);
+    for (const [cid, cell] of await this.gridStore.all()) {
+      let changed = false;
+      if (cell.ownerId === oldId) {
+        cell.ownerId = newId;
+        changed = true;
+      }
+      if (cell.progress && cell.progress.playerId === oldId) {
+        cell.progress.playerId = newId;
+        changed = true;
+      }
+      if (changed) await this.gridStore.set(cid, cell);
+    }
   }
 
   async removePlayer(id) {
@@ -361,6 +392,7 @@ export class GameState {
         if (!cell) continue;
         const teams = new Set(occupants.map((p) => p.color));
         if (teams.size > 1) continue;
+        if (occupants.every((p) => !p.connected)) continue;
         const claimant = occupants[0];
         if (cell.ownerId === claimant.id) continue;
         if (!cell.progress || cell.progress.playerId !== claimant.id) {
@@ -487,6 +519,7 @@ function publicPlayer(p) {
     lives: p.lives,
     shieldActive: p.shieldActive,
     alive: p.alive,
+    connected: p.connected !== false,
   };
 }
 

@@ -12,6 +12,14 @@ import {
 } from './shared/memoryStore.js';
 import { ValkeyStore } from './shared/valkeyStore.js';
 import { RoomLock } from './shared/roomLock.js';
+import { registerClashHandlers } from './clash/socketHandlers.js';
+import { registerSnakeHandlers } from './snake/socketHandlers.js';
+
+// Handler map — mirrors GAME_HANDLERS in socketHandlers.js for reconnect path.
+const GAME_HANDLERS = {
+  clash: registerClashHandlers,
+  snake: registerSnakeHandlers,
+};
 
 // Factory map — extend here when adding new game types.
 const GAME_FACTORIES = {
@@ -54,6 +62,7 @@ export class RoomRegistry {
     this._now = now;
     this._rooms = new Map(); // roomId -> GameState
     this._destroyTimers = new Map(); // roomId -> setTimeout handle
+    this._disconnectTimers = new Map(); // socketId -> setTimeout handle
     this._lock = new RoomLock(redisClient);
     this._metaStore = redisClient
       ? new ValkeyStore(META_PREFIX, redisClient)
@@ -138,13 +147,45 @@ export class RoomRegistry {
     });
   }
 
-  async join(roomId, socket, name) {
+  async join(roomId, socket, name, sessionId) {
     return this._lock.withLock(roomId, async () => {
       const game = this._rooms.get(roomId);
       if (!game) return { ok: false, reason: 'no-such-room' };
       const meta = await this._metaStore.get(roomId);
       if (!meta) return { ok: false, reason: 'no-such-room' };
       if (meta.status === 'ended') return { ok: false, reason: 'ended' };
+
+      // Reconnect path: find an existing player by sessionId.
+      if (sessionId && typeof game.getPlayerBySessionId === 'function') {
+        const existing = await game.getPlayerBySessionId(sessionId);
+        if (existing) {
+          const { socketId: oldId } = existing;
+          const pendingDc = this._disconnectTimers.get(oldId);
+          if (pendingDc) {
+            clearTimeout(pendingDc);
+            this._disconnectTimers.delete(oldId);
+          }
+          await game.swapSocketId(oldId, socket.id);
+          socket.join(roomId);
+          socket.data.roomId = roomId;
+          socket.data.gameType = meta.gameType || 'clash';
+          const registerGameHandlers =
+            GAME_HANDLERS[socket.data.gameType];
+          if (registerGameHandlers) registerGameHandlers(socket, game);
+          const snapshot = await game.snapshot();
+          socket.emit('joined', { id: socket.id, roomId });
+          socket.emit('snapshot', snapshot);
+          this._io.to(roomId)
+            .emit('player-reconnected', { id: socket.id, oldId });
+          return {
+            ok: true,
+            reconnected: true,
+            room: meta,
+            snapshot,
+          };
+        }
+      }
+
       if (meta.playerCount >= meta.maxPlayers) {
         return { ok: false, reason: 'room-full' };
       }
@@ -153,7 +194,7 @@ export class RoomRegistry {
         clearTimeout(pending);
         this._destroyTimers.delete(roomId);
       }
-      await game.addPlayer(socket.id, name);
+      await game.addPlayer(socket.id, name, sessionId);
       socket.join(roomId);
       socket.data.roomId = roomId;
       meta.playerCount += 1;
@@ -161,6 +202,47 @@ export class RoomRegistry {
       if (!game.matchActive && game.status === 'lobby') game.startMatch();
       this._broadcastList();
       return { ok: true, room: meta, snapshot: await game.snapshot() };
+    });
+  }
+
+  async softDisconnect(roomId, socket) {
+    return this._lock.withLock(roomId, async () => {
+      const game = this._rooms.get(roomId);
+      if (!game) return;
+      const p = await game.playerStore.get(socket.id);
+      if (!p) {
+        // Player not found — fall back to a hard leave.
+        await game.removePlayer(socket.id);
+        socket.leave(roomId);
+        socket.data.roomId = null;
+        this._io.to(roomId).emit('player-left', { id: socket.id });
+        const meta = await this._metaStore.get(roomId);
+        if (meta) {
+          meta.playerCount = Math.max(0, (meta.playerCount || 1) - 1);
+          await this._metaStore.set(roomId, meta);
+          if (meta.playerCount === 0) await this.destroy(roomId);
+        }
+        this._broadcastList();
+        return;
+      }
+      p.connected = false;
+      await game.playerStore.set(socket.id, p);
+      socket.leave(roomId);
+      socket.data.roomId = null;
+      this._io.to(roomId).emit('player-disconnected', { id: socket.id });
+
+      const graceDurationMs =
+        game.matchActive && typeof game.remainingSeconds === 'number'
+          ? game.remainingSeconds * 1000 + 30_000
+          : 30_000;
+
+      const fakeSocket = { id: socket.id, data: {}, leave: () => {}, join: () => {} };
+      const handle = setTimeout(async () => {
+        this._disconnectTimers.delete(socket.id);
+        await this.leave(roomId, fakeSocket);
+      }, graceDurationMs);
+      if (typeof handle.unref === 'function') handle.unref();
+      this._disconnectTimers.set(socket.id, handle);
     });
   }
 

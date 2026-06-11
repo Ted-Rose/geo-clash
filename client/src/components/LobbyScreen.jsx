@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { getSocket } from '../socket.js';
+import { getSocket, getSessionId } from '../socket.js';
 import { useRooms } from '../hooks/useRooms.js';
 
 // Single mobile-first lobby screen. Lets the player set their name + GPS
@@ -51,13 +51,15 @@ export default function LobbyScreen({
     if (!ready) return;
     setBusy(true);
     setError(null);
+    const trimmedName = name.trim() || undefined;
     socket.emit(
       'room-join',
       {
         roomId,
-        name: name.trim() || undefined,
+        name: trimmedName,
         lat: position.lat,
         lng: position.lng,
+        sessionId: getSessionId(),
       },
       (ack) => {
         setBusy(false);
@@ -65,6 +67,7 @@ export default function LobbyScreen({
           roomId,
           room: ack.room || rooms.find((r) => r.id === roomId),
           snapshot: ack.snapshot,
+          name: trimmedName,
         });
         else {
           setError(ack?.reason || 'join failed');
@@ -100,13 +103,15 @@ export default function LobbyScreen({
           return;
         }
         // Auto-join the freshly-created room.
+        const trimmedName = name.trim() || undefined;
         socket.emit(
           'room-join',
           {
             roomId: ack.room.id,
-            name: name.trim() || undefined,
+            name: trimmedName,
             lat: position.lat,
             lng: position.lng,
+            sessionId: getSessionId(),
           },
           (jack) => {
             setBusy(false);
@@ -114,6 +119,7 @@ export default function LobbyScreen({
               roomId: ack.room.id,
               room: ack.room,
               snapshot: jack.snapshot,
+              name: trimmedName,
             });
             else setError(jack?.reason || 'join failed');
           }
