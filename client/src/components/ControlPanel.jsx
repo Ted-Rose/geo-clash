@@ -11,6 +11,8 @@ export default function ControlPanel({
   onAttack,
   onShield,
   onRespawn,
+  ammo,
+  maxAmmo,
 }) {
   const [shieldLeft, setShieldLeft] = useState(0);
   useEffect(() => {
@@ -54,6 +56,7 @@ export default function ControlPanel({
   };
 
   const dead = me && me.lives <= 0;
+  const outOfAmmo = maxAmmo != null && ammo != null && ammo <= 0;
 
   return (
     <div className="pointer-events-none absolute bottom-0 left-0 right-0 z-[500] p-3 flex flex-col gap-3">
@@ -90,10 +93,15 @@ export default function ControlPanel({
               enableMotion();
               onAttack();
             }}
-            disabled={dead}
+            disabled={dead || outOfAmmo}
             className="flex-1 max-w-[200px] h-20 rounded-2xl bg-rose-500 disabled:bg-slate-600 text-white font-bold text-lg shadow-lg active:scale-95 transition"
           >
             🚀 FIRE ROCKET
+            {maxAmmo != null && (
+              <div className="text-xs font-normal opacity-80 mt-0.5">
+                {ammo ?? maxAmmo}/{maxAmmo}
+              </div>
+            )}
           </button>
         )}
       </div>

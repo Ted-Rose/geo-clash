@@ -38,6 +38,8 @@ export function registerSocketHandlers(io, registry) {
           arenaSideMeters: payload?.arenaSideMeters,
           foodCountTarget: payload?.foodCountTarget,
           foodRespawnIntervalMs: payload?.foodRespawnIntervalMs,
+          maxAmmo: payload?.maxAmmo ?? null,
+          ammoRenewalMs: payload?.ammoRenewalMs ?? 5000,
         });
         if (typeof ack === 'function') ack({ ok: true, room });
       } catch (err) {

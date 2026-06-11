@@ -40,7 +40,7 @@ const STARTING_LIVES = 3;
 
 export class GameState {
   // Args: { io, roomId, stores?, roomName?, onEnd? }
-  constructor({ io, roomId, stores, roomName, onEnd, cellSize = 10, squaresPerSide = 10 } = {}) {
+  constructor({ io, roomId, stores, roomName, onEnd, cellSize = 10, squaresPerSide = 10, maxAmmo = null, ammoRenewalMs = 5000 } = {}) {
     if (!io) throw new Error('GameState: io required');
     if (!roomId) throw new Error('GameState: roomId required');
     this.io = io;
@@ -54,6 +54,9 @@ export class GameState {
     this.status = 'lobby';
     this.cellSize = cellSize;
     this.squaresPerSide = squaresPerSide;
+    this.maxAmmo = (typeof maxAmmo === 'number' && maxAmmo > 0) ? maxAmmo : null;
+    this.ammoRenewalMs = (typeof ammoRenewalMs === 'number' && ammoRenewalMs >= 500) ? ammoRenewalMs : 5000;
+    this._ammoTimers = new Map();
     this.grid = null;
     this.baseCellId = null;
     this.matchActive = false;
@@ -109,6 +112,10 @@ export class GameState {
     if (this._projectileTimers) {
       for (const h of this._projectileTimers.values()) clearTimeout(h);
       this._projectileTimers.clear();
+    }
+    if (this._ammoTimers) {
+      for (const h of this._ammoTimers.values()) clearTimeout(h);
+      this._ammoTimers.clear();
     }
 
     let archived = [];
@@ -171,6 +178,7 @@ export class GameState {
       lng: spawn.lng,
       heading: 0,
       lives: STARTING_LIVES,
+      ammo: this.maxAmmo,
       shieldActive: false,
       shieldUntil: 0,
       score: 0,
@@ -248,6 +256,14 @@ export class GameState {
     if (this.status === 'ending' || this.status === 'ended') return;
     const attacker = await this.playerStore.get(id);
     if (!attacker || !attacker.alive) return;
+    if (this.maxAmmo !== null) {
+      const cur = attacker.ammo ?? this.maxAmmo;
+      if (cur <= 0) return;
+      attacker.ammo = cur - 1;
+      await this.playerStore.set(id, attacker);
+      this.io.to(id).emit('ammo-update', { ammo: attacker.ammo, maxAmmo: this.maxAmmo });
+      this._scheduleAmmoRecharge(id);
+    }
     const dir = typeof heading === 'number' ? heading : attacker.heading || 0;
 
     let resolvedTarget = null;
@@ -285,6 +301,21 @@ export class GameState {
     await this.projectileStore.set(proj.id, proj);
     this._emit('projectile-spawn', proj);
     this._scheduleResolution(proj);
+  }
+
+  _scheduleAmmoRecharge(playerId) {
+    const key = `${playerId}:${Date.now()}:${Math.random()}`;
+    const handle = setTimeout(async () => {
+      this._ammoTimers?.delete(key);
+      if (this.maxAmmo === null) return;
+      const p = await this.playerStore.get(playerId);
+      if (!p) return;
+      p.ammo = Math.min(this.maxAmmo, (p.ammo ?? 0) + 1);
+      await this.playerStore.set(playerId, p);
+      this.io.to(playerId).emit('ammo-update', { ammo: p.ammo, maxAmmo: this.maxAmmo });
+    }, this.ammoRenewalMs);
+    if (typeof handle.unref === 'function') handle.unref();
+    this._ammoTimers.set(key, handle);
   }
 
   _scheduleResolution(proj) {
@@ -355,8 +386,12 @@ export class GameState {
     p.lives = STARTING_LIVES;
     p.alive = true;
     p.shieldActive = false;
+    if (this.maxAmmo !== null) p.ammo = this.maxAmmo;
     await this.playerStore.set(id, p);
     this._emit('player-respawn', { id, lives: p.lives });
+    if (this.maxAmmo !== null) {
+      this.io.to(id).emit('ammo-update', { ammo: p.ammo, maxAmmo: this.maxAmmo });
+    }
   }
 
   // ---- tick --------------------------------------------------------------
@@ -469,6 +504,8 @@ export class GameState {
       matchActive: this.matchActive,
       remainingSeconds: this.remainingSeconds,
       serverNow: now,
+      maxAmmo: this.maxAmmo,
+      ammoRenewalMs: this.maxAmmo !== null ? this.ammoRenewalMs : null,
     };
   }
 
@@ -517,6 +554,7 @@ function publicPlayer(p) {
     lng: p.lng,
     heading: p.heading,
     lives: p.lives,
+    ammo: p.ammo ?? null,
     shieldActive: p.shieldActive,
     alive: p.alive,
     connected: p.connected !== false,

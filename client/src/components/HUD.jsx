@@ -1,4 +1,4 @@
-export default function HUD({ remainingSeconds, me, mySquares, leaderboard }) {
+export default function HUD({ remainingSeconds, me, mySquares, leaderboard, ammo, maxAmmo }) {
   const mm = Math.floor((remainingSeconds || 0) / 60);
   const ss = Math.floor((remainingSeconds || 0) % 60).toString().padStart(2, '0');
   return (
@@ -25,6 +25,17 @@ export default function HUD({ remainingSeconds, me, mySquares, leaderboard }) {
           ))}
         </div>
       </div>
+
+      {maxAmmo != null && (
+        <div className="bg-slate-900/85 backdrop-blur rounded-xl px-3 py-2 shadow-lg">
+          <div className="text-xs uppercase tracking-wider text-slate-400">Ammo</div>
+          <div className="text-2xl flex gap-0.5">
+            {Array.from({ length: maxAmmo }).map((_, i) => (
+              <span key={i}>{i < (ammo ?? maxAmmo) ? '🚀' : '○'}</span>
+            ))}
+          </div>
+        </div>
+      )}
 
       {leaderboard?.length > 0 && (
         <div className="hidden sm:block bg-slate-900/85 backdrop-blur rounded-xl px-3 py-2 shadow-lg min-w-[160px]">

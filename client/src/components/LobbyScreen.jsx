@@ -27,6 +27,8 @@ export default function LobbyScreen({
   const [newRoomName, setNewRoomName] = useState('');
   const [cellSize, setCellSize] = useState(5);
   const [squaresPerSide, setSquaresPerSide] = useState(10);
+  const [ammoLimit, setAmmoLimit] = useState(0);
+  const [ammoRenewalSec, setAmmoRenewalSec] = useState(5);
   const [createGameType, setCreateGameType] = useState('clash');
   const [foodCount, setFoodCount] = useState(30);
   const [foodRespawnSec, setFoodRespawnSec] = useState(1);
@@ -90,6 +92,10 @@ export default function LobbyScreen({
         cellSize,
         squaresPerSide,
         gameType: createGameType,
+        ...(createGameType === 'clash' && ammoLimit > 0 && {
+          maxAmmo: ammoLimit,
+          ammoRenewalMs: ammoRenewalSec * 1000,
+        }),
         ...(createGameType === 'snake' && {
           foodCountTarget: foodCount,
           foodRespawnIntervalMs: foodRespawnSec * 1000,
@@ -338,6 +344,46 @@ export default function LobbyScreen({
                     <span>5×5</span>
                     <span>20×20</span>
                   </div>
+                </label>
+                <label className="block border-t border-slate-700 pt-3">
+                  <div className="text-sm text-slate-300 mb-2">Rocket ammo limit</div>
+                  <div className="flex gap-2">
+                    {[0, 3, 5].map((v) => (
+                      <button
+                        key={v}
+                        type="button"
+                        onClick={() => setAmmoLimit(v)}
+                        className={`flex-1 py-2 rounded-lg text-sm font-semibold transition ${
+                          ammoLimit === v
+                            ? 'bg-cyan-500 text-slate-900'
+                            : 'bg-slate-700 text-slate-300'
+                        }`}
+                      >
+                        {v === 0 ? '∞ Unlimited' : `${v} rockets`}
+                      </button>
+                    ))}
+                  </div>
+                  {ammoLimit > 0 && (
+                    <label className="block mt-3">
+                      <div className="flex justify-between text-sm text-slate-300 mb-1">
+                        <span>Renewal time</span>
+                        <span className="font-mono text-cyan-400">{ammoRenewalSec} s</span>
+                      </div>
+                      <input
+                        type="range"
+                        min={1}
+                        max={30}
+                        step={1}
+                        value={ammoRenewalSec}
+                        onChange={(e) => setAmmoRenewalSec(Number(e.target.value))}
+                        className="w-full accent-cyan-500"
+                      />
+                      <div className="flex justify-between text-xs text-slate-500 mt-0.5">
+                        <span>1 s</span>
+                        <span>30 s</span>
+                      </div>
+                    </label>
+                  )}
                 </label>
               </>
             )}

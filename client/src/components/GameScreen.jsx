@@ -50,6 +50,8 @@ export default function GameScreen({
   const [globalTop, setGlobalTop] = useState(null);
   const [mapLocked, setMapLocked] = useState(true);
   const [menuOpen, setMenuOpen] = useState(false);
+  const [ammo, setAmmo] = useState(null);
+  const [maxAmmo, setMaxAmmo] = useState(null);
 
   // Refs and their effects
   const myIdRef = useRef(myId);
@@ -78,6 +80,9 @@ export default function GameScreen({
       setRemainingSeconds(s.remainingSeconds);
     if (Array.isArray(s.projectiles)) setProjectiles(s.projectiles);
     if (typeof s.serverNow === "number") setSkewMs(s.serverNow - Date.now());
+    if (typeof s.maxAmmo === "number") setMaxAmmo(s.maxAmmo);
+    const meSnap = s.players?.find((p) => p.id === socket.id);
+    if (meSnap && typeof meSnap.ammo === "number") setAmmo(meSnap.ammo);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -96,6 +101,9 @@ export default function GameScreen({
       setRemainingSeconds(s.remainingSeconds);
     if (Array.isArray(s.projectiles)) setProjectiles(s.projectiles);
     if (typeof s.serverNow === "number") setSkewMs(s.serverNow - Date.now());
+    if (typeof s.maxAmmo === "number") setMaxAmmo(s.maxAmmo);
+    const meSnap = s.players?.find((p) => p.id === reconnectSnap.id);
+    if (meSnap && typeof meSnap.ammo === "number") setAmmo(meSnap.ammo);
   }, [reconnectSnap]);
 
   // Wire socket events for the active room.
@@ -171,6 +179,10 @@ export default function GameScreen({
         .catch(() => setGlobalTop([]));
     }
 
+    function onAmmoUpdate({ ammo: a, maxAmmo: m }) {
+      setAmmo(a);
+      setMaxAmmo(m);
+    }
     socket.on("snapshot", onSnapshot);
     socket.on("joined", onJoined);
     socket.on("players-update", onPlayers);
@@ -182,6 +194,7 @@ export default function GameScreen({
     socket.on("projectile-spawn", onProjectileSpawn);
     socket.on("projectile-resolved", onProjectileResolved);
     socket.on("match-end", onMatchEnd);
+    socket.on("ammo-update", onAmmoUpdate);
 
     return () => {
       socket.off("snapshot", onSnapshot);
@@ -195,6 +208,7 @@ export default function GameScreen({
       socket.off("projectile-spawn", onProjectileSpawn);
       socket.off("projectile-resolved", onProjectileResolved);
       socket.off("match-end", onMatchEnd);
+      socket.off("ammo-update", onAmmoUpdate);
     };
   }, [roomId]);
 
@@ -360,6 +374,8 @@ export default function GameScreen({
         me={me}
         mySquares={mySquares}
         leaderboard={leaderboard}
+        ammo={ammo}
+        maxAmmo={maxAmmo}
       />
 
       {/* Click-outside overlay */}
@@ -437,6 +453,8 @@ export default function GameScreen({
         onAttack={attack}
         onShield={shield}
         onRespawn={respawn}
+        ammo={ammo}
+        maxAmmo={maxAmmo}
       />
 
       {simulate && (

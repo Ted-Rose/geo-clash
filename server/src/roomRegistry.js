@@ -97,7 +97,7 @@ export class RoomRegistry {
     return this._rooms.get(roomId) || null;
   }
 
-  async create({ name, hostId, centerLat, centerLng, maxPlayers = 8, cellSize = 10, squaresPerSide = 10, gameType = 'clash', arenaSideMeters, foodCountTarget, foodRespawnIntervalMs }) {
+  async create({ name, hostId, centerLat, centerLng, maxPlayers = 8, cellSize = 10, squaresPerSide = 10, gameType = 'clash', arenaSideMeters, foodCountTarget, foodRespawnIntervalMs, maxAmmo = null, ammoRenewalMs = 5000 }) {
     return this._lock.withLock('create', async () => {
       const factory = GAME_FACTORIES[gameType];
       if (!factory) throw new Error(`unsupported-game-type:${gameType}`);
@@ -118,6 +118,10 @@ export class RoomRegistry {
           foodRespawnIntervalMs: foodRespawnIntervalMs ?? 2000,
           arenaSideMeters: arenaSideMeters ?? 1000,
         }),
+        ...(gameType === 'clash' && maxAmmo !== null && {
+          maxAmmo,
+          ammoRenewalMs,
+        }),
       };
       const stores = makeRoomStores(id);
       const game = factory({
@@ -128,6 +132,8 @@ export class RoomRegistry {
         onEnd: () => { this.destroy(id).catch(() => {}); },
         cellSize,
         squaresPerSide,
+        maxAmmo,
+        ammoRenewalMs,
         arenaSideMeters,
         centerLat,
         centerLng,
