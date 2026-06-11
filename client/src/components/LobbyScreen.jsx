@@ -430,22 +430,24 @@ export default function LobbyScreen({
                   </div>
                 </label>
                 <label className="block border-t border-slate-700 pt-3">
-                  <div className="text-sm text-slate-300 mb-2">Time limit</div>
-                  <div className="flex gap-2 flex-wrap">
-                    {[0, 120, 300, 600].map((v) => (
-                      <button
-                        key={v}
-                        type="button"
-                        onClick={() => setTimeLimitSec(v)}
-                        className={`flex-1 py-2 rounded-lg text-sm font-semibold transition ${
-                          timeLimitSec === v
-                            ? 'bg-cyan-500 text-slate-900'
-                            : 'bg-slate-700 text-slate-300'
-                        }`}
-                      >
-                        {v === 0 ? '∞ No limit' : v === 120 ? '2 min' : v === 300 ? '5 min' : '10 min'}
-                      </button>
-                    ))}
+                  <div className="flex justify-between text-sm text-slate-300 mb-1">
+                    <span>Time limit</span>
+                    <span className="font-mono text-cyan-400">
+                      {timeLimitSec === 0 ? '∞ No limit' : `${timeLimitSec / 60} min`}
+                    </span>
+                  </div>
+                  <input
+                    type="range"
+                    min={0}
+                    max={30}
+                    step={1}
+                    value={timeLimitSec / 60}
+                    onChange={(e) => setTimeLimitSec(Number(e.target.value) * 60)}
+                    className="w-full accent-cyan-500"
+                  />
+                  <div className="flex justify-between text-xs text-slate-500 mt-0.5">
+                    <span>∞</span>
+                    <span>30 min</span>
                   </div>
                 </label>
                 <label className="block">
