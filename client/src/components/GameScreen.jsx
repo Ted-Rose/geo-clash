@@ -21,6 +21,7 @@ export default function GameScreen({
   maxImageryAge,
   maxNativeZoom,
   initialSnapshot,
+  reconnectSnap,
   connected,
   onLeave,
 }) {
@@ -79,6 +80,23 @@ export default function GameScreen({
     if (typeof s.serverNow === "number") setSkewMs(s.serverNow - Date.now());
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  // On reconnect: apply the fresh snapshot pushed from the ack and update
+  // myId to the new socket ID so HUD and actions target the right player.
+  useEffect(() => {
+    if (!reconnectSnap) return;
+    if (reconnectSnap.id) setMyId(reconnectSnap.id);
+    const s = reconnectSnap.snapshot;
+    if (!s) return;
+    if (s.grid) setGrid(s.grid);
+    if (s.ownership) setOwnership(s.ownership);
+    if (s.players) setPlayers(s.players);
+    if (s.scores) setScores(s.scores);
+    if (typeof s.remainingSeconds === "number")
+      setRemainingSeconds(s.remainingSeconds);
+    if (Array.isArray(s.projectiles)) setProjectiles(s.projectiles);
+    if (typeof s.serverNow === "number") setSkewMs(s.serverNow - Date.now());
+  }, [reconnectSnap]);
 
   // Wire socket events for the active room.
   useEffect(() => {

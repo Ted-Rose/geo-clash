@@ -166,7 +166,7 @@ export class RoomRegistry {
             this._disconnectTimers.delete(oldId);
           }
           await game.swapSocketId(oldId, socket.id);
-          socket.join(roomId);
+          await socket.join(roomId);
           socket.data.roomId = roomId;
           socket.data.gameType = meta.gameType || 'clash';
           const registerGameHandlers =

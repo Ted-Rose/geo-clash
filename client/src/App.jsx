@@ -17,6 +17,8 @@ export default function App() {
   const [roomId, setRoomId] = useState(null);
   const [room, setRoom] = useState(null);
   const [initialSnapshot, setInitialSnapshot] = useState(null);
+  const [reconnectSnap, setReconnectSnap] = useState(null);
+  const [rejoining, setRejoining] = useState(false);
   const rejoinRef = useRef(null);
 
   // Lift sim/GPS state here so the Lobby and the Game share the same
@@ -59,16 +61,27 @@ export default function App() {
       // If we were in a game when the connection dropped, auto-rejoin.
       const rj = rejoinRef.current;
       if (rj) {
+        setRejoining(true);
         socket.emit(
           'room-join',
           { roomId: rj.roomId, name: rj.name, sessionId: rj.sessionId },
           (result) => {
+            setRejoining(false);
             if (!result?.ok) {
               // Game ended or room gone — go back to lobby.
               rejoinRef.current = null;
               setRoomId(null);
               setRoom(null);
               setInitialSnapshot(null);
+              setReconnectSnap(null);
+            } else {
+              // Push the snapshot directly so GameScreen unfreezes
+              // immediately without depending on the separately-emitted
+              // 'snapshot' event arriving at the right time.
+              setReconnectSnap({
+                id: socket.id,
+                snapshot: result.snapshot,
+              });
             }
           },
         );
@@ -129,7 +142,8 @@ export default function App() {
       maxImageryAge={maxImageryAge}
       maxNativeZoom={maxNativeZoom}
       initialSnapshot={initialSnapshot}
-      connected={connected}
+      reconnectSnap={reconnectSnap}
+      connected={connected && !rejoining}
       onLeave={() => {
         rejoinRef.current = null;
         setRoomId(null);
