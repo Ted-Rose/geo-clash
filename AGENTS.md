@@ -59,6 +59,10 @@ folders unless introducing a genuinely new deployable.
 ## Cross-cutting rules
 - **Don't hardcode credentials, tokens, or production URLs.** This project must
   remain runnable on a fresh laptop with `npm install` + `npm run dev`.
+- **GCP Secret Manager stays minimal.** Runtime secrets are Terraform-managed
+  (`terraform/main.tf`). Never add a new `google_secret_manager_secret` per
+  credential — consolidate into one shared env-file-style secret (KEY=VALUE
+  lines) and append keys there; each extra secret adds cost.
 - **Same-origin in dev** is enforced via the Vite proxy for `/socket.io`. Don't
   hardcode `http://localhost:3001` in client code — use the proxy.
 - **Geolocation requires `localhost` or HTTPS** in browsers. Keep the
