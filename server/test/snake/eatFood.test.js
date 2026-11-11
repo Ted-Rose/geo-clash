@@ -92,6 +92,11 @@ test('eatFood: second claim on just-eaten foodId still scores', async (t) => {
 
   const ates = io._events.filter((e) => e.event === 'snake-ate');
   assert.equal(ates.length, 2, 'a snake-ate is emitted per reporting player');
+  assert.equal(
+    io._events.filter((e) => e.event === 'food-update').length,
+    1,
+    'no second food-update fires for the doubly-claimed id',
+  );
 });
 
 test('eatFood: fabricated foodId awards nothing, no events', async (t) => {

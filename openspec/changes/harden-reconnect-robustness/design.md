@@ -61,7 +61,13 @@ teardown), `server/src/snake/gameState.js` + `clashHandshake.js`
   victim disconnect but punish patterns — unenforceable at MVP scale.
   Trade-off accepted: a genuinely-dropped victim loses the kill it
   couldn't contest anyway; the 2000 ms window + reconnect grace still
-  bounds abuse.
+  bounds abuse. Killerless kills (mutual head-on-head, `killerId`
+  null) have no deciding participant — they commit AT DETECTION with
+  no pending clash, since the victim's ack was only advisory and
+  waiting would reopen the disconnect-to-dodge vector. An ack that
+  lands after the window but before the next tick's expiry sweep is
+  treated as expired — the window is enforced at `clash_ack` time,
+  not only in `_tick`.
 - **`eat_food` validation via `_recentlyEaten` as a real check.**
   The bookkeeping set already written (and purged after 3000 ms)
   becomes the leniency window: award iff `foodId` is live or in

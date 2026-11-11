@@ -1,12 +1,14 @@
 // Pending-clash ACK handshake for Geo Snake.
 //
 // The server detects a collision in _tick and pushes `clash_verify` to
-// every participant, but the kill commits once the DECIDING participant
-// — the killer, or the victim for killerless head-on-head clashes —
-// ACKs inside CLASH_ACK_TIMEOUT_MS. The victim's ACK is advisory only:
-// victim timeout or disconnect never voids a killer-acknowledged kill.
-// Free functions that take the SnakeGameState instance, matching the
-// collisions.js/food.js helper style; the class owns `_pendingClashes`
+// every participant. Kills with a killer commit once the KILLER ACKs
+// inside CLASH_ACK_TIMEOUT_MS; the victim's ACK is advisory only and
+// its timeout or disconnect never voids a killer-acknowledged kill.
+// Killerless kills (mutual head-on-head, killerId null) have no
+// decider, so they commit AT DETECTION — going dark can never dodge
+// the death. Free functions that take the SnakeGameState instance,
+// matching the collisions.js/food.js helper style; the class owns
+// `_pendingClashes`
 // (clashId → { victimId, killerId, acksNeeded: Set, timestamp }).
 
 import { CLASH_ACK_TIMEOUT_MS } from './constants.js';
@@ -19,6 +21,13 @@ export async function clashAck(game, socketId, clashId) {
   const pending = game._pendingClashes.get(clashId);
   if (!pending) return;
 
+  // An ACK landing after the window closed but before the next tick's
+  // expiry sweep must not commit — treat the clash as expired.
+  if (Date.now() - pending.timestamp > CLASH_ACK_TIMEOUT_MS) {
+    game._pendingClashes.delete(clashId);
+    return;
+  }
+
   pending.acksNeeded.delete(socketId);
 
   if (pending.acksNeeded.size === 0) {
@@ -28,9 +37,10 @@ export async function clashAck(game, socketId, clashId) {
 }
 
 // Called on socket disconnect — cancel pending clashes where the
-// departed player was the deciding participant (the killer, or the
-// victim of a killerless clash). A victim leaving a killered clash
-// does NOT cancel it: the killer can still ACK and collect the kill.
+// departed player was the deciding participant (the killer; killerless
+// kills commit at detection and never become pending). A victim
+// leaving a killered clash does NOT cancel it: the killer can still
+// ACK and collect the kill.
 export function cancelClashesFor(game, socketId) {
   for (const [clashId, entry] of game._pendingClashes) {
     if (entry.acksNeeded.has(socketId)) {
@@ -59,32 +69,43 @@ export function expirePendingClashes(game, now) {
   }
 }
 
-// Turn fresh collision results into pending clashes: dedup one pending
-// clash per victim, register the deciding participant's ACK (the
-// killer; the victim when the collision has no killer), and push
-// clash_verify to every participant.
-export function initiateClashes(game, kills, now) {
+// Turn fresh collision results into outcomes: dedup one clash per
+// victim per tick, push clash_verify to every participant, then either
+// commit the kill at detection (killerless mutual head-on-head — no
+// decider exists and the victim's ack was only advisory, so waiting
+// would let a hard leave dodge the death) or register a pending clash
+// that waits on the killer's ACK. Acks for already-committed clashes
+// are harmless no-ops.
+export async function initiateClashes(game, kills, now) {
+  const seenVictims = new Set();
   for (const { killerId, victimId } of kills) {
-    // Dedup: skip if a pending clash already exists for this victim.
+    // Dedup: one outcome per victim — skip duplicates in this batch and
+    // any pending clash already registered for the victim.
+    if (seenVictims.has(victimId)) continue;
     const alreadyPending = [...game._pendingClashes.values()].some(
       (e) => e.victimId === victimId,
     );
     if (alreadyPending) continue;
+    seenVictims.add(victimId);
 
     const clashId = `${victimId}:${now}`;
-    // The victim's ACK is advisory — only the decider must respond.
-    const acksNeeded = new Set([killerId || victimId]);
-
-    game._pendingClashes.set(clashId, {
-      victimId,
-      killerId: killerId || null,
-      acksNeeded,
-      timestamp: now,
-    });
 
     // Notify all participants; the victim's reply is informational.
     game.io.to(victimId).emit('clash_verify', { clashId });
     if (killerId) game.io.to(killerId).emit('clash_verify', { clashId });
+
+    if (!killerId) {
+      await killPlayer(game, victimId, null);
+      continue;
+    }
+
+    // The victim's ACK is advisory — only the killer must respond.
+    game._pendingClashes.set(clashId, {
+      victimId,
+      killerId,
+      acksNeeded: new Set([killerId]),
+      timestamp: now,
+    });
   }
 }
 

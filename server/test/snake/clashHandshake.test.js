@@ -44,12 +44,13 @@ function freezeTimers(game) {
 
 const PAST_GRACE = () => Date.now() - SPAWN_GRACE_MS - 100;
 
-async function placePlayer(game, id, { lat, lng, tailPoints = [] }) {
+async function placePlayer(game, id, { lat, lng, tailPoints = [], score }) {
   const p = await game.playerStore.get(id);
   p.spawnedAt = PAST_GRACE();
   p.lat = lat;
   p.lng = lng;
   p.tailPoints = tailPoints;
+  if (typeof score === 'number') p.score = score;
   await game.playerStore.set(id, p);
 }
 
@@ -177,6 +178,35 @@ test('clashAck: victim disconnect cannot dodge the kill', async (t) => {
   assert.equal(killer.score, 5);
 });
 
+test(
+  'clashAck: killer ACK after the window is treated as expired',
+  async (t) => {
+  const { io, game } = makeGame(t, 'ack-late');
+  await setupHeadOnTail(game);
+  game.startMatch();
+  freezeTimers(game);
+  await game._tick();
+
+  const clashId =
+    io._events.find((e) => e.event === 'clash_verify').payload.clashId;
+
+  // Age the pending entry past the ACK window, then ACK before the next
+  // _tick expiry sweep — the late ACK must drop the clash, not commit.
+  game._pendingClashes.get(clashId).timestamp =
+    Date.now() - CLASH_ACK_TIMEOUT_MS - 1;
+  await game.clashAck('p2', clashId);
+
+  assert.equal(io._events.filter((e) => e.event === 'snake-hit').length, 0);
+  assert.equal(
+    game._pendingClashes.has(clashId),
+    false,
+    'late ACK drops the expired clash instead of committing',
+  );
+  const killer = await game.playerStore.get('p2');
+  assert.equal(killer.kills, 0, 'late killer ACK earns nothing');
+  },
+);
+
 test('clashAck: killer timeout voids the clash', async (t) => {
   const { io, game } = makeGame(t, 'ack-killer-timeout');
   await setupHeadOnTail(game);
@@ -293,7 +323,9 @@ test('removePlayer: killer leaving cancels the pending clash', async (t) => {
   assert.equal(io._events.filter((e) => e.event === 'snake-hit').length, 0);
 });
 
-test('_tick: dedup — at most one pending clash per victim', async (t) => {
+test(
+  '_tick: dedup — one committed kill per victim on head-on-head',
+  async (t) => {
   const { io, game } = makeGame(t, 'clash-dedup');
   await game.addPlayer('p1', 'A');
   await game.addPlayer('p2', 'B');
@@ -312,5 +344,76 @@ test('_tick: dedup — at most one pending clash per victim', async (t) => {
     ['p1', 'p2'],
     'each participant verified exactly once',
   );
-  assert.equal(game._pendingClashes.size, 2);
-});
+  // Killerless kills commit at detection — nothing stays pending, and
+  // the duplicated kill entries collapse to one commit per victim.
+  assert.equal(game._pendingClashes.size, 0);
+  const hits = io._events.filter((e) => e.event === 'snake-hit');
+  assert.equal(hits.length, 2, 'one committed kill per victim');
+  },
+);
+
+test(
+  'killerless head-on-head commits at detection — silence ' +
+    'or disconnect cannot dodge',
+  async (t) => {
+  const { io, game } = makeGame(t, 'headon-commit');
+  await game.addPlayer('p1', 'A');
+  await game.addPlayer('p2', 'B');
+  // Same spot with tails far from both heads → mutual head-on-head
+  // (two killerless kills), observable via the score/tail wipe.
+  await placePlayer(game, 'p1', {
+    lat: 51.5,
+    lng: -0.12,
+    tailPoints: [{ lat: 51.51, lng: -0.12 }],
+    score: 7,
+  });
+  await placePlayer(game, 'p2', {
+    lat: 51.5,
+    lng: -0.12,
+    tailPoints: [{ lat: 51.52, lng: -0.12 }],
+    score: 9,
+  });
+  game.startMatch();
+  freezeTimers(game);
+  await game._tick();
+
+  // No ack is needed — nothing is left pending.
+  assert.equal(game._pendingClashes.size, 0);
+  const hits = io._events.filter((e) => e.event === 'snake-hit');
+  assert.equal(hits.length, 2, 'both kills commit at detection');
+  assert.deepEqual(
+    hits.map((e) => e.payload.victimId).sort(),
+    ['p1', 'p2'],
+  );
+  assert.ok(hits.every((e) => e.payload.killerId === null));
+
+  const resets = io._events.filter((e) => e.event === 'snake-reset');
+  assert.deepEqual(
+    resets.map((e) => e.target).sort(),
+    ['p1', 'p2'],
+    'each victim socket gets its own snake-reset',
+  );
+  for (const id of ['p1', 'p2']) {
+    const p = await game.playerStore.get(id);
+    assert.equal(p.score, 0, `${id} score reset`);
+    assert.deepEqual(p.tailPoints, [], `${id} tail wiped`);
+    assert.ok(
+      Date.now() - p.spawnedAt < SPAWN_GRACE_MS,
+      `${id} respawned inside the grace window`,
+    );
+  }
+
+  // The old dodge: a victim who hard-leaves or never acks — the kills
+  // are already committed, so there is nothing left to void.
+  await game.removePlayer('p2');
+  assert.equal(game._pendingClashes.size, 0);
+  const clashId =
+    io._events.find((e) => e.event === 'clash_verify').payload.clashId;
+  await game.clashAck('p1', clashId); // late ack for a dead clash
+  assert.equal(
+    io._events.filter((e) => e.event === 'snake-hit').length,
+    2,
+    'late acks and disconnects change nothing',
+  );
+  },
+);

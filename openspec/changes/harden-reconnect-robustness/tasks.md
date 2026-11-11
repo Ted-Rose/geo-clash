@@ -34,8 +34,11 @@
 
 - [x] 3.1 server: Change `clashHandshake.js` so the kill commits once
   the killer ACKs inside the window, treating the victim's ack as
-  advisory (victim timeout/disconnect no longer voids); verify tests
-  for killer-ack+victim-timeout commits and killer-timeout voids
+  advisory (victim timeout/disconnect no longer voids); killerless
+  head-on-head kills commit at detection with no pending clash, and
+  an ack arriving after the window is treated as expired; verify
+  tests for killer-ack+victim-timeout commits, killer-timeout voids,
+  late-ack drops, and mutual head-on committing without acks
 - [x] 3.2 server: Validate `eat_food` against the live food list or
   `_recentlyEaten` (3000 ms window); verify fabricated `foodId`
   claims award nothing while a second racer's claim still scores

@@ -38,9 +38,9 @@ export const FOOD_SPAWN_RADIUS_M = 50;
 // collision-safe.
 export const SPAWN_GRACE_MS = 3000;
 
-// How long (ms) the server waits for the deciding clash participant
-// (the killer; the victim for killerless clashes) to ACK before
-// dropping the pending clash without committing the kill.
+// How long (ms) the server waits for the killer's clash ACK before
+// dropping the pending clash without committing the kill. Killerless
+// kills commit at detection and never enter this window.
 export const CLASH_ACK_TIMEOUT_MS = 2000;
 
 // How many kills a player needs to win (0 = time-based only).

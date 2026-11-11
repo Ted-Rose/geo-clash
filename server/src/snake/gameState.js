@@ -9,8 +9,9 @@
 //                      recently-claimed food, awards the point to the
 //                      reporting player, broadcasts food-update
 //   _tick            → server detects collisions from stored
-//                      positions;
-//                      emits clash_verify to both participants
+//                      positions; emits clash_verify to both
+//                      participants and commits killerless kills
+//                      (mutual head-on-head) at detection
 //   clash_ack        → the killer's ACK inside CLASH_ACK_TIMEOUT_MS
 //                      commits the kill; the victim's ACK is advisory
 //                      and its absence can never void the kill
@@ -84,8 +85,8 @@ export class SnakeGameState {
     // foodId → timestamp of when it was eaten (race-condition window)
     this._recentlyEaten = new Map();
     // clashId → { victimId, killerId, acksNeeded: Set, timestamp }
-    // acksNeeded holds only the deciding participant — the killer, or
-    // the victim for killerless head-on-head clashes.
+    // acksNeeded holds only the deciding participant — the killer.
+    // Killerless kills commit at detection and never land here.
     this._pendingClashes = new Map();
     if (this._centerLat !== null && this._centerLng !== null) {
       this._initArena(this._centerLat, this._centerLng);
@@ -358,8 +359,9 @@ export class SnakeGameState {
     for (const p of players) playersMap[p.id] = p;
     const kills = resolveCollisions(playersMap);
 
-    // Turn kills into pending clashes + clash_verify pushes.
-    initiateClashes(this, kills, now);
+    // Turn kills into pending clashes + clash_verify pushes;
+    // killerless kills commit inside this call.
+    await initiateClashes(this, kills, now);
   }
 
   // ---- snapshot ----------------------------------------------------------
