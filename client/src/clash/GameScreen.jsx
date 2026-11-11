@@ -1,7 +1,7 @@
-import { useEffect, useMemo, useRef, useState } from "react";
-import { useSound } from "../shared/hooks/useSound.js";
+import { useEffect, useRef, useState } from "react";
 import { CircleMarker, Tooltip } from "react-leaflet";
-import { getSocket, API_BASE } from "../shared/socket.js";
+import { getSocket } from "../shared/socket.js";
+import { useClashGame } from "./useClashGame.js";
 import MapView from "../shared/MapView.jsx";
 import ProjectileLayer from "./ProjectileLayer.jsx";
 import HUD from "./HUD.jsx";
@@ -9,9 +9,9 @@ import ControlPanel from "./ControlPanel.jsx";
 import SimPanel from "./SimPanel.jsx";
 import PostMatchScreen from "./PostMatchScreen.jsx";
 
-// In-game shell. All socket subscriptions are scoped to the lifetime of
-// this component (i.e. while a roomId is set). Leaving the room cleanly
-// unsubscribes and clears local state.
+// In-game shell. Socket subscriptions + server-driven state live in
+// useClashGame; this component is render + input only. Leaving the room
+// cleanly unsubscribes and clears local state.
 export default function GameScreen({
   roomId,
   position,
@@ -26,211 +26,32 @@ export default function GameScreen({
   onLeave,
 }) {
   const socket = getSocket();
-  const [myId, setMyId] = useState(() => socket.id);
   const {
-    playCaptureStart,
-    playCaptureOwned,
-    playShoot,
-    playEnemyShoot,
-    playShield,
-  } = useSound();
-  // State declarations first
-  const [grid, setGrid] = useState(null);
-  const [ownership, setOwnership] = useState([]);
-  const [players, setPlayers] = useState([]);
-  const [scores, setScores] = useState({});
-  const [remainingSeconds, setRemainingSeconds] = useState(300);
-  const [shieldUntil, setShieldUntil] = useState(0);
-  const [projectiles, setProjectiles] = useState([]);
-  const [skewMs, setSkewMs] = useState(0);
-  const [target, setTarget] = useState(null); // { lat, lng } picked via long-press
+    myId,
+    grid,
+    ownership,
+    players,
+    me,
+    mySquares,
+    leaderboard,
+    atBase,
+    remainingSeconds,
+    shieldUntil,
+    projectiles,
+    skewMs,
+    ammo,
+    maxAmmo,
+    matchEnded,
+    finalLeaderboard,
+    globalTop,
+  } = useClashGame({ roomId, position, initialSnapshot, reconnectSnap });
+
+  // Local input/UI state — not server-driven.
+  // target: { lat, lng } picked via long-press
+  const [target, setTarget] = useState(null);
   const [bots, setBots] = useState([]);
-  const [matchEnded, setMatchEnded] = useState(false);
-  const [finalLeaderboard, setFinalLeaderboard] = useState(null);
-  const [globalTop, setGlobalTop] = useState(null);
   const [mapLocked, setMapLocked] = useState(true);
   const [menuOpen, setMenuOpen] = useState(false);
-  const [ammo, setAmmo] = useState(null);
-  const [maxAmmo, setMaxAmmo] = useState(null);
-
-  // Refs and their effects
-  const myIdRef = useRef(myId);
-  useEffect(() => {
-    myIdRef.current = myId;
-  }, [myId]);
-  const positionRef = useRef(position);
-  useEffect(() => {
-    positionRef.current = position;
-  }, [position]);
-  const playersRef = useRef([]);
-  useEffect(() => {
-    playersRef.current = players;
-  }, [players]);
-
-  // Apply the snapshot that arrived in the room-join ack (before this
-  // component mounted, so the socket events were already missed).
-  useEffect(() => {
-    if (!initialSnapshot) return;
-    const s = initialSnapshot;
-    if (s.grid) setGrid(s.grid);
-    if (s.ownership) setOwnership(s.ownership);
-    if (s.players) setPlayers(s.players);
-    if (s.scores) setScores(s.scores);
-    if (typeof s.remainingSeconds === "number")
-      setRemainingSeconds(s.remainingSeconds);
-    if (Array.isArray(s.projectiles)) setProjectiles(s.projectiles);
-    if (typeof s.serverNow === "number") setSkewMs(s.serverNow - Date.now());
-    if (typeof s.maxAmmo === "number") setMaxAmmo(s.maxAmmo);
-    const meSnap = s.players?.find((p) => p.id === socket.id);
-    if (meSnap && typeof meSnap.ammo === "number") setAmmo(meSnap.ammo);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
-  // On reconnect: apply the fresh snapshot pushed from the ack and update
-  // myId to the new socket ID so HUD and actions target the right player.
-  useEffect(() => {
-    if (!reconnectSnap) return;
-    if (reconnectSnap.id) setMyId(reconnectSnap.id);
-    const s = reconnectSnap.snapshot;
-    if (!s) return;
-    if (s.grid) setGrid(s.grid);
-    if (s.ownership) setOwnership(s.ownership);
-    if (s.players) setPlayers(s.players);
-    if (s.scores) setScores(s.scores);
-    if (typeof s.remainingSeconds === "number")
-      setRemainingSeconds(s.remainingSeconds);
-    if (Array.isArray(s.projectiles)) setProjectiles(s.projectiles);
-    if (typeof s.serverNow === "number") setSkewMs(s.serverNow - Date.now());
-    if (typeof s.maxAmmo === "number") setMaxAmmo(s.maxAmmo);
-    const meSnap = s.players?.find((p) => p.id === reconnectSnap.id);
-    if (meSnap && typeof meSnap.ammo === "number") setAmmo(meSnap.ammo);
-  }, [reconnectSnap]);
-
-  // Wire socket events for the active room.
-  useEffect(() => {
-    function onSnapshot(s) {
-      if (s.grid) setGrid(s.grid);
-      if (s.ownership) setOwnership(s.ownership);
-      if (s.players) setPlayers(s.players);
-      if (s.scores) setScores(s.scores);
-      if (typeof s.remainingSeconds === "number") {
-        setRemainingSeconds(s.remainingSeconds);
-      }
-      if (Array.isArray(s.projectiles)) setProjectiles(s.projectiles);
-      if (typeof s.serverNow === "number") {
-        // First-cut skew estimate from the snapshot, refined by `time-sync`.
-        setSkewMs(s.serverNow - Date.now());
-      }
-    }
-    function onJoined({ id }) {
-      setMyId(id);
-    }
-    function onPlayers({ players: ps }) {
-      setPlayers(ps);
-    }
-    function onGrid({ cells, scores: sc }) {
-      setOwnership((prev) => {
-        const m = new Map(prev.map((c) => [c.id, c]));
-        for (const c of cells) m.set(c.id, c);
-        return [...m.values()];
-      });
-      if (sc) setScores(sc);
-      if (cells.some((c) => c.ownerId === myIdRef.current)) playCaptureOwned();
-    }
-    function onCaptureStart({ playerId }) {
-      if (playerId === myIdRef.current) playCaptureStart();
-    }
-    function onTimer({ remainingSeconds: rs }) {
-      setRemainingSeconds(rs);
-    }
-    function onShield({ id, until }) {
-      if (id === socket.id) {
-        setShieldUntil(until);
-        playShield();
-      }
-    }
-    function onShieldEnd({ id }) {
-      if (id === socket.id) setShieldUntil(0);
-    }
-    function onProjectileSpawn(p) {
-      setProjectiles((prev) => [...prev, p]);
-      if (p.attackerId === myIdRef.current) {
-        playShoot(p.attackerId);
-      } else {
-        const me =
-          playersRef.current.find((pl) => pl.id === myIdRef.current) ||
-          positionRef.current;
-        if (me && distDeg(me, p.target) <= ENEMY_SHOT_NEAR_DEG) {
-          playEnemyShoot(p.attackerId);
-        }
-      }
-    }
-    function onProjectileResolved({ id }) {
-      setProjectiles((prev) => prev.filter((p) => p.id !== id));
-    }
-    function onMatchEnd({ leaderboard } = {}) {
-      setMatchEnded(true);
-      if (Array.isArray(leaderboard)) setFinalLeaderboard(leaderboard);
-      // Pull the global top-N so the post-match screen can show where this
-      // match sits in the all-time list.
-      fetch(`${API_BASE}/api/leaderboard?limit=10`)
-        .then((r) => (r.ok ? r.json() : { top: [] }))
-        .then((data) => setGlobalTop(data.top || []))
-        .catch(() => setGlobalTop([]));
-    }
-
-    function onAmmoUpdate({ ammo: a, maxAmmo: m }) {
-      setAmmo(a);
-      setMaxAmmo(m);
-    }
-    socket.on("snapshot", onSnapshot);
-    socket.on("joined", onJoined);
-    socket.on("players-update", onPlayers);
-    socket.on("grid-update", onGrid);
-    socket.on("cell-capture-start", onCaptureStart);
-    socket.on("timer", onTimer);
-    socket.on("player-shield", onShield);
-    socket.on("player-shield-end", onShieldEnd);
-    socket.on("projectile-spawn", onProjectileSpawn);
-    socket.on("projectile-resolved", onProjectileResolved);
-    socket.on("match-end", onMatchEnd);
-    socket.on("ammo-update", onAmmoUpdate);
-
-    return () => {
-      socket.off("snapshot", onSnapshot);
-      socket.off("joined", onJoined);
-      socket.off("players-update", onPlayers);
-      socket.off("grid-update", onGrid);
-      socket.off("cell-capture-start", onCaptureStart);
-      socket.off("timer", onTimer);
-      socket.off("player-shield", onShield);
-      socket.off("player-shield-end", onShieldEnd);
-      socket.off("projectile-spawn", onProjectileSpawn);
-      socket.off("projectile-resolved", onProjectileResolved);
-      socket.off("match-end", onMatchEnd);
-      socket.off("ammo-update", onAmmoUpdate);
-    };
-  }, [roomId]);
-
-  // Refine clock skew with a round-trip measurement at mount + reconnect.
-  useEffect(() => {
-    function syncOnce() {
-      const send = Date.now();
-      socket.emit("time-sync", send, (resp) => {
-        if (!resp) return;
-        const recv = Date.now();
-        const rtt = recv - send;
-        // skew = serverNow - clientMidpoint
-        const skew = resp.serverNowMs - (send + rtt / 2);
-        setSkewMs(skew);
-      });
-    }
-    if (socket.connected) syncOnce();
-    socket.on("connect", syncOnce);
-    return () => {
-      socket.off("connect", syncOnce);
-    };
-  }, []);
 
   // Stream our position to the server (rate-limited).
   const lastSentRef = useRef(0);
@@ -246,39 +67,6 @@ export default function GameScreen({
     });
   }, [position]);
 
-  const me = useMemo(
-    () => players.find((p) => p.id === myId) || null,
-    [players, myId],
-  );
-
-  const mySquares = useMemo(() => {
-    if (!me) return 0;
-    return ownership.filter((c) => c.ownerId === me.id).length;
-  }, [ownership, me]);
-
-  const leaderboard = useMemo(() => {
-    return Object.entries(scores)
-      .map(([id, s]) => ({ id, ...s }))
-      .sort((a, b) => b.squares - a.squares);
-  }, [scores]);
-
-  const atBase = useMemo(() => {
-    if (!grid || !position) return false;
-    const cell = grid.cells.find((c) => c.id === grid.baseCellId);
-    if (!cell) return false;
-    const [a, b, , d] = cell.polygon;
-    const south = a[0];
-    const west = a[1];
-    const east = b[1];
-    const north = d[0];
-    return (
-      position.lat >= south &&
-      position.lat <= north &&
-      position.lng >= west &&
-      position.lng <= east
-    );
-  }, [grid, position]);
-
   const attack = () => {
     socket.emit("player-attack", {
       heading: position?.heading ?? 0,
@@ -288,7 +76,7 @@ export default function GameScreen({
   const shield = () => socket.emit("player-shield");
   const respawn = () => socket.emit("player-respawn");
 
-  // Bots: extra socket.io connections from this tab — convenient for testing.
+  // Bots: extra socket.io connections from this tab — handy for testing.
   const spawnBot = async () => {
     if (!grid) return;
     const { io } = await import("socket.io-client");
@@ -311,12 +99,16 @@ export default function GameScreen({
       const stepM = 2 + Math.random() * 3;
       const dLat = (stepM / 111320) * Math.cos((heading * Math.PI) / 180);
       const dLng =
-        (stepM / (111320 * Math.cos(φ))) * Math.sin((heading * Math.PI) / 180);
+        (stepM / (111320 * Math.cos(φ))) *
+        Math.sin((heading * Math.PI) / 180);
       lat = Math.min(
         bbox.north - 1e-6,
         Math.max(bbox.south + 1e-6, lat + dLat),
       );
-      lng = Math.min(bbox.east - 1e-6, Math.max(bbox.west + 1e-6, lng + dLng));
+      lng = Math.min(
+        bbox.east - 1e-6,
+        Math.max(bbox.west + 1e-6, lng + dLng),
+      );
       botSocket.emit("location-update", { lat, lng, heading });
       if (Math.random() < 0.02) botSocket.emit("player-attack", { heading });
       if (Math.random() < 0.01) botSocket.emit("player-shield");
@@ -390,23 +182,34 @@ export default function GameScreen({
       <div className="absolute top-3 left-3 z-[601]">
         <button
           onClick={() => setMenuOpen((o) => !o)}
-          className="w-11 h-11 flex items-center justify-center bg-slate-900/85 backdrop-blur rounded-xl shadow-lg text-slate-200 text-xl active:scale-95 transition"
+          className="w-11 h-11 flex items-center justify-center
+                     bg-slate-900/85 backdrop-blur rounded-xl shadow-lg
+                     text-slate-200 text-xl active:scale-95 transition"
           aria-label="Menu"
         >
           ☰
         </button>
         {menuOpen && (
-          <div className="mt-2 bg-slate-900/95 backdrop-blur rounded-xl shadow-xl p-2 flex flex-col gap-1 min-w-[180px]">
+          <div
+            className="mt-2 bg-slate-900/95 backdrop-blur rounded-xl
+                       shadow-xl p-2 flex flex-col gap-1 min-w-[180px]"
+          >
             <button
               onClick={() => {
                 setMenuOpen(false);
                 onLeave();
               }}
-              className="w-full text-left px-3 py-2 rounded-lg text-slate-200 hover:bg-slate-700 active:scale-95 transition text-sm"
+              className="w-full text-left px-3 py-2 rounded-lg
+                         text-slate-200 hover:bg-slate-700 active:scale-95
+                         transition text-sm"
             >
               ⤺ Leave
             </button>
-            <label className="flex items-center gap-2 px-3 py-2 rounded-lg hover:bg-slate-700 cursor-pointer text-sm text-slate-200 select-none">
+            <label
+              className="flex items-center gap-2 px-3 py-2 rounded-lg
+                         hover:bg-slate-700 cursor-pointer text-sm
+                         text-slate-200 select-none"
+            >
               <input
                 type="checkbox"
                 checked={mapLocked}
@@ -418,16 +221,21 @@ export default function GameScreen({
             {players.length > 0 && (
               <>
                 <div className="border-t border-slate-700 my-1" />
-                <div className="px-3 py-1 text-xs uppercase tracking-wider text-slate-500">
+                <div
+                  className="px-3 py-1 text-xs uppercase tracking-wider
+                             text-slate-500"
+                >
                   Players
                 </div>
                 {players.map((p) => (
                   <div
                     key={p.id}
-                    className="flex items-center gap-2 px-3 py-1.5 text-sm text-slate-200"
+                    className="flex items-center gap-2 px-3 py-1.5
+                               text-sm text-slate-200"
                   >
                     <span
-                      className="inline-block w-3 h-3 rounded-full flex-shrink-0"
+                      className="inline-block w-3 h-3 rounded-full
+                                 flex-shrink-0"
                       style={{ background: p.color || "#94a3b8" }}
                     />
                     <span className={p.id === myId ? "font-semibold" : ""}>
@@ -471,17 +279,23 @@ export default function GameScreen({
       {target && (
         <button
           onClick={() => setTarget(null)}
-          className="absolute top-3 right-3 z-[600] bg-yellow-400/90 text-slate-900 rounded-full px-3 py-1 text-xs font-semibold shadow-lg active:scale-95 transition"
+          className="absolute top-3 right-3 z-[600] bg-yellow-400/90
+                     text-slate-900 rounded-full px-3 py-1 text-xs
+                     font-semibold shadow-lg active:scale-95 transition"
         >
           ✕ clear target
         </button>
       )}
 
       {!connected && !matchEnded && (
-        <div className="fixed inset-0 z-[700] bg-slate-900/60
-                        backdrop-blur-sm flex items-center justify-center">
-          <div className="bg-slate-800 rounded-2xl px-6 py-4 text-white
-                          text-center shadow-2xl">
+        <div
+          className="fixed inset-0 z-[700] bg-slate-900/60
+                     backdrop-blur-sm flex items-center justify-center"
+        >
+          <div
+            className="bg-slate-800 rounded-2xl px-6 py-4 text-white
+                       text-center shadow-2xl"
+          >
             <div className="text-lg font-semibold mb-1">Reconnecting…</div>
             <div className="text-sm text-slate-400">Your game is saved</div>
           </div>
@@ -497,12 +311,4 @@ export default function GameScreen({
       )}
     </div>
   );
-}
-
-const ENEMY_SHOT_NEAR_DEG = 0.00015; // ~15 m in degrees
-
-function distDeg(a, b) {
-  const dLat = a.lat - b.lat;
-  const dLng = a.lng - b.lng;
-  return Math.sqrt(dLat * dLat + dLng * dLng);
 }
