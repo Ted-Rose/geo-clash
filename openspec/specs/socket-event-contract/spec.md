@@ -38,16 +38,20 @@ result (`{ rooms }`, `{ ok, room }`, or `{ ok: false, reason }`).
 
 #### Scenario: Join rejected
 
-- **WHEN** `room-join` targets a missing, ended, or full room
-- **THEN** the ack resolves `{ ok: false, reason }` (e.g.
-  `no-such-room`, `ended`, `room-full`) and no state mutates
+- **WHEN** `room-join` targets a missing or full room
+- **THEN** the ack resolves `{ ok: false, reason }` (`no-such-room` or
+  `room-full`; the `ended` reason branch exists but is unreachable —
+  ended rooms are destroyed) and no state mutates
 
 ### Requirement: Join handshake sequence
 
 On a fresh successful join the server SHALL emit `joined` and
 `snapshot` to the joining socket, then broadcast `player-joined` to the
 room. Rejoins carrying a known `sessionId` re-key the stored player to
-the new socket id and broadcast `player-reconnected` instead.
+the new socket id and broadcast `player-reconnected` instead — but only
+for games implementing the session interface (`getPlayerBySessionId`/
+`swapSocketId`; clash does, snake does not). Snake reconnects always
+take the fresh-join path.
 
 #### Scenario: Fresh join delivers full state
 
@@ -58,9 +62,17 @@ the new socket id and broadcast `player-reconnected` instead.
 
 #### Scenario: Reconnect preserves identity
 
-- **WHEN** `room-join` carries a `sessionId` matching an existing player
+- **WHEN** `room-join` to a clash room carries a `sessionId` matching
+  an existing player
 - **THEN** the player record is re-keyed to the new socket id, a fresh
   `snapshot` is emitted, and the room sees `player-reconnected`
+
+#### Scenario: Snake reconnect is a fresh join
+
+- **WHEN** `room-join` to a snake room carries a previous `sessionId`
+- **THEN** a new player record is created, the stale record lingers
+  until its disconnect-grace timer fires, and a full room rejects the
+  rejoining player `room-full`
 
 ### Requirement: Per-gameType handler dispatch
 

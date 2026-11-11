@@ -23,14 +23,19 @@ folders unless introducing a genuinely new deployable.
 - **Authoritative server.** All gameplay rules, timers, ownership, hit detection,
   and scoring live in `server/`. Clients are dumb renderers + input sources.
 - **Transport.** Socket.io over WebSocket. Events are small JSON payloads named in
-  `kebab-case` (`location-update`, `grid-update`, `player-attack`, …).
-- **State store.** A small async KV facade (`server/src/memoryStore.js`) backs
+  `kebab-case` (`location-update`, `grid-update`, `player-attack`, …). Snake keeps
+  three legacy snake_case events (`eat_food`, `clash_ack`, `clash_verify`) until a
+  deliberate both-ends rename.
+- **State store.** A small async KV facade (`server/src/shared/memoryStore.js`;
+  `server/src/memoryStore.js` is a backward-compat re-export shim) backs
   every persistent collection. Default impl is an in-process `Map`; it is designed
   to be swappable for Redis/Valkey **without changing call sites**. Preserve that
   contract.
-- **Tick loop.** A single interval inside the game-state module advances per-cell
-  capture progress, expires shields, decrements the match timer, and broadcasts
-  diffs. Avoid spawning competing timers — extend the existing tick instead.
+- **Tick loops.** Each per-game state module (`server/src/clash/gameState.js`,
+  `server/src/snake/gameState.js`) runs its own interval — clash drives capture
+  progress/shield expiry/match timer; snake relays updates and runs a second
+  food-respawn interval. Avoid spawning competing timers — extend the existing
+  ticks instead.
 - **Geo math.** Bounding-box → grid slicing uses a local equirectangular
   approximation, which is fine at <1 km scales. Don't reach for full geodesics
   unless arenas grow significantly.
@@ -92,9 +97,11 @@ env if the need arises — don't bake new ports into multiple files.
 
 ## When extending the game
 Typical extension checklist:
-1. Add/modify a Socket.io event in **both** `server/src/socketHandlers.js` and the
-   client wiring.
-2. Mutate authoritative state only inside the game-state module; broadcast a diff.
+1. Add/modify a Socket.io event in **both** the matching
+   `server/src/<game>/socketHandlers.js` (dispatched by `gameType` from
+   `server/src/socketHandlers.js`) and the client wiring.
+2. Mutate authoritative state only inside the per-game game-state module
+   (`server/src/clash/` or `server/src/snake/`); broadcast a diff.
 3. Update the snapshot payload if a new client needs to render the new field on
    first connect.
 4. Add a debug/mock path so the feature is exercisable on desktop without
@@ -113,9 +120,11 @@ Typical extension checklist:
 - Build native mobile (React Native, Capacitor, Cordova). This is a web app.
 
 ## Where to look first
-- Game rules & tick → server game-state module.
-- Geo helpers → server grid utils.
-- Realtime wiring (server) → server socket handlers.
+- Game rules & ticks → `server/src/clash/gameState.js` and
+  `server/src/snake/gameState.js`.
+- Geo helpers → `server/src/shared/gridUtils.js`.
+- Realtime wiring (server) → `server/src/socketHandlers.js` (lobby +
+  dispatch) and `server/src/<game>/socketHandlers.js` (gameplay).
 - Realtime wiring (client) → client `App.jsx` and `socket.js`.
 - Map rendering → client `MapView` component.
 - HUD / inputs → client `HUD`, `ControlPanel`, `SimPanel` components.

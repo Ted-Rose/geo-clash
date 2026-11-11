@@ -13,19 +13,28 @@ The client MUST NOT simulate game rules beyond its snake-local state.
 
 A single interval (200 ms) SHALL drive capture progress, shield
 expiry, and the match timer — no competing timers. A cell accrues
-progress only while occupied by a single color of connected players;
-contested or vacated cells lose progress. At 5 s elapsed the cell is
-claimed and a `grid-update` diff broadcasts new owners + scores.
+progress only under a single color with ≥1 connected occupant.
+Contested or all-disconnected cells are skipped but keep progress;
+vacated cells lose it; a same-color claimant switch restarts
+`elapsedMs` at 0. At 5 s the cell is claimed and a `grid-update` diff
+broadcasts new owners + scores.
 
 #### Scenario: Contested cell stalls
 
 - **WHEN** players of different colors occupy the same cell on a tick
-- **THEN** the cell accrues no capture progress
+- **THEN** the cell accrues no progress that tick, but existing
+  progress is preserved and resumes once a single color remains
 
 #### Scenario: Claimant leaves mid-capture
 
 - **WHEN** a cell has `progress` but its occupants leave before 5 s
 - **THEN** progress resets to null and no ownership change is emitted
+
+#### Scenario: Same-color claimant switch restarts progress
+
+- **WHEN** a cell has `progress` from player A and only teammate B
+  occupies it on a tick
+- **THEN** `elapsedMs` restarts at 0 under B's `playerId`
 
 ### Requirement: Deterministic projectiles
 
@@ -87,16 +96,18 @@ participant disconnect cancels the clash — no ghost kills.
   required participant disconnects
 - **THEN** the pending clash is dropped and no kill commits
 
-### Requirement: Tolerant food claims
+### Requirement: Undeduplicated food claims
 
-`eat_food` SHALL award the point to the reporting player and remove the
-food on the first claim; a duplicate claim inside a 3000 ms race window
-still awards the point (lag tolerance) without double-removing.
-Food is topped back to its target on a 2000 ms interval and every
-change broadcasts `food-update`.
+Every well-formed `eat_food` claim during an active match SHALL award
+`FOOD_SCORE_PER_ITEM` to the reporter and emit `snake-ate`; the first
+claim removes the food and broadcasts `food-update`. Claims are not
+deduplicated — `_recentlyEaten` is bookkeeping only (written, purged
+after 3000 ms, never read), so repeat claims keep awarding points.
+Food is topped to target on a configurable interval (default 2000 ms).
 
 #### Scenario: Two clients eat the same food
 
-- **WHEN** a second `eat_food` for the same `foodId` arrives within the
-  race window
+- **WHEN** a second `eat_food` for the same `foodId` arrives after the
+  first claim removed it
 - **THEN** the second reporter still receives its point via `snake-ate`
+  and no second `food-update` fires for that id

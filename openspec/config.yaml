@@ -8,12 +8,16 @@ context: |
              Authoritative for all gameplay rules. Sub-layout:
              src/clash/ (territory game), src/snake/ (geo-snake game),
              src/shared/ (stores, grid math, room lock, time sync).
-             Top-level src/*.js files are backward-compat re-export shims.
+             Some top-level src/*.js files (gameState, gridUtils,
+             memoryStore, projectiles, roomLock, valkeyStore) are
+             backward-compat re-export shims; index, socketHandlers,
+             roomRegistry, tileProxy are real modules.
   - client/  React (Vite) + Leaflet + Tailwind. Dumb renderer + input
              source; the server snapshot + deltas are the single source
              of truth for gameplay state. Sub-layout: src/components/
-             (clash UI), src/snake/, src/shared/; src/clash/ and other
-             duplicate paths are backward-compat re-export shims.
+             (clash UI), src/snake/, src/hooks/, root socket.js;
+             src/clash/ and src/shared/ are backward-compat re-export
+             shims only.
   - terraform/  GCP infra. Never add a new google_secret_manager_secret
              per credential — append KEY=VALUE to the shared env-file
              secret (each extra secret adds cost).

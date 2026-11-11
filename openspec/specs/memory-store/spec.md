@@ -51,13 +51,15 @@ drains the room — teardown never touches another room's keys.
 
 `leaderboardStore.archive` SHALL record a match result keyed by
 member `${playerId}:${matchId}` carrying `score`, `metric`, `gameType`,
-and metadata, keeping at most 10 000 entries sorted by score desc.
-`top(limit, { gameType })` SHALL return highest scores first,
-optionally filtered by `gameType`. `squaresCaptured` is accepted as a
-deprecated alias for `score`.
+and metadata. The 10 000-entry cap covers the memory impl's list and,
+under Valkey, only the per-`gameType` zset (`leaderboard:<gameType>`) —
+the shared `leaderboard:all` zset is never trimmed. `top(limit,
+{ gameType })` SHALL return highest scores first, optionally filtered
+by `gameType`. `squaresCaptured` is a deprecated alias for `score`.
 
 #### Scenario: Leaderboard caps at 10k
 
-- **WHEN** an archive call would push the store past 10 000 entries
+- **WHEN** an archive call would push a capped collection (the memory
+  list or a per-`gameType` zset) past 10 000 entries
 - **THEN** the lowest-scored entries are dropped and ordering stays
   desc-by-score

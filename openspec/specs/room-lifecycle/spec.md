@@ -11,8 +11,11 @@ room, and one `rooms:meta` record indexed in `rooms:index`.
 
 ### Requirement: Locked mutations
 
-Create/join/leave/destroy SHALL run inside `RoomLock` (per-room key,
+Create/join/leave SHALL run inside `RoomLock` (per-room key,
 `'create'` for creates) so concurrent lobby actions cannot race.
+`destroy` is deliberately NOT lock-wrapped: `RoomLock` local locks are
+non-reentrant, `leave`/`softDisconnect` already invoke it inside the
+caller's lock, and the `onEnd` callback path calls it unlocked.
 
 #### Scenario: Two joins race for the last seat
 
@@ -36,9 +39,11 @@ the game via its factory, and broadcast `rooms-updated`. Supplying
 
 ### Requirement: Match start on first join
 
-The first successful join of a lobby-status room SHALL start the match
-(`status` → `active`, `match-start` broadcast). Joining an `ended`
-room MUST be rejected.
+The first successful join SHALL start the match when the game instance
+is still in `lobby` status (`match-start` broadcast). `meta.status` is
+written once at create (`'lobby'`) for lobby-listing purposes and never
+transitions — the `ended` join-reject branch is dead code, since ended
+rooms are destroyed and joins then fail `no-such-room`.
 
 #### Scenario: Lobby room activates
 
@@ -50,14 +55,23 @@ room MUST be rejected.
 `softDisconnect` SHALL mark the player `connected: false`, emit
 `player-disconnected`, and schedule a hard leave after a grace window —
 30 s, or remaining match time + 30 s during an active match. A
-`sessionId` rejoin inside the window cancels the timer.
+`sessionId` rejoin inside the window cancels the timer — but only in
+games implementing the session interface (clash). Snake ignores
+`sessionId`, so its timer still fires and hard-leaves the stale record.
 
 #### Scenario: Mobile reconnect within grace
 
-- **WHEN** a socket disconnects mid-match and rejoins with its
+- **WHEN** a clash socket disconnects mid-match and rejoins with its
   `sessionId` before the grace timer fires
 - **THEN** the player record is re-keyed to the new socket, its cells
   and progress are preserved, and `player-reconnected` is broadcast
+
+#### Scenario: Snake reconnect leaves a stale record
+
+- **WHEN** a snake player rejoins with its `sessionId` inside the grace
+  window
+- **THEN** a fresh player record is created and the stale one is
+  removed when the grace timer fires, broadcasting `player-left`
 
 #### Scenario: Grace expiry removes the player
 
