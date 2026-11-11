@@ -8,22 +8,20 @@ context: |
              Authoritative for all gameplay rules. Sub-layout:
              src/clash/ (territory game), src/snake/ (geo-snake game),
              src/shared/ (stores, grid math, room lock, time sync).
-             Some top-level src/*.js files (gameState, gridUtils,
-             memoryStore, projectiles, roomLock, valkeyStore) are
-             backward-compat re-export shims; index, socketHandlers,
-             roomRegistry, tileProxy are real modules.
+             Root src/ holds only real modules: index, app,
+             socketHandlers, roomRegistry, tileProxy.
   - client/  React (Vite) + Leaflet + Tailwind. Dumb renderer + input
              source; the server snapshot + deltas are the single source
-             of truth for gameplay state. Sub-layout: src/components/
-             (clash UI), src/snake/, src/hooks/, root socket.js;
-             src/clash/ and src/shared/ are backward-compat re-export
-             shims only.
+             of truth for gameplay state. Sub-layout: src/clash/
+             (clash UI), src/snake/ (snake UI), src/shared/
+             (MapView, LobbyScreen, hooks/, socket.js); src/test/
+             mirrors the layout.
   - terraform/  GCP infra. Never add a new google_secret_manager_secret
              per credential — append KEY=VALUE to the shared env-file
              secret (each extra secret adds cost).
 
   Specs describe CURRENT, code-verified behavior — not aspirational
-  design. When docs (AGENTS.md, README, feature-plan.md) disagree with
+  design. When docs (AGENTS.md, README) disagree with
   the code, the code wins; write the spec from the code.
 
   Branch model: `main` is the default/integration branch. Work happens
@@ -49,9 +47,8 @@ context: |
   - Mobile-first UI: portrait phone browser, touch targets >= 44 px,
     HUD overlays the map (never push the map below the fold).
   - Leaflet + OpenStreetMap tiles only — no keyed map providers.
-  - Root feature-plan.md is a historical artifact; new planning goes
-    through `openspec changes` — never create new plan/feature-plan
-    Markdown files.
+  - New planning goes through `openspec changes` — never create new
+    plan/feature-plan Markdown files.
 
 rules:
   proposal:

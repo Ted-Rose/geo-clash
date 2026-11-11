@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { render, screen } from '@testing-library/react';
-import HUD from '../../components/HUD.jsx';
+import HUD from '../../clash/HUD.jsx';
 
 const leaders = (n) =>
   Array.from({ length: n }, (_, i) => ({

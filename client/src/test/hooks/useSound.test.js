@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { idToFreq } from '../../hooks/useSound.js';
+import { idToFreq } from '../../shared/hooks/useSound.js';
 
 describe('idToFreq', () => {
   it('maps the same id deterministically', () => {

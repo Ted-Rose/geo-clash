@@ -44,6 +44,6 @@ export function makeFakeSocket({ id = 'socket-1', connected = false } = {}) {
   return socket;
 }
 
-// Shared mutable slot so `vi.mock('../socket.js')` factories (which run before
+// Shared mutable slot so `vi.mock('../shared/socket.js')` factories (which run before
 // test bodies) can hand the current fake to getSocket().
 export const socketState = { current: null };

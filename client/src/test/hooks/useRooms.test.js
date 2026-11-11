@@ -1,9 +1,9 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { renderHook, act } from '@testing-library/react';
 import { makeFakeSocket, socketState } from '../fakeSocket.js';
-import { useRooms } from '../../hooks/useRooms.js';
+import { useRooms } from '../../shared/hooks/useRooms.js';
 
-vi.mock('../../socket.js', () => ({
+vi.mock('../../shared/socket.js', () => ({
   getSocket: () => socketState.current,
   getSessionId: () => 'sess-test',
   API_BASE: '',

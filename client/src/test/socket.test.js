@@ -9,7 +9,7 @@ vi.mock('socket.io-client', () => ({ io: ioSpy }));
 // so every test re-imports it fresh via vi.resetModules().
 async function importSocket() {
   vi.resetModules();
-  return await import('../socket.js');
+  return await import('../shared/socket.js');
 }
 
 function randomUUIDSpy() {

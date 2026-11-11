@@ -1,8 +1,8 @@
 import { useEffect, useRef, useState } from 'react';
-import { getSocket, getSessionId } from './socket.js';
-import { useGeolocation } from './hooks/useGeolocation.js';
-import LobbyScreen from './components/LobbyScreen.jsx';
-import ClashGameScreen from './components/GameScreen.jsx';
+import { getSocket, getSessionId } from './shared/socket.js';
+import { useGeolocation } from './shared/hooks/useGeolocation.js';
+import LobbyScreen from './shared/LobbyScreen.jsx';
+import ClashGameScreen from './clash/GameScreen.jsx';
 import SnakeGameScreen from './snake/GameScreen.jsx';
 
 const GAME_SCREENS = {
