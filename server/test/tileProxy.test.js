@@ -54,29 +54,37 @@ const pngTile = () => new Response(new Uint8Array([1, 2, 3, 4]), {
 });
 
 test('fresh imagery proxies tile with upstream headers', async (t) => {
-  const counts = installFetchStub(t, { onMetadata: freshMetadata, onTile: pngTile });
+  const counts = installFetchStub(t, {
+    onMetadata: freshMetadata, onTile: pngTile,
+  });
   const base = await startTileApp(t);
 
   const res = await realFetch(`${base}/t/11/1000/1001`);
   assert.equal(res.status, 200);
   assert.equal(res.headers.get('content-type'), 'image/png');
-  assert.equal(res.headers.get('cache-control'), 'public, max-age=86400');
+  assert.equal(
+    res.headers.get('cache-control'),
+    'public, max-age=86400, s-maxage=2592000, stale-while-revalidate=86400'
+  );
   assert.deepEqual([...new Uint8Array(await res.arrayBuffer())], [1, 2, 3, 4]);
   assert.equal(counts.metadata, 1);
   assert.equal(counts.tile, 1);
 });
 
-test('imagery older than maxAge returns 404 and skips tile fetch', async (t) => {
-  const counts = installFetchStub(t, { onMetadata: oldMetadata, onTile: pngTile });
+test('old imagery returns 404 and skips tile fetch', async (t) => {
+  const counts = installFetchStub(t, {
+    onMetadata: oldMetadata, onTile: pngTile,
+  });
   const base = await startTileApp(t);
 
   const res = await realFetch(`${base}/t/12/1002/1003`);
   assert.equal(res.status, 404);
+  assert.equal(res.headers.get('cache-control'), 'no-store');
   assert.equal(await res.text(), 'Imagery too old');
   assert.equal(counts.tile, 0, 'tile fetch skipped for stale imagery');
 });
 
-test('maxAge query param adjusts cutoff; invalid value uses default 3', async (t) => {
+test('maxAge param adjusts cutoff; invalid uses default 3', async (t) => {
   installFetchStub(t, { onMetadata: oldMetadata, onTile: pngTile });
   const base = await startTileApp(t);
 
@@ -120,6 +128,7 @@ test('upstream tile non-OK forwards its status', async (t) => {
 
   const res = await realFetch(`${base}/t/17/1016/1017`);
   assert.equal(res.status, 503);
+  assert.equal(res.headers.get('cache-control'), 'no-store');
 });
 
 test('upstream tile fetch throwing yields 502', async (t) => {
@@ -131,11 +140,14 @@ test('upstream tile fetch throwing yields 502', async (t) => {
 
   const res = await realFetch(`${base}/t/18/1018/1019`);
   assert.equal(res.status, 502);
+  assert.equal(res.headers.get('cache-control'), 'no-store');
   assert.deepEqual(await res.json(), { error: 'Source fetch failed' });
 });
 
-test('metadata cache dedupes repeat requests and expires after TTL', async (t) => {
-  const counts = installFetchStub(t, { onMetadata: freshMetadata, onTile: pngTile });
+test('metadata cache dedupes and expires after TTL', async (t) => {
+  const counts = installFetchStub(t, {
+    onMetadata: freshMetadata, onTile: pngTile,
+  });
   const base = await startTileApp(t);
   t.mock.timers.enable({ apis: ['Date'] });
 
@@ -149,8 +161,10 @@ test('metadata cache dedupes repeat requests and expires after TTL', async (t) =
   assert.equal(counts.metadata, 2, 'cache expired → metadata refetched');
 });
 
-test('tileToBBox produces correct envelope (via geometry param)', async (t) => {
-  const counts = installFetchStub(t, { onMetadata: freshMetadata, onTile: pngTile });
+test('tileToBBox envelope via geometry param', async (t) => {
+  const counts = installFetchStub(t, {
+    onMetadata: freshMetadata, onTile: pngTile,
+  });
   const base = await startTileApp(t);
 
   const geometryFor = async (z, y, x) => {
