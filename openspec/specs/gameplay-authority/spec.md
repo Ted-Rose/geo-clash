@@ -87,37 +87,66 @@ kill decision.
   the next `snake-update`
 
 ### Requirement: Server-authoritative kill handshake
-
-On a server-detected collision the server SHALL emit `clash_verify` to
-every participant socket and commit the kill (`snake-hit` + targeted
-`snake-reset` to the victim, +5 score/+1 kill to the killer) only after
-ALL participants answer `clash_ack` within 2000 ms. Timeout or
-participant disconnect cancels the clash — no ghost kills.
+On a server-detected collision the server SHALL emit `clash_verify`
+to every participant. A kill with a killer commits (`snake-hit` +
+targeted `snake-reset`, +5 score/+1 kill) once the killer answers
+`clash_ack` within 2000 ms; a late ack is treated as expired. The
+victim's ack is advisory — victim silence or disconnect SHALL NOT
+void the kill. Killerless kills (`killerId: null`) SHALL commit at
+detection without any ack.
 
 #### Scenario: Both sides ACK
-
 - **WHEN** every participant of a pending clash sends `clash_ack`
   inside the window
 - **THEN** the victim's score/tail reset and the killer is credited
 
-#### Scenario: Unresponsive participant voids the kill
+#### Scenario: Victim silence cannot dodge the kill
+- **WHEN** the killer acks inside the window but the victim times out
+  or disconnects
+- **THEN** the kill still commits — the victim's score/tail reset and
+  the killer is credited
 
-- **WHEN** the 2000 ms window lapses with an outstanding ack, or a
-  required participant disconnects
+#### Scenario: Unresponsive participant voids the kill
+- **WHEN** the 2000 ms window lapses with the killer's ack outstanding
 - **THEN** the pending clash is dropped and no kill commits
 
-### Requirement: Undeduplicated food claims
+#### Scenario: Mutual head-on kills commit immediately
+- **WHEN** a server-detected collision produces kills with no killer
+  (mutual head-on-head)
+- **THEN** each kill commits at detection — `snake-hit` and a targeted
+  `snake-reset` fire per victim with no `clash_ack` required — and a
+  victim's silence or disconnect cannot void it
 
-Every well-formed `eat_food` claim during an active match SHALL award
-`FOOD_SCORE_PER_ITEM` to the reporter and emit `snake-ate`; the first
-claim removes the food and broadcasts `food-update`. Claims are not
-deduplicated — `_recentlyEaten` is bookkeeping only (written, purged
-after 3000 ms, never read), so repeat claims keep awarding points.
-Food is topped to target on a configurable interval (default 2000 ms).
+### Requirement: Undeduplicated food claims
+A well-formed `eat_food` claim SHALL award `FOOD_SCORE_PER_ITEM` and
+emit `snake-ate` only when the `foodId` is live or was removed inside
+the recent-claim window (3000 ms); other ids SHALL be ignored with no
+score change. Claims are not deduplicated within the window. Food is
+topped to target on a configurable interval (default 2000 ms).
 
 #### Scenario: Two clients eat the same food
-
 - **WHEN** a second `eat_food` for the same `foodId` arrives after the
   first claim removed it
 - **THEN** the second reporter still receives its point via `snake-ate`
   and no second `food-update` fires for that id
+
+#### Scenario: Fabricated food id is ignored
+- **WHEN** an `eat_food` claim arrives naming a `foodId` that is
+  neither live nor inside the recent-claim window
+- **THEN** no point is awarded and no `snake-ate` is emitted
+
+### Requirement: Score broadcasts reflect the live roster
+Score payloads SHALL be computed against the current player set — a
+departed player SHALL NOT linger in `grid-update` scores — and
+`match-end` SHALL carry the real final tally computed before per-room
+state is purged.
+
+#### Scenario: Departed player drops out of scores
+- **WHEN** a clash player leaves a match while scores are being
+  reported via `grid-update`
+- **THEN** subsequent `grid-update` payloads omit the departed player
+
+#### Scenario: Snake match-end reports final scores
+- **WHEN** a snake match ends
+- **THEN** `match-end.scores` contains each final player's tally,
+  computed before `playerStore` is purged
