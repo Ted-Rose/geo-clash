@@ -7,7 +7,8 @@
 //   location-update  → server stores client-supplied state, relays to peers
 //   eat_food         → server removes food (tolerates duplicate claims),
 //                      awards point to reporting player, broadcasts food-update
-//   _tick            → server detects collisions from stored positions;
+//   _tick            → server detects collisions from stored
+//                      positions;
 //                      emits clash_verify to both participants
 //   clash_ack        → both clients must ACK within CLASH_ACK_TIMEOUT_MS;
 //                      only then does the server commit the kill
@@ -17,13 +18,20 @@ import { bboxAround } from '../shared/gridUtils.js';
 import { replenishFood } from './food.js';
 import { resolveCollisions } from './collisions.js';
 import {
+  clashAck as clashAckHandshake,
+  cancelClashesFor,
+  rekeyClashesFor,
+  expirePendingClashes,
+  initiateClashes,
+  killPlayer,
+} from './clashHandshake.js';
+import {
   FOOD_RESPAWN_INTERVAL_MS,
   FOOD_SPAWN_RADIUS_M,
   ARENA_SIDE_M,
   TICK_MS,
   FOOD_COUNT_TARGET,
   FOOD_SCORE_PER_ITEM,
-  CLASH_ACK_TIMEOUT_MS,
   COLORS,
 } from './constants.js';
 
@@ -67,7 +75,9 @@ export class SnakeGameState {
     this._centerLat = typeof centerLat === 'number' ? centerLat : null;
     this._centerLng = typeof centerLng === 'number' ? centerLng : null;
     this._arenaSideMeters = arenaSideMeters;
-    this._timeLimitMs = typeof timeLimitMs === 'number' && timeLimitMs > 0 ? timeLimitMs : 0;
+    const validLimit =
+      typeof timeLimitMs === 'number' && timeLimitMs > 0;
+    this._timeLimitMs = validLimit ? timeLimitMs : 0;
     this._matchStartAt = null;
     // foodId → timestamp of when it was eaten (race-condition window)
     this._recentlyEaten = new Map();
@@ -101,7 +111,10 @@ export class SnakeGameState {
   _initArena(lat, lng) {
     this._bbox = bboxAround(lat, lng, this._arenaSideMeters);
     this._foodSpawnCenter = { lat, lng };
-    this._foods = replenishFood([], this._foodSpawnCenter, FOOD_SPAWN_RADIUS_M, this._foodCountTarget);
+    this._foods = replenishFood(
+      [], this._foodSpawnCenter,
+      FOOD_SPAWN_RADIUS_M, this._foodCountTarget,
+    );
   }
 
   startMatch() {
@@ -112,13 +125,18 @@ export class SnakeGameState {
     this._matchStartAt = Date.now();
     this._lastTick = this._matchStartAt;
     if (!this._tickHandle) {
-      this._tickHandle = setInterval(() => this._tick().catch(() => {}), TICK_MS);
+      this._tickHandle = setInterval(
+        () => this._tick().catch(() => {}), TICK_MS,
+      );
     }
     if (!this._foodInterval) {
       this._foodInterval = setInterval(() => {
         if (!this.matchActive || !this._foodSpawnCenter) return;
         const before = this._foods.length;
-        this._foods = replenishFood(this._foods, this._foodSpawnCenter, FOOD_SPAWN_RADIUS_M, this._foodCountTarget);
+        this._foods = replenishFood(
+          this._foods, this._foodSpawnCenter,
+          FOOD_SPAWN_RADIUS_M, this._foodCountTarget,
+        );
         if (this._foods.length !== before) {
           this._emit('food-update', { foods: this._foods });
         }
@@ -161,7 +179,9 @@ export class SnakeGameState {
           finishedAt: Date.now(),
           roomName: this.roomName,
         });
-        archived.push({ id: p.id, name: p.name, color: p.color, score: p.score });
+        archived.push({
+          id: p.id, name: p.name, color: p.color, score: p.score,
+        });
       }
       archived.sort((a, b) => b.score - a.score);
     } catch (err) {
@@ -176,7 +196,8 @@ export class SnakeGameState {
       console.error('[snake/gameState] purge error:', err.message);
     }
 
-    this._emit('match-end', { scores: this._scores(await this._allPlayers()), leaderboard: archived });
+    const finalScores = this._scores(await this._allPlayers());
+    this._emit('match-end', { scores: finalScores, leaderboard: archived });
     this.status = 'ended';
     this._onEnd?.();
   }
@@ -221,17 +242,13 @@ export class SnakeGameState {
     p.connected = true;
     await this.playerStore.set(newId, p);
     await this.playerStore.del(oldId);
-    // Re-key pending clashes that referenced the old socket id so ACKs and
-    // cancelClashesFor keep working against the reconnected socket.
-    for (const entry of this._pendingClashes.values()) {
-      if (entry.victimId === oldId) entry.victimId = newId;
-      if (entry.killerId === oldId) entry.killerId = newId;
-      if (entry.acksNeeded.delete(oldId)) entry.acksNeeded.add(newId);
-    }
+    // Re-key pending clashes so ACKs and cancelClashesFor keep working
+    // against the reconnected socket.
+    rekeyClashesFor(this, oldId, newId);
   }
 
   async removePlayer(id) {
-    this.cancelClashesFor(id);
+    cancelClashesFor(this, id);
     await this.playerStore.del(id);
   }
 
@@ -287,30 +304,19 @@ export class SnakeGameState {
   }
 
   // ---- clash (player-vs-player) server-authoritative handshake -----------
+  // The pending-clash ACK handshake lives in clashHandshake.js; these thin
+  // delegates keep the method surface socket handlers and tests rely on.
 
-  // Called when a socket ACKs a pending clash_verify.
-  // The kill only executes once every participant has ACKed.
-  async clashAck(socketId, clashId) {
-    if (!this.matchActive) return;
-    const pending = this._pendingClashes.get(clashId);
-    if (!pending) return;
-
-    pending.acksNeeded.delete(socketId);
-
-    if (pending.acksNeeded.size === 0) {
-      this._pendingClashes.delete(clashId);
-      await this._killPlayer(pending.victimId, pending.killerId);
-    }
+  clashAck(socketId, clashId) {
+    return clashAckHandshake(this, socketId, clashId);
   }
 
-  // Called on socket disconnect — cancel any pending clashes where the
-  // disconnected player was a required participant (no kill for ghost clash).
   cancelClashesFor(socketId) {
-    for (const [clashId, entry] of this._pendingClashes) {
-      if (entry.acksNeeded.has(socketId)) {
-        this._pendingClashes.delete(clashId);
-      }
-    }
+    return cancelClashesFor(this, socketId);
+  }
+
+  _killPlayer(victimId, killerId) {
+    return killPlayer(this, victimId, killerId);
   }
 
   // ---- tick --------------------------------------------------------------
@@ -337,62 +343,15 @@ export class SnakeGameState {
     });
 
     // Expire pending clashes whose ACK window has closed without all ACKs.
-    for (const [clashId, entry] of this._pendingClashes) {
-      if (now - entry.timestamp > CLASH_ACK_TIMEOUT_MS) {
-        this._pendingClashes.delete(clashId);
-      }
-    }
+    expirePendingClashes(this, now);
 
     // Server-authoritative collision detection.
     const playersMap = {};
     for (const p of players) playersMap[p.id] = p;
     const kills = resolveCollisions(playersMap);
 
-    for (const { killerId, victimId } of kills) {
-      // Dedup: skip if a pending clash already exists for this victim.
-      const alreadyPending = [...this._pendingClashes.values()].some(
-        (e) => e.victimId === victimId,
-      );
-      if (alreadyPending) continue;
-
-      const clashId = `${victimId}:${now}`;
-      const acksNeeded = new Set([victimId]);
-      if (killerId) acksNeeded.add(killerId);
-
-      this._pendingClashes.set(clashId, {
-        victimId,
-        killerId: killerId || null,
-        acksNeeded,
-        timestamp: now,
-      });
-
-      // Notify all participants — each must ACK to prove liveness.
-      this.io.to(victimId).emit('clash_verify', { clashId });
-      if (killerId) this.io.to(killerId).emit('clash_verify', { clashId });
-    }
-  }
-
-  async _killPlayer(victimId, killerId) {
-    const victim = await this.playerStore.get(victimId);
-    if (!victim) return;
-    victim.score = 0;
-    victim.tailPoints = [];
-    victim.spawnedAt = Date.now();
-    await this.playerStore.set(victimId, victim);
-
-    if (killerId) {
-      const killer = await this.playerStore.get(killerId);
-      if (killer) {
-        killer.kills = (killer.kills || 0) + 1;
-        killer.score += 5;
-        await this.playerStore.set(killerId, killer);
-      }
-    }
-
-    this._emit('snake-hit', { victimId, killerId: killerId || null });
-
-    // Tell the victim's own socket to reset its local state
-    this.io.to(victimId).emit('snake-reset', { spawnedAt: victim.spawnedAt });
+    // Turn kills into pending clashes + clash_verify pushes.
+    initiateClashes(this, kills, now);
   }
 
   // ---- snapshot ----------------------------------------------------------
@@ -423,7 +382,9 @@ export class SnakeGameState {
   _scores(players) {
     const out = {};
     for (const p of players) {
-      out[p.id] = { name: p.name, color: p.color, score: p.score, kills: p.kills };
+      out[p.id] = {
+        name: p.name, color: p.color, score: p.score, kills: p.kills,
+      };
     }
     return out;
   }
@@ -432,9 +393,11 @@ export class SnakeGameState {
     if (!this._bbox) {
       return { lat: this._centerLat || 0, lng: this._centerLng || 0 };
     }
+    const latSpan = this._bbox.north - this._bbox.south;
+    const lngSpan = this._bbox.east - this._bbox.west;
     return {
-      lat: this._bbox.south + Math.random() * (this._bbox.north - this._bbox.south),
-      lng: this._bbox.west + Math.random() * (this._bbox.east - this._bbox.west),
+      lat: this._bbox.south + Math.random() * latSpan,
+      lng: this._bbox.west + Math.random() * lngSpan,
     };
   }
 }
