@@ -30,7 +30,8 @@ function lastSpawn(io) {
   return spawns[spawns.length - 1];
 }
 
-test('attack clamps an out-of-range explicit target to ATTACK_RANGE_M', async (t) => {
+test('attack clamps an out-of-range explicit target ' +
+     'to ATTACK_RANGE_M', async (t) => {
   const { io, game } = makeGame(t);
   await makeAttacker(game);
   const far = targetFromHeading(ORIGIN, 0, 100);
@@ -60,7 +61,8 @@ test('attack uses an in-range explicit target verbatim', async (t) => {
   });
 });
 
-test('attack auto-aims at the nearest enemy inside the 25deg cone', async (t) => {
+test('attack auto-aims at the nearest enemy inside ' +
+     'the 25deg cone', async (t) => {
   const { io, game } = makeGame(t);
   await makeAttacker(game, 0);
   const e1 = targetFromHeading(ORIGIN, 0, 10);   // dead ahead, in cone
@@ -80,7 +82,8 @@ test('attack auto-aims at the nearest enemy inside the 25deg cone', async (t) =>
   });
 });
 
-test('attack falls back to targetFromHeading at full range when no enemy in cone', async (t) => {
+test('attack falls back to targetFromHeading at full range ' +
+     'when no enemy in cone', async (t) => {
   const { io, game } = makeGame(t);
   await makeAttacker(game, 0);
   await game.attack('A', { heading: 0 });
@@ -90,7 +93,8 @@ test('attack falls back to targetFromHeading at full range when no enemy in cone
   );
 });
 
-test('attack heading argument overrides stored heading; non-number falls back', async (t) => {
+test('attack heading argument overrides stored heading; ' +
+     'non-number falls back', async (t) => {
   const { io, game } = makeGame(t);
   await makeAttacker(game, 90); // stored heading east
 
@@ -190,7 +194,8 @@ test('resolve: nearest victim inside the hit radius is chosen', async (t) => {
   assert.equal(res.payload.victimId, 'N');
 });
 
-test('resolve: victim inside HIT_RADIUS_M hits, just outside misses', async (t) => {
+test('resolve: victim inside HIT_RADIUS_M hits, ' +
+     'just outside misses', async (t) => {
   const { io, game } = makeGame(t);
   await makeAttacker(game);
   const target = targetFromHeading(ORIGIN, 0, 20);
@@ -243,7 +248,8 @@ test('resolve: an expired shield does not block', async (t) => {
   assert.equal(res.payload.outcome, 'hit');
 });
 
-test('resolve: attacker and dead players are excluded from victim scan', async (t) => {
+test('resolve: attacker and dead players are excluded ' +
+     'from victim scan', async (t) => {
   const { io, game } = makeGame(t);
   await makeAttacker(game);
 
@@ -278,6 +284,45 @@ test('resolve is idempotent / no-op for missing projectile', async (t) => {
   await game._resolveProjectile(id); // already deleted -> no-op
   await game._resolveProjectile('no-such-id');
   assert.equal(eventsNamed(io, 'projectile-resolved').length, 1);
+});
+
+test('swapSocketId re-keys an in-flight projectile ' +
+     'so it cannot self-hit', async (t) => {
+  const { io, game } = makeGame(t);
+  await makeAttacker(game);
+  // shooter stands exactly on his own committed target point
+  await game.attack('A', { target: { ...ORIGIN } });
+  const id = lastSpawn(io).payload.id;
+
+  await game.swapSocketId('A', 'A2');
+  const proj = await game.projectileStore.get(id);
+  assert.equal(proj.attackerId, 'A2', 'attackerId follows the new id');
+
+  await game._resolveProjectile(id);
+  const res = eventsNamed(io, 'projectile-resolved')
+    .find((e) => e.payload.id === id);
+  assert.equal(res.payload.outcome, 'expired', 'no self-hit after re-key');
+  assert.equal(res.payload.victimId, null);
+  assert.equal(eventsNamed(io, 'player-hit').length, 0);
+});
+
+test('a re-keyed projectile still resolves ' +
+     'against an enemy victim', async (t) => {
+  const { io, game } = makeGame(t);
+  await makeAttacker(game);
+  const target = targetFromHeading(ORIGIN, 0, 10);
+  await game.addPlayer('V', 'victim');
+  await game.updateLocation('V', target.lat, target.lng);
+
+  await game.attack('A', { target });
+  const id = lastSpawn(io).payload.id;
+  await game.swapSocketId('A', 'A2');
+  await game._resolveProjectile(id);
+
+  const res = eventsNamed(io, 'projectile-resolved')
+    .find((e) => e.payload.id === id);
+  assert.equal(res.payload.outcome, 'hit');
+  assert.equal(res.payload.victimId, 'V');
 });
 
 test('resolve is a no-op once status is ending/ended', async (t) => {

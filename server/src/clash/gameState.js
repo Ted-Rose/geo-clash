@@ -61,10 +61,18 @@ export class GameState {
       typeof ammoRenewalMs === 'number' && ammoRenewalMs >= 500;
     this.ammoRenewalMs = validRenewal ? ammoRenewalMs : 5000;
     this._ammoTimers = new Map();
+    this._projectileTimers = new Map();
+    // Score-tally caches refreshed by recountScores() in capture.js and
+    // read by scores() for snapshots and match-end.
+    this._lastPlayersCache = null;
+    this._lastCellsCache = null;
     this.grid = null;
     this.baseCellId = null;
     this.matchActive = false;
     this.remainingSeconds = MATCH_SECONDS;
+    // Last whole second emitted via `timer` — the broadcast fires only
+    // when this changes, not every tick.
+    this._lastTimerSecond = null;
     this._tickHandle = null;
     this._lastTick = Date.now();
     this._colorIdx = 0;
@@ -99,6 +107,7 @@ export class GameState {
     this.matchActive = true;
     this.status = 'active';
     this.remainingSeconds = MATCH_SECONDS;
+    this._lastTimerSecond = null;
     this._lastTick = Date.now();
     if (!this._tickHandle) {
       this._tickHandle = setInterval(() => this.tick().catch((err) => {
@@ -172,12 +181,28 @@ export class GameState {
     for (const rec of this._ammoTimers.values()) {
       if (rec.playerId === oldId) rec.playerId = newId;
     }
+    // In-flight projectiles are re-keyed to the new socket id so a
+    // reconnected shooter can never be hit by their own arrow.
+    for (const [pid, proj] of await this.projectileStore.all()) {
+      if (proj.attackerId === oldId) {
+        proj.attackerId = newId;
+        await this.projectileStore.set(pid, proj);
+      }
+    }
   }
 
   async removePlayer(id) {
     const p = await this.playerStore.get(id);
     if (!p) return;
     await this.playerStore.del(id);
+    // Cancel pending ammo recharges so they can never mutate state or
+    // emit ammo-update for a player who is gone.
+    for (const [key, rec] of this._ammoTimers) {
+      if (rec.playerId === id) {
+        clearTimeout(rec.handle);
+        this._ammoTimers.delete(key);
+      }
+    }
     for (const [cid, cell] of await this.gridStore.all()) {
       if (cell && cell.progress?.playerId === id) {
         cell.progress = null;
@@ -255,7 +280,11 @@ export class GameState {
     const dt = now - this._lastTick;
     this._lastTick = now;
 
-    for (const [, p] of await this.playerStore.all()) {
+    // One store read per tick: the same snapshot drives shield expiry,
+    // capture processing, and the players-update broadcast.
+    const players = await this.playerStore.all();
+
+    for (const [, p] of players) {
       if (p.shieldActive && p.shieldUntil <= now) {
         p.shieldActive = false;
         await this.playerStore.set(p.id, p);
@@ -264,17 +293,21 @@ export class GameState {
     }
 
     // Occupancy → capture-progress → grid-update (see capture.js).
-    await processCaptures(this, dt);
+    await processCaptures(this, dt, players);
 
     this._emit('players-update', {
-      players: (await this.playerStore.all())
+      players: players
         .map(([, p]) => publicPlayer(p))
         .filter(Boolean),
     });
 
     if (this.matchActive) {
       this.remainingSeconds = Math.max(0, this.remainingSeconds - dt / 1000);
-      this._emit('timer', { remainingSeconds: this.remainingSeconds });
+      const second = Math.floor(this.remainingSeconds);
+      if (second !== this._lastTimerSecond) {
+        this._lastTimerSecond = second;
+        this._emit('timer', { remainingSeconds: this.remainingSeconds });
+      }
       if (this.remainingSeconds <= 0) this.endMatch();
     }
   }

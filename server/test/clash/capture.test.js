@@ -9,7 +9,8 @@ import {
   sleep,
 } from './helpers.js';
 
-test('tick accrues capture progress and emits cell-capture-start once', async (t) => {
+test('tick accrues capture progress and emits ' +
+     'cell-capture-start once', async (t) => {
   const { io, game } = makeGame(t);
   await game.initGrid(51.5, -0.12);
   await game.addPlayer('A', 'Alice');
@@ -20,7 +21,10 @@ test('tick accrues capture progress and emits cell-capture-start once', async (t
   const cell = await game.gridStore.get('0_0');
   assert.ok(cell.progress, 'progress started');
   assert.equal(cell.progress.playerId, 'A');
-  assert.ok(cell.progress.elapsedMs >= 1000, `elapsedMs=${cell.progress.elapsedMs}`);
+  assert.ok(
+    cell.progress.elapsedMs >= 1000,
+    `elapsedMs=${cell.progress.elapsedMs}`,
+  );
   assert.ok(cell.progress.elapsedMs < 2000, 'bounded by dt + eps');
   assert.equal(cell.ownerId, null);
   assert.equal(eventsNamed(io, 'cell-capture-start').length, 1);
@@ -33,7 +37,8 @@ test('tick accrues capture progress and emits cell-capture-start once', async (t
   );
 });
 
-test('ownership flips at CAPTURE_SECONDS; grid-update diff carries cell + recount', async (t) => {
+test('ownership flips at CAPTURE_SECONDS; grid-update diff ' +
+     'carries cell + recount', async (t) => {
   const { io, game } = makeGame(t);
   await game.initGrid(51.5, -0.12);
   const a = await game.addPlayer('A', 'Alice');
@@ -57,7 +62,8 @@ test('ownership flips at CAPTURE_SECONDS; grid-update diff carries cell + recoun
   assert.equal(scores.A.color, a.color);
 });
 
-test('contested cell (two different-color players) accrues no progress', async (t) => {
+test('contested cell (two different-color players) ' +
+     'accrues no progress', async (t) => {
   const { io, game } = makeGame(t);
   await game.initGrid(51.5, -0.12);
   await game.addPlayer('A', 'Alice'); // red
@@ -74,7 +80,8 @@ test('contested cell (two different-color players) accrues no progress', async (
   assert.equal(eventsNamed(io, 'grid-update').length, 0);
 });
 
-test('same-color co-occupants still capture; claim credited to first occupant', async (t) => {
+test('same-color co-occupants still capture; ' +
+     'claim credited to first occupant', async (t) => {
   const { game } = makeGame(t);
   await game.initGrid(51.5, -0.12);
   const a = await game.addPlayer('A', 'Alice');
@@ -92,7 +99,8 @@ test('same-color co-occupants still capture; claim credited to first occupant', 
   assert.equal(cell.progress, null);
 });
 
-test('standing in an already-owned cell does not restart capture', async (t) => {
+test('standing in an already-owned cell ' +
+     'does not restart capture', async (t) => {
   const { io, game } = makeGame(t);
   await game.initGrid(51.5, -0.12);
   const a = await game.addPlayer('A', 'Alice');
@@ -167,7 +175,8 @@ test('dead player does not claim cells', async (t) => {
   assert.equal(eventsNamed(io, 'cell-capture-start').length, 0);
 });
 
-test('no grid-update is emitted while capture is still in progress', async (t) => {
+test('no grid-update is emitted while capture ' +
+     'is still in progress', async (t) => {
   const { io, game } = makeGame(t);
   await game.initGrid(51.5, -0.12);
   await game.addPlayer('A', 'Alice');
@@ -182,7 +191,8 @@ test('no grid-update is emitted while capture is still in progress', async (t) =
   assert.equal(eventsNamed(io, 'grid-update').length, 0);
 });
 
-test('tick in lobby runs players-update but no capture or timer', async (t) => {
+test('tick in lobby runs players-update but ' +
+     'no capture or timer', async (t) => {
   const { io, game } = makeGame(t);
   await game.initGrid(51.5, -0.12);
   await game.addPlayer('A', 'Alice');
@@ -196,7 +206,8 @@ test('tick in lobby runs players-update but no capture or timer', async (t) => {
   assert.ok(eventsNamed(io, 'players-update').length >= 1);
 });
 
-test('timer decrements by dt and emits timer each tick while active', async (t) => {
+test('timer decrements by dt and emits on ' +
+     'each new whole second', async (t) => {
   const { io, game } = makeGame(t);
   await game.initGrid(51.5, -0.12);
   game.matchActive = true;
@@ -267,7 +278,70 @@ test('re-entering a cell restarts capture from zero', async (t) => {
   assert.equal(starts.length, 2, 'second capture-start for re-entry');
 });
 
-test('cells owned by a removed player do not count toward any score', async (t) => {
+test('grid-update omits a player who left between captures', async (t) => {
+  const { io, game } = makeGame(t);
+  await game.initGrid(51.5, -0.12);
+  await game.addPlayer('A', 'Alice');
+  await game.addPlayer('B', 'Bob');
+  // B idles disconnected at base so only A captures during tick 1.
+  await patchPlayer(game, 'B', { connected: false });
+  await placeInCell(game, 'A', '0_0');
+  game.matchActive = true;
+
+  await tick(game, 5100); // A claims 0_0
+  let updates = eventsNamed(io, 'grid-update');
+  assert.equal(updates.length, 1);
+  assert.ok(updates[0].payload.scores.A, 'A tallied while present');
+  assert.ok(updates[0].payload.scores.B, 'B tallied at 0 while present');
+
+  await game.removePlayer('A');
+  await patchPlayer(game, 'B', { connected: true });
+  await placeInCell(game, 'B', '0_1');
+  await tick(game, 5100); // B claims 0_1 -> second grid-update
+
+  updates = eventsNamed(io, 'grid-update');
+  assert.equal(updates.length, 2);
+  const scores = updates[1].payload.scores;
+  assert.equal(scores.A, undefined, 'departed player omitted');
+  assert.equal(scores.B.squares, 1);
+});
+
+test('timer emits only when the integer second changes', async (t) => {
+  const { io, game } = makeGame(t);
+  await game.initGrid(51.5, -0.12);
+  game.matchActive = true;
+
+  await tick(game, 100); // first active tick emits
+  await tick(game, 100); // same whole second -> silent
+  assert.equal(
+    eventsNamed(io, 'timer').length,
+    1,
+    'sub-second ticks do not re-emit',
+  );
+
+  await tick(game, 1000); // crosses a whole-second boundary
+  assert.equal(eventsNamed(io, 'timer').length, 2);
+});
+
+test('tick reads playerStore once per tick', async (t) => {
+  const { game } = makeGame(t);
+  await game.initGrid(51.5, -0.12);
+  await game.addPlayer('A', 'Alice');
+  await placeInCell(game, 'A', '0_0');
+  game.matchActive = true;
+
+  let calls = 0;
+  const orig = game.playerStore.all.bind(game.playerStore);
+  game.playerStore.all = async () => {
+    calls += 1;
+    return orig();
+  };
+  await tick(game, 200);
+  assert.equal(calls, 1, `playerStore.all ran ${calls} times per tick`);
+});
+
+test('cells owned by a removed player ' +
+     'do not count toward any score', async (t) => {
   const { io, game } = makeGame(t);
   await game.initGrid(51.5, -0.12);
   const a = await game.addPlayer('A', 'Alice');
