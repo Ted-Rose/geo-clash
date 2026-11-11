@@ -48,10 +48,9 @@ result (`{ rooms }`, `{ ok, room }`, or `{ ok: false, reason }`).
 On a fresh successful join the server SHALL emit `joined` and
 `snapshot` to the joining socket, then broadcast `player-joined` to the
 room. Rejoins carrying a known `sessionId` re-key the stored player to
-the new socket id and broadcast `player-reconnected` instead — but only
-for games implementing the session interface (`getPlayerBySessionId`/
-`swapSocketId`; clash does, snake does not). Snake reconnects always
-take the fresh-join path.
+the new socket id and broadcast `player-reconnected` instead — both
+games implement the session interface
+(`getPlayerBySessionId`/`swapSocketId`).
 
 #### Scenario: Fresh join delivers full state
 
@@ -67,12 +66,13 @@ take the fresh-join path.
 - **THEN** the player record is re-keyed to the new socket id, a fresh
   `snapshot` is emitted, and the room sees `player-reconnected`
 
-#### Scenario: Snake reconnect is a fresh join
+#### Scenario: Snake reconnect preserves identity
 
-- **WHEN** `room-join` to a snake room carries a previous `sessionId`
-- **THEN** a new player record is created, the stale record lingers
-  until its disconnect-grace timer fires, and a full room rejects the
-  rejoining player `room-full`
+- **WHEN** `room-join` to a snake room carries a `sessionId` matching
+  an existing player
+- **THEN** the player record is re-keyed to the new socket id, a fresh
+  `snapshot` is emitted, and the room sees `player-reconnected` — even
+  when the room is at `maxPlayers`
 
 ### Requirement: Per-gameType handler dispatch
 
