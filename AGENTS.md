@@ -34,9 +34,10 @@ folders unless introducing a genuinely new deployable.
   three legacy snake_case events (`eat_food`, `clash_ack`, `clash_verify`)
   until a
   deliberate both-ends rename.
-- **State store.** A small async KV facade (`server/src/shared/memoryStore.js`;
-  `server/src/memoryStore.js` is a backward-compat re-export shim) backs
-  every persistent collection. Default impl is an in-process `Map`; it is
+- **State store.** A small async KV facade
+  (`server/src/shared/memoryStore.js`)
+  backs every persistent collection. Default impl is an in-process `Map`;
+  it is
   designed
   to be swappable for Redis/Valkey **without changing call sites**. Preserve
   that
@@ -187,8 +188,8 @@ Universal rules — follow exactly:
 - Commit in small, themed steps; never commit `node_modules`,
   build artifacts, secrets, or editor scratch files — extend
   `.gitignore` instead.
-- The root `feature-plan.md` is a historical artifact, not a
-  template — planning goes through OpenSpec (rule 11).
+- Never create plan/feature-plan Markdown files — planning goes
+  through OpenSpec (rule 11).
 
 ## When extending the game
 Typical extension checklist:
@@ -221,9 +222,11 @@ Typical extension checklist:
 - Geo helpers → `server/src/shared/gridUtils.js`.
 - Realtime wiring (server) → `server/src/socketHandlers.js` (lobby +
   dispatch) and `server/src/<game>/socketHandlers.js` (gameplay).
-- Realtime wiring (client) → client `App.jsx` and `socket.js`.
-- Map rendering → client `MapView` component.
-- HUD / inputs → client `HUD`, `ControlPanel`, `SimPanel` components.
+- Realtime wiring (client) → client `src/App.jsx` and
+  `src/shared/socket.js`.
+- Map rendering → client `src/shared/MapView.jsx`.
+- HUD / inputs → client `src/clash/` (`HUD`, `ControlPanel`, `SimPanel`)
+  and `src/snake/` components.
 
 ## OpenSpec
 
