@@ -13,8 +13,10 @@ export function buildGrid(bbox, cellMeters = CELL_METERS) {
   const dLat = metersToDegLat(cellMeters);
   const dLng = metersToDegLng(cellMeters, midLat);
 
-  const rows = Math.max(1, Math.floor((bbox.north - bbox.south) / dLat));
-  const cols = Math.max(1, Math.floor((bbox.east - bbox.west) / dLng));
+  // round (not floor): a bbox built as an exact multiple of cellMeters
+  // would otherwise floor to N-1 cells on floating-point error.
+  const rows = Math.max(1, Math.round((bbox.north - bbox.south) / dLat));
+  const cols = Math.max(1, Math.round((bbox.east - bbox.west) / dLng));
 
   const cells = [];
   for (let r = 0; r < rows; r++) {

@@ -118,6 +118,11 @@ export class GameState {
       this._ammoTimers.clear();
     }
 
+    // Refresh the score caches before the purge so the match-end payload
+    // carries real scores even when no tick/snapshot ran since the last
+    // ownership change (_scores() reads the caches, not the stores).
+    await this._recountScores();
+
     let archived = [];
     try {
       const players = (await this.playerStore.all()).map(([, p]) => p);
