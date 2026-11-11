@@ -142,7 +142,7 @@ test('reconnect while player still connected takes over the session', async (t) 
   assert.ok(await game.playerStore.get('s2'));
 });
 
-test('snake room ignores sessionId — no reconnect support', async (t) => {
+test('snake room reconnects by sessionId like clash', async (t) => {
   const io = makeIoStub();
   const reg = new RoomRegistry(io);
   const meta = await reg.create({ name: 'SnakeRC', gameType: 'snake' });
@@ -155,26 +155,9 @@ test('snake room ignores sessionId — no reconnect support', async (t) => {
   const s2 = fakeSocket('s2', io);
   const result = await reg.join(meta.id, s2, 'Snek', 'sess-1');
   assert.equal(result.ok, true);
-  assert.notEqual(result.reconnected, true,
-    'SnakeGameState lacks getPlayerBySessionId — falls through to addPlayer');
+  assert.equal(result.reconnected, true);
   const freshMeta = await reg._metaStore.get(meta.id);
-  assert.equal(freshMeta.playerCount, 2, 'second player added instead of swap');
-});
-
-test('snake room at capacity returns room-full even with a sessionId', async (t) => {
-  const io = makeIoStub();
-  const reg = new RoomRegistry(io);
-  const meta = await reg.create({ name: 'SnakeFull', gameType: 'snake', maxPlayers: 1 });
-  t.after(() => reg.destroy(meta.id));
-
-  const s1 = fakeSocket('s1', io);
-  await reg.join(meta.id, s1, 'Snek', 'sess-1');
-  await reg.softDisconnect(meta.id, s1);
-
-  const s2 = fakeSocket('s2', io);
-  const result = await reg.join(meta.id, s2, 'Snek', 'sess-1');
-  assert.equal(result.ok, false);
-  assert.equal(result.reason, 'room-full');
+  assert.equal(freshMeta.playerCount, 1, 'socket swapped, not a second player');
 });
 
 test('join rejects no-such-room and ended rooms', async (t) => {

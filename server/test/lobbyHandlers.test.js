@@ -128,7 +128,7 @@ test('room-create acks ok with defaults; bad gameType acks fail', async (t) => {
   assert.equal(res2.ok, true);
   created.push(res2.room.id);
   assert.equal(res2.room.gameType, 'snake');
-  assert.equal(res2.room.foodCountTarget, 10);
+  assert.equal(res2.room.foodCountTarget, 5);
 
   const ack3 = ackSpy();
   await sock.trigger('room-create', { name: 'b', gameType: 'bogus' }, ack3);

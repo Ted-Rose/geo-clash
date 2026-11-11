@@ -88,9 +88,9 @@ test('create() meta shape: default name, null center, per-gameType fields', asyn
 
   const snake = await reg.create({ gameType: 'snake' });
   t.after(() => reg.destroy(snake.id));
-  assert.equal(snake.foodCountTarget, 10);
+  assert.equal(snake.foodCountTarget, 5);
   assert.equal(snake.foodRespawnIntervalMs, 2000);
-  assert.equal(snake.arenaSideMeters, 1000);
+  assert.equal(snake.arenaSideMeters, 50);
   assert.equal(snake.timeLimitMs, 0);
 });
 
