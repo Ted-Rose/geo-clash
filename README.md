@@ -54,6 +54,7 @@ npm run install:all
 npm run dev
 # client → http://localhost:5173
 # server → http://localhost:3001
+npm test    # run the server and client test suites
 ```
 No GPS on desktop? Tick **Simulate Movement** in the UI and walk around with
 WASD. Spawn bots from the same panel to fill the arena.

@@ -101,6 +101,7 @@ npm run dev              # run server and client together (hot reload)
 npm --prefix server run dev
 npm --prefix client run dev
 npm --prefix client run build
+npm test                 # run server (node --test) + client (vitest) suites
 ```
 Server default port: `3001`. Client dev server: `5173`. Both
 are configurable via env if the need arises — don't bake new

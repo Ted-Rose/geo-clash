@@ -161,7 +161,7 @@ export function useSound() {
   };
 }
 
-function idToFreq(id, min, max) {
+export function idToFreq(id, min, max) {
   let h = 0;
   for (let i = 0; i < id.length; i++) {
     h = (h * 31 + id.charCodeAt(i)) & 0x7fffffff;

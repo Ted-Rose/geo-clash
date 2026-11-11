@@ -2,7 +2,7 @@ import { Fragment } from 'react';
 import { Marker, CircleMarker } from 'react-leaflet';
 import L from 'leaflet';
 
-function lightenHex(hex, amount = 0.45) {
+export function lightenHex(hex, amount = 0.45) {
   const r = parseInt(hex.slice(1, 3), 16);
   const g = parseInt(hex.slice(3, 5), 16);
   const b = parseInt(hex.slice(5, 7), 16);
@@ -16,7 +16,7 @@ function lightenHex(hex, amount = 0.45) {
 // Equirectangular distance between two [lat, lng] pairs (metres).
 const EARTH_R = 6378137;
 const DEG = Math.PI / 180;
-function distM(a, b) {
+export function distM(a, b) {
   const dLat = (b[0] - a[0]) * DEG;
   const dLng = (b[1] - a[1]) * DEG;
   const s =
@@ -27,7 +27,7 @@ function distM(a, b) {
 }
 
 // Sample `count` evenly-spaced positions along a geo path ([lat,lng][]).
-function sampleEvenPoints(path, count) {
+export function sampleEvenPoints(path, count) {
   if (!path || path.length === 0 || count <= 0) return [];
   if (path.length === 1) return [path[0]];
   const cumDist = [0];

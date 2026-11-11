@@ -42,6 +42,10 @@ export function resolveCollisions(players) {
 
     for (const other of entries) {
       if (other.id === p.id) continue;
+      // Players inside the spawn-grace window are fully collision-safe:
+      // they can neither be killed (the symmetric head-on-head push below
+      // would otherwise victimize them) nor kill via their own tail.
+      if (Date.now() - (other.spawnedAt || 0) < SPAWN_GRACE_MS) continue;
       // Head-on-tail
       if (other.tailPoints && collidesWithTail(head, other.tailPoints, 0)) {
         kills.push({ killerId: other.id, victimId: p.id });
