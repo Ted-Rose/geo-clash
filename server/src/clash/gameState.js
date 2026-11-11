@@ -2,23 +2,22 @@
 // Holds players, grid ownership, timers. Mutated only by socket handlers
 // and the internal tick(); emits patched updates via the provided io.
 
-import { makeRoomStores, leaderboardStore } from '../shared/memoryStore.js';
+import { makeRoomStores } from '../shared/memoryStore.js';
 import {
   buildGrid,
   cellIdAt,
   baseCellId,
 } from './gridUtils.js';
+import { bboxAround } from '../shared/gridUtils.js';
+import { processCaptures } from './capture.js';
 import {
-  bboxAround,
-  distanceMeters,
-} from '../shared/gridUtils.js';
-import {
-  spawnProjectile,
-  targetFromHeading,
-  PROJECTILE_VMPS,
-  HIT_RADIUS_M,
-  ATTACK_RANGE_M as PROJECTILE_RANGE_M,
-} from './projectiles.js';
+  attack as runAttack,
+  scheduleAmmoRecharge,
+  scheduleResolution,
+  resolveProjectile,
+} from './combat.js';
+import { endMatch as teardownMatch } from './lifecycle.js';
+import { buildSnapshot, publicPlayer } from './snapshot.js';
 
 const COLORS = [
   '#ef4444', // red
@@ -32,10 +31,8 @@ const COLORS = [
 ];
 
 const MATCH_SECONDS = 5 * 60;
-const CAPTURE_SECONDS = 5;
 const SHIELD_SECONDS = 5;
 const TICK_MS = 200;
-const ATTACK_CONE_DEG = 25;
 const STARTING_LIVES = 3;
 
 export class GameState {
@@ -112,75 +109,10 @@ export class GameState {
     this._emit('match-start', { remainingSeconds: this.remainingSeconds });
   }
 
-  async endMatch() {
-    if (this.status === 'ending' || this.status === 'ended') return;
-    this.status = 'ending';
-    this.matchActive = false;
-    if (this._tickHandle) {
-      clearInterval(this._tickHandle);
-      this._tickHandle = null;
-    }
-    if (this._projectileTimers) {
-      for (const h of this._projectileTimers.values()) clearTimeout(h);
-      this._projectileTimers.clear();
-    }
-    if (this._ammoTimers) {
-      for (const rec of this._ammoTimers.values()) {
-        clearTimeout(rec.handle);
-      }
-      this._ammoTimers.clear();
-    }
-
-    // Refresh the score caches before the purge so the match-end payload
-    // carries real scores even when no tick/snapshot ran since the last
-    // ownership change (_scores() reads the caches, not the stores).
-    await this._recountScores();
-
-    let archived = [];
-    try {
-      const players = (await this.playerStore.all()).map(([, p]) => p);
-      const cells = (await this.gridStore.all()).map(([, c]) => c);
-      const matchId = `${this.roomId}:${Date.now()}`;
-      for (const p of players) {
-        const squares = cells.filter((c) => c.ownerId === p.id).length;
-        await leaderboardStore.archive({
-          playerId: p.id,
-          matchId,
-          name: p.name,
-          color: p.color,
-          score: squares,
-          metric: 'squares',
-          gameType: 'clash',
-          finishedAt: Date.now(),
-          roomName: this.roomName,
-        });
-        archived.push({
-          id: p.id,
-          name: p.name,
-          color: p.color,
-          squares,
-        });
-      }
-      archived.sort((a, b) => b.squares - a.squares);
-    } catch (err) {
-      // eslint-disable-next-line no-console
-      console.error('[clash/gameState] archive error:', err.message);
-    }
-
-    try {
-      await Promise.all([
-        this.playerStore.clear?.(),
-        this.gridStore.clear?.(),
-        this.projectileStore?.clear?.(),
-      ]);
-    } catch (err) {
-      // eslint-disable-next-line no-console
-      console.error('[clash/gameState] purge error:', err.message);
-    }
-
-    this._emit('match-end', { scores: this._scores(), leaderboard: archived });
-    this.status = 'ended';
-    this._onEnd?.();
+  // Teardown lives in lifecycle.js; kept as a delegating method because
+  // socket handlers and tests call game.endMatch() directly.
+  endMatch() {
+    return teardownMatch(this);
   }
 
   // ---- players -----------------------------------------------------------
@@ -275,137 +207,22 @@ export class GameState {
     this._emit('player-shield', { id, until: p.shieldUntil });
   }
 
-  async attack(id, { heading, target } = {}) {
-    if (this.status === 'ending' || this.status === 'ended') return;
-    const attacker = await this.playerStore.get(id);
-    if (!attacker || !attacker.alive) return;
-    if (this.maxAmmo !== null) {
-      const cur = attacker.ammo ?? this.maxAmmo;
-      if (cur <= 0) return;
-      attacker.ammo = cur - 1;
-      await this.playerStore.set(id, attacker);
-      this.io.to(id).emit('ammo-update', {
-        ammo: attacker.ammo, maxAmmo: this.maxAmmo,
-      });
-      this._scheduleAmmoRecharge(id);
-    }
-    const dir = typeof heading === 'number' ? heading : attacker.heading || 0;
+  // ---- combat (see combat.js) ---------------------------------------------
 
-    let resolvedTarget = null;
-    if (target && typeof target.lat === 'number'
-        && typeof target.lng === 'number') {
-      const dist = distanceMeters(attacker, target);
-      if (dist > PROJECTILE_RANGE_M) {
-        const scale = PROJECTILE_RANGE_M / dist;
-        resolvedTarget = {
-          lat: attacker.lat + (target.lat - attacker.lat) * scale,
-          lng: attacker.lng + (target.lng - attacker.lng) * scale,
-        };
-      } else {
-        resolvedTarget = { lat: target.lat, lng: target.lng };
-      }
-    } else {
-      let bestEnemy = null;
-      let bestDist = Infinity;
-      for (const [, p] of await this.playerStore.all()) {
-        if (p.id === id || !p.alive) continue;
-        const d = distanceMeters(attacker, p);
-        if (d > PROJECTILE_RANGE_M) continue;
-        const bearing = bearingDeg(attacker, p);
-        const delta = Math.abs(angleDelta(bearing, dir));
-        if (delta <= ATTACK_CONE_DEG && d < bestDist) {
-          bestDist = d;
-          bestEnemy = p;
-        }
-      }
-      resolvedTarget = bestEnemy
-        ? { lat: bestEnemy.lat, lng: bestEnemy.lng }
-        : targetFromHeading(attacker, dir, PROJECTILE_RANGE_M);
-    }
-
-    const proj = spawnProjectile({
-      attacker, target: resolvedTarget, vMps: PROJECTILE_VMPS,
-    });
-    await this.projectileStore.set(proj.id, proj);
-    this._emit('projectile-spawn', proj);
-    this._scheduleResolution(proj);
+  attack(id, opts) {
+    return runAttack(this, id, opts);
   }
 
   _scheduleAmmoRecharge(playerId) {
-    const key = `${playerId}:${Date.now()}:${Math.random()}`;
-    // Mutable record: swapSocketId rewrites `playerId` so a recharge
-    // scheduled before a reconnect still mutates the re-keyed record.
-    const rec = { playerId, handle: null };
-    rec.handle = setTimeout(async () => {
-      this._ammoTimers?.delete(key);
-      if (this.maxAmmo === null) return;
-      const id = rec.playerId; // resolved at fire time, not schedule time
-      const p = await this.playerStore.get(id);
-      if (!p) return;
-      p.ammo = Math.min(this.maxAmmo, (p.ammo ?? 0) + 1);
-      await this.playerStore.set(id, p);
-      this.io.to(id).emit('ammo-update', {
-        ammo: p.ammo, maxAmmo: this.maxAmmo,
-      });
-    }, this.ammoRenewalMs);
-    if (typeof rec.handle.unref === 'function') rec.handle.unref();
-    this._ammoTimers.set(key, rec);
+    scheduleAmmoRecharge(this, playerId);
   }
 
   _scheduleResolution(proj) {
-    const delay = Math.max(0, proj.tArrival - Date.now());
-    if (!this._projectileTimers) this._projectileTimers = new Map();
-    const handle = setTimeout(() => {
-      this._projectileTimers?.delete(proj.id);
-      this._resolveProjectile(proj.id).catch((err) => {
-        // eslint-disable-next-line no-console
-        console.error('[clash/gameState] resolve error:', err.message);
-      });
-    }, delay);
-    if (typeof handle.unref === 'function') handle.unref();
-    this._projectileTimers.set(proj.id, handle);
+    scheduleResolution(this, proj);
   }
 
-  async _resolveProjectile(projectileId) {
-    if (this.status === 'ending' || this.status === 'ended') return;
-    const proj = await this.projectileStore.get(projectileId);
-    if (!proj || proj.status !== 'in-flight') return;
-    const now = Date.now();
-
-    let victim = null;
-    let bestDist = Infinity;
-    for (const [, p] of await this.playerStore.all()) {
-      if (p.id === proj.attackerId || !p.alive) continue;
-      const d = distanceMeters(proj.target, p);
-      if (d <= HIT_RADIUS_M && d < bestDist) {
-        bestDist = d;
-        victim = p;
-      }
-    }
-
-    let outcome = 'expired';
-    let victimId = null;
-    if (victim) {
-      victimId = victim.id;
-      const shielded = victim.shieldActive && victim.shieldUntil > now;
-      if (shielded) {
-        outcome = 'blocked';
-      } else {
-        outcome = 'hit';
-        victim.lives = Math.max(0, victim.lives - 1);
-        if (victim.lives === 0) victim.alive = false;
-        await this.playerStore.set(victim.id, victim);
-        this._emit('player-hit', {
-          id: victim.id,
-          lives: victim.lives,
-          alive: victim.alive,
-        });
-      }
-    }
-
-    proj.status = outcome;
-    await this.projectileStore.del(projectileId);
-    this._emit('projectile-resolved', { id: proj.id, outcome, victimId });
+  _resolveProjectile(projectileId) {
+    return resolveProjectile(this, projectileId);
   }
 
   async respawn(id) {
@@ -447,58 +264,8 @@ export class GameState {
       }
     }
 
-    if (this.grid && this.matchActive) {
-      const players = (await this.playerStore.all()).map(([, p]) => p);
-      const occupiedCells = new Map();
-      for (const p of players) {
-        if (!p.alive) continue;
-        const cid = cellIdAt(this.grid, p.lat, p.lng);
-        if (!cid) continue;
-        if (!occupiedCells.has(cid)) occupiedCells.set(cid, []);
-        occupiedCells.get(cid).push(p);
-      }
-
-      const updates = [];
-      for (const [cid, occupants] of occupiedCells) {
-        const cell = await this.gridStore.get(cid);
-        if (!cell) continue;
-        const teams = new Set(occupants.map((p) => p.color));
-        if (teams.size > 1) continue;
-        if (occupants.every((p) => !p.connected)) continue;
-        const claimant = occupants[0];
-        if (cell.ownerId === claimant.id) continue;
-        if (!cell.progress || cell.progress.playerId !== claimant.id) {
-          cell.progress = {
-            playerId: claimant.id,
-            color: claimant.color,
-            elapsedMs: 0,
-          };
-          this._emit('cell-capture-start', {
-            cellId: cid, playerId: claimant.id, color: claimant.color,
-          });
-        }
-        cell.progress.elapsedMs += dt;
-        if (cell.progress.elapsedMs >= CAPTURE_SECONDS * 1000) {
-          cell.ownerId = claimant.id;
-          cell.color = claimant.color;
-          cell.progress = null;
-          updates.push({ id: cid, ownerId: cell.ownerId, color: cell.color });
-        }
-        await this.gridStore.set(cid, cell);
-      }
-
-      for (const [cid, cell] of await this.gridStore.all()) {
-        if (cell.progress && !occupiedCells.has(cid)) {
-          cell.progress = null;
-          await this.gridStore.set(cid, cell);
-        }
-      }
-
-      if (updates.length) {
-        await this._recountScores();
-        this._emit('grid-update', { cells: updates, scores: this._scores() });
-      }
-    }
+    // Occupancy → capture-progress → grid-update (see capture.js).
+    await processCaptures(this, dt);
 
     this._emit('players-update', {
       players: (await this.playerStore.all())
@@ -515,42 +282,9 @@ export class GameState {
 
   // ---- snapshots ---------------------------------------------------------
 
-  async snapshot() {
-    await this._recountScores();
-    const players = (await this.playerStore.all())
-      .map(([, p]) => publicPlayer(p))
-      .filter(Boolean);
-    const cells = (await this.gridStore.all()).map(([id, c]) => ({
-      id,
-      ownerId: c.ownerId,
-      color: c.color,
-    }));
-    const now = Date.now();
-    const projectiles = (await this.projectileStore.all())
-      .map(([, p]) => p)
-      .filter((p) => p.status === 'in-flight' && p.tArrival > now);
-    return {
-      grid: this.grid
-        ? {
-            rows: this.grid.rows,
-            cols: this.grid.cols,
-            cellMeters: this.grid.cellMeters,
-            bbox: this.grid.bbox,
-            cells: this.grid.cells
-              .map((c) => ({ id: c.id, polygon: c.polygon })),
-            baseCellId: this.baseCellId,
-          }
-        : null,
-      players,
-      ownership: cells,
-      projectiles,
-      scores: this._scores(),
-      matchActive: this.matchActive,
-      remainingSeconds: this.remainingSeconds,
-      serverNow: now,
-      maxAmmo: this.maxAmmo,
-      ammoRenewalMs: this.maxAmmo !== null ? this.ammoRenewalMs : null,
-    };
+  // Read-model assembly lives in snapshot.js.
+  snapshot() {
+    return buildSnapshot(this);
   }
 
   // ---- helpers -----------------------------------------------------------
@@ -563,61 +297,5 @@ export class GameState {
     return { lat: (south + north) / 2, lng: (west + east) / 2 };
   }
 
-  _scores() {
-    const tally = {};
-    for (const [, p] of this._lastPlayersCache || []) {
-      if (!p) continue;
-      tally[p.id] = { name: p.name, color: p.color, squares: 0 };
-    }
-    for (const [, c] of this._lastCellsCache || []) {
-      if (c && c.ownerId && tally[c.ownerId]) {
-        tally[c.ownerId].squares += 1;
-      }
-    }
-    return tally;
-  }
-
-  async _recountScores() {
-    try {
-      this._lastPlayersCache = await this.playerStore.all();
-      this._lastCellsCache = await this.gridStore.all();
-    } catch (err) {
-      // eslint-disable-next-line no-console
-      console.error('[clash/gameState] recountScores error:', err.message);
-    }
-  }
 }
 
-function publicPlayer(p) {
-  if (!p) return null;
-  return {
-    id: p.id,
-    name: p.name,
-    color: p.color,
-    lat: p.lat,
-    lng: p.lng,
-    heading: p.heading,
-    lives: p.lives,
-    ammo: p.ammo ?? null,
-    shieldActive: p.shieldActive,
-    alive: p.alive,
-    connected: p.connected !== false,
-  };
-}
-
-function bearingDeg(from, to) {
-  const φ1 = from.lat * Math.PI / 180;
-  const φ2 = to.lat * Math.PI / 180;
-  const λ1 = from.lng * Math.PI / 180;
-  const λ2 = to.lng * Math.PI / 180;
-  const y = Math.sin(λ2 - λ1) * Math.cos(φ2);
-  const x =
-    Math.cos(φ1) * Math.sin(φ2) -
-    Math.sin(φ1) * Math.cos(φ2) * Math.cos(λ2 - λ1);
-  return (Math.atan2(y, x) * 180) / Math.PI;
-}
-
-function angleDelta(a, b) {
-  let d = ((a - b + 540) % 360) - 180;
-  return d;
-}
