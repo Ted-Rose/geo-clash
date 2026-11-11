@@ -4,6 +4,7 @@
   "outputDirectory": "client/dist",
   "cleanUrls": true,
   "framework": null,
+  "regions": ["arn1"],
   "headers": [
     {
       "source": "/sw.js",
@@ -26,9 +27,32 @@
           "value": "no-cache, no-store, must-revalidate"
         }
       ]
+    },
+    {
+      "source": "/assets/(.*)",
+      "headers": [
+        {
+          "key": "Cache-Control",
+          "value": "public, max-age=31536000, immutable"
+        }
+      ]
+    },
+    {
+      "source": "/manifest.webmanifest",
+      "headers": [
+        {
+          "key": "Cache-Control",
+          "value": "public, max-age=3600, must-revalidate"
+        }
+      ]
     }
   ],
   "rewrites": [
+    {
+      "source": "/api/map/tiles/:path*",
+      "destination":
+        "https://geo-clash-server-j5z6jemnyq-ma.a.run.app/api/map/tiles/:path*"
+    },
     {
       "source": "/(.*)",
       "destination": "/index.html"

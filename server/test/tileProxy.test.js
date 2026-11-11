@@ -60,7 +60,10 @@ test('fresh imagery proxies tile with upstream headers', async (t) => {
   const res = await realFetch(`${base}/t/11/1000/1001`);
   assert.equal(res.status, 200);
   assert.equal(res.headers.get('content-type'), 'image/png');
-  assert.equal(res.headers.get('cache-control'), 'public, max-age=86400');
+  assert.equal(
+    res.headers.get('cache-control'),
+    'public, max-age=86400, s-maxage=2592000, stale-while-revalidate=86400'
+  );
   assert.deepEqual([...new Uint8Array(await res.arrayBuffer())], [1, 2, 3, 4]);
   assert.equal(counts.metadata, 1);
   assert.equal(counts.tile, 1);

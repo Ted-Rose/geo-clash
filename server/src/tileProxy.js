@@ -24,6 +24,12 @@ const DEFAULT_MAX_AGE_YEARS = 3;
 const metadataCache = new Map();
 const CACHE_TTL = 1000 * 60 * 60; // 1 hour
 
+// Browser TTL stays at 1 day; s-maxage lets Vercel's edge cache hold tiles
+// for 30 days independently (imagery is effectively immutable), with a
+// stale-while-revalidate window so a miss never blocks on origin.
+const TILE_CACHE_CONTROL =
+    'public, max-age=86400, s-maxage=2592000, stale-while-revalidate=86400';
+
 function tileToBBox(z, x, y) {
     const n = Math.pow(2, z);
     const west = (x / n) * 360 - 180;
@@ -92,7 +98,7 @@ router.get('/:z/:y/:x', async (req, res) => {
         if (!tileRes.ok) return res.status(tileRes.status).send();
         
         res.set('Content-Type', tileRes.headers.get('Content-Type'));
-        res.set('Cache-Control', 'public, max-age=86400');
+        res.set('Cache-Control', TILE_CACHE_CONTROL);
         
         const buffer = await tileRes.arrayBuffer();
         return res.send(Buffer.from(buffer));
