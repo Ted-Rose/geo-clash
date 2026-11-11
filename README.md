@@ -76,6 +76,15 @@ the *Enter the arena* button does nothing.
     and Socket.io). Don't leave this unset in production — the dev default
     reflects all origins, which you don't want in prod.
 
+### Map tiles
+Tile requests are **same-origin** in every environment: in dev the Vite `/api`
+proxy forwards them to the local server; in production a `vercel.json` rewrite
+proxies `/api/map/tiles/*` to Cloud Run and lets Vercel's edge cache serve
+them (upstream `s-maxage=2592000`). Only websockets/REST still go
+cross-origin — `/socket.io` is intentionally *not* routed through Vercel.
+If the Vercel project predates the default-on behaviour, enable **"Cache
+external rewrite responses"** in the project dashboard once after merging.
+
 ## Why it might be fun to build
 - Real-world gameplay without writing a single line of native code.
 - Tight, satisfying core loop — capture, shoot, shield, respawn.
