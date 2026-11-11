@@ -52,14 +52,14 @@
 - [x] 4.2 client: Gate `ProjectileLayer`'s rAF loop on
   `projectiles.length > 0`; verify no rAF runs while the layer is
   empty
-- [ ] 4.3 server: Hoist the per-tick `playerStore.all()` once and pass
+- [x] 4.3 server: Hoist the per-tick `playerStore.all()` once and pass
   it into `processCaptures`, emit `timer` only when the integer
   second changes, and add `console.error` to the snake `_tick` catch;
   verify store reads per tick drop to one via a spy test
 
 ## 5. Verification
 
-- [ ] 5.1 both: Run `npm --prefix server test` plus the client vitest
+- [x] 5.1 both: Run `npm --prefix server test` plus the client vitest
   suite and manual smoke (two tabs, kill Wi-Fi on one, rejoin within
   grace — progress and projectiles behave per spec)
 
