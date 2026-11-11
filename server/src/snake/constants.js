@@ -3,6 +3,9 @@
 export const FOOD_RESPAWN_INTERVAL_MS = 2000;
 export const TICK_MS = 500;
 
+// Default side length (meters) of the square arena.
+export const ARENA_SIDE_M = 50;
+
 // How far behind the head to leave a "neck gap" before recording tail points.
 // This prevents self-collision from GPS jitter.
 export const NECK_GAP_M = 2.0;
