@@ -183,7 +183,7 @@ export class SnakeGameState {
 
   // ---- players -----------------------------------------------------------
 
-  async addPlayer(id, name) {
+  async addPlayer(id, name, sessionId) {
     const color = COLORS[this._colorIdx++ % COLORS.length];
     const spawn = this._spawnPoint();
     const player = {
@@ -199,9 +199,35 @@ export class SnakeGameState {
       tailPoints: [],
       spawnedAt: Date.now(),
       lastSeen: Date.now(),
+      connected: true,
+      sessionId: sessionId || null,
     };
     await this.playerStore.set(id, player);
     return player;
+  }
+
+  async getPlayerBySessionId(sessionId) {
+    if (!sessionId) return null;
+    for (const [socketId, p] of await this.playerStore.all()) {
+      if (p.sessionId === sessionId) return { player: p, socketId };
+    }
+    return null;
+  }
+
+  async swapSocketId(oldId, newId) {
+    const p = await this.playerStore.get(oldId);
+    if (!p) return;
+    p.id = newId;
+    p.connected = true;
+    await this.playerStore.set(newId, p);
+    await this.playerStore.del(oldId);
+    // Re-key pending clashes that referenced the old socket id so ACKs and
+    // cancelClashesFor keep working against the reconnected socket.
+    for (const entry of this._pendingClashes.values()) {
+      if (entry.victimId === oldId) entry.victimId = newId;
+      if (entry.killerId === oldId) entry.killerId = newId;
+      if (entry.acksNeeded.delete(oldId)) entry.acksNeeded.add(newId);
+    }
   }
 
   async removePlayer(id) {
