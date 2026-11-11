@@ -97,6 +97,23 @@ test('maxAmmo:null means unlimited', async (t) => {
   assert.equal(eventsNamed(io, 'ammo-update').length, 0);
 });
 
+test('removePlayer cancels the pending recharge; ' +
+     'no ammo-update after leave', async (t) => {
+  const { io, game } = makeGame(t, { maxAmmo: 2, ammoRenewalMs: 500 });
+  await game.addPlayer('A', 'Alice');
+  await game.updateLocation('A', ORIGIN.lat, ORIGIN.lng, 0);
+
+  await game.attack('A'); // ammo 1, one recharge scheduled
+  assert.equal(game._ammoTimers.size, 1);
+
+  await game.removePlayer('A');
+  assert.equal(game._ammoTimers.size, 0, 'recharge cancelled');
+
+  await sleep(700); // long enough for the cancelled timer's window
+  const upds = eventsNamed(io, 'ammo-update');
+  assert.equal(upds.length, 1, 'only the attack-time emit remains');
+});
+
 test('respawn refills ammo to maxAmmo', async (t) => {
   const { io, game } = makeGame(t, { maxAmmo: 3 });
   await game.initGrid(51.5, -0.12);

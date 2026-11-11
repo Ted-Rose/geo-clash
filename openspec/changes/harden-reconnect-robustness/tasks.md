@@ -12,10 +12,10 @@
   `registerClashHandlers`/`registerSnakeHandlers`; verify a test
   emitting `room-join` twice on one socket produces exactly one
   `player-attack` handling per emit
-- [ ] 1.3 server: Re-key `projectileStore` `attackerId` values inside
+- [x] 1.3 server: Re-key `projectileStore` `attackerId` values inside
   clash `swapSocketId`; verify with a test that a projectile fired
   before reconnect cannot hit its own shooter after re-key
-- [ ] 1.4 server: Cancel a removed player's pending `_ammoTimers`
+- [x] 1.4 server: Cancel a removed player's pending `_ammoTimers`
   entries in `removePlayer`, and declare `_projectileTimers`,
   `_lastPlayersCache`, `_lastCellsCache` in the clash `GameState`
   constructor; verify no `ammo-update` fires after player removal
@@ -25,7 +25,7 @@
 - [ ] 2.1 server: In snake `endMatch`, compute `finalScores` from the
   pre-purge player list before `playerStore.clear()`; verify
   `match-end.scores` is populated in a test ending a snake match
-- [ ] 2.2 server: Invalidate/recompute clash scores on `addPlayer`/
+- [x] 2.2 server: Invalidate/recompute clash scores on `addPlayer`/
   `removePlayer` (or derive the tally in `processCaptures` from the
   already-fetched lists); verify a `grid-update` after a leave omits
   the departed player
