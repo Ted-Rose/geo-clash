@@ -206,6 +206,24 @@ Universal rules — follow exactly:
   via squash-merge PRs; delete the working branch after
   merge. `development` is a stale legacy branch (the repo
   converged on `main`) — do not target it.
+- **Work in a git worktree, never the main checkout** —
+  `git fetch origin`, then `git worktree add
+  ../geo-clash-worktrees/<slug> -b <type>/<slug>
+  origin/main` and do all work (commits, push, PR) inside it.
+  The main checkout may hold the user's uncommitted work or
+  another agent's session; never switch branches there. Once
+  the PR's checks are green and no work remains, clean up
+  IMMEDIATELY — don't wait for the merge (the PR lives on
+  the remote branch; removing the local worktree/branch does
+  not touch it, and the remote branch is deleted at merge
+  time). From the main checkout: `git worktree remove
+  ../geo-clash-worktrees/<slug>` + `git branch -D
+  <type>/<slug>` (`-D`, not `-d` — squash-merges leave the
+  branch "unmerged"). Abandoned work gets the same cleanup;
+  follow-up requests get a FRESH worktree — never reuse an
+  old one. Goal state: `git worktree list` shows only the
+  main checkout when the task ends. Each worktree needs its
+  own `npm run install:all` (`node_modules` is gitignored).
 - **Commit style switched to `Type: Capitalized`** (rule 2) —
   older history uses lowercase conventional commits; do not
   rewrite it.
