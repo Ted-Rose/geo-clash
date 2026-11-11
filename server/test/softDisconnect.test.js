@@ -148,7 +148,8 @@ test('snake room always uses the flat 30s grace (no remainingSeconds)', async (t
     'snake player removed after flat 30s despite active match');
 });
 
-test('softDisconnect falls back to hard leave when player record missing', async (t) => {
+test('softDisconnect falls back to hard leave when player record '
+  + 'missing', async () => {
   const io = makeIoStub();
   const reg = new RoomRegistry(io);
   const meta = await reg.create({ name: 'SD4', maxPlayers: 4 });

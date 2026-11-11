@@ -25,7 +25,7 @@ vi.mock('../../shared/hooks/useSound.js', () => ({ useSound: () => sounds }));
 vi.mock('react-leaflet', async () => {
   const React = await import('react');
   return {
-    MapContainer: React.forwardRef((props, ref) =>
+    MapContainer: React.forwardRef((props) =>
       React.createElement('div', { 'data-testid': 'map' }, props.children)
     ),
     TileLayer: () => null,

@@ -13,8 +13,6 @@ function makeIo() {
   };
 }
 
-const CENTER = { lat: 51.5, lng: -0.12 };
-
 test('foodCountTarget=2 never spawns more than 2 items', async (t) => {
   const io = makeIo();
   const game = new SnakeGameState({

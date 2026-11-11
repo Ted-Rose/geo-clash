@@ -59,7 +59,6 @@ export async function endMatch(state) {
     }
     archived.sort((a, b) => b.squares - a.squares);
   } catch (err) {
-    // eslint-disable-next-line no-console
     console.error('[clash/lifecycle] archive error:', err.message);
   }
 
@@ -70,7 +69,6 @@ export async function endMatch(state) {
       state.projectileStore?.clear?.(),
     ]);
   } catch (err) {
-    // eslint-disable-next-line no-console
     console.error('[clash/lifecycle] purge error:', err.message);
   }
 

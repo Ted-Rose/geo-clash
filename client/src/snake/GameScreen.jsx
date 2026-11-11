@@ -47,7 +47,7 @@ export default function SnakeGameScreen({
   const eatenIdsRef = useRef(new Set());
 
   const [scores, setScores] = useState({});
-  const [matchActive, setMatchActive] = useState(false);
+  const [, setMatchActive] = useState(false);
   const [matchOver, setMatchOver] = useState(false);
   const [finalLeaderboard, setFinalLeaderboard] = useState(null);
   const [timeLimitMs, setTimeLimitMs] = useState(0);

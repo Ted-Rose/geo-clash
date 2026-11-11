@@ -185,14 +185,12 @@ export class SnakeGameState {
       }
       archived.sort((a, b) => b.score - a.score);
     } catch (err) {
-      // eslint-disable-next-line no-console
       console.error('[snake/gameState] archive error:', err.message);
     }
 
     try {
       await this.playerStore.clear?.();
     } catch (err) {
-      // eslint-disable-next-line no-console
       console.error('[snake/gameState] purge error:', err.message);
     }
 

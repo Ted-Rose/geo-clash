@@ -85,7 +85,6 @@ export async function recountScores(state) {
     state._lastPlayersCache = await state.playerStore.all();
     state._lastCellsCache = await state.gridStore.all();
   } catch (err) {
-    // eslint-disable-next-line no-console
     console.error('[clash/capture] recountScores error:', err.message);
   }
 }

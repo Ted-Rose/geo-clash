@@ -102,7 +102,6 @@ export class GameState {
     this._lastTick = Date.now();
     if (!this._tickHandle) {
       this._tickHandle = setInterval(() => this.tick().catch((err) => {
-        // eslint-disable-next-line no-console
         console.error('[clash/gameState] tick error:', err.message);
       }), TICK_MS);
     }

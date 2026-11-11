@@ -32,7 +32,7 @@ export async function attack(state, id, { heading, target } = {}) {
   }
   const dir = typeof heading === 'number' ? heading : attacker.heading || 0;
 
-  let resolvedTarget = null;
+  let resolvedTarget;
   if (target && typeof target.lat === 'number'
       && typeof target.lng === 'number') {
     const dist = distanceMeters(attacker, target);
@@ -101,7 +101,6 @@ export function scheduleResolution(state, proj) {
   const handle = setTimeout(() => {
     state._projectileTimers?.delete(proj.id);
     resolveProjectile(state, proj.id).catch((err) => {
-      // eslint-disable-next-line no-console
       console.error('[clash/combat] resolve error:', err.message);
     });
   }, delay);
