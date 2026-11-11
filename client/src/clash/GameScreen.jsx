@@ -49,7 +49,12 @@ export default function GameScreen({
   // Local input/UI state — not server-driven.
   // target: { lat, lng } picked via long-press
   const [target, setTarget] = useState(null);
-  const [bots, setBots] = useState([]);
+  // Bot handles live in a ref so the unmount cleanup always sees every
+  // spawned bot (a `[]` deps effect over state would close over the
+  // initial empty array). `botCount` mirrors the length for render.
+  const botsRef = useRef([]);
+  const unmountedRef = useRef(false);
+  const [botCount, setBotCount] = useState(0);
   const [mapLocked, setMapLocked] = useState(true);
   const [menuOpen, setMenuOpen] = useState(false);
 
@@ -82,13 +87,16 @@ export default function GameScreen({
     const { io } = await import("socket.io-client");
     const { bbox } = grid;
     const botSocket = io("/", { transports: ["websocket", "polling"] });
+    // Number the bot now: the connect handler runs after the sync
+    // push below, where `length + 1` would already count this bot.
+    const botNo = botsRef.current.length + 1;
     let lat = bbox.south + Math.random() * (bbox.north - bbox.south);
     let lng = bbox.west + Math.random() * (bbox.east - bbox.west);
     let heading = Math.random() * 360;
     botSocket.on("connect", () => {
       botSocket.emit("room-join", {
         roomId,
-        name: `Bot-${bots.length + 1}`,
+        name: `Bot-${botNo}`,
         lat,
         lng,
       });
@@ -113,17 +121,28 @@ export default function GameScreen({
       if (Math.random() < 0.02) botSocket.emit("player-attack", { heading });
       if (Math.random() < 0.01) botSocket.emit("player-shield");
     }, 500);
-    setBots((b) => [...b, { socket: botSocket, interval }]);
+    // Unmounted while the import was in flight — tear the bot down
+    // instead of pushing it past the already-run cleanup.
+    if (unmountedRef.current) {
+      clearInterval(interval);
+      botSocket.disconnect();
+      return;
+    }
+    botsRef.current.push({ socket: botSocket, interval });
+    setBotCount(botsRef.current.length);
   };
 
   // Cleanup bots + leave room on unmount.
   useEffect(() => {
+    unmountedRef.current = false;
     return () => {
+      unmountedRef.current = true;
       socket.emit("room-leave");
-      for (const b of bots) {
+      for (const b of botsRef.current) {
         clearInterval(b.interval);
         b.socket.disconnect();
       }
+      botsRef.current = [];
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -270,7 +289,7 @@ export default function GameScreen({
           simPos={simPos}
           setSimPos={setSimPos}
           onSpawnBot={spawnBot}
-          botCount={bots.length}
+          botCount={botCount}
           onAttackAtTarget={attack}
           hasTarget={Boolean(target)}
         />

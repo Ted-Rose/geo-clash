@@ -13,7 +13,7 @@ path, `softDisconnect`), `server/src/clash/gameState.js` +
 `combat.js`/`capture.js`/`lifecycle.js` (re-key, projectiles, scores,
 teardown), `server/src/snake/gameState.js` + `clashHandshake.js`
 (re-key, kill ACK, `eat_food`), `client/src/clash/GameScreen.jsx`
-(debug bots), `client/src/shared/ProjectileLayer.jsx` (rAF loop).
+(debug bots), `client/src/clash/ProjectileLayer.jsx` (rAF loop).
 
 ## Goals / Non-Goals
 

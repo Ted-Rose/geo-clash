@@ -29,13 +29,18 @@ const proj = (over = {}) => ({
   ...over,
 });
 
+let raf;
+let caf;
+
 beforeEach(() => {
   captured.markers = [];
   captured.lines = [];
   vi.spyOn(Date, 'now').mockReturnValue(T);
   // Stop the rAF re-render loop — one render is enough to inspect positions.
-  vi.stubGlobal('requestAnimationFrame', vi.fn(() => 1));
-  vi.stubGlobal('cancelAnimationFrame', vi.fn());
+  raf = vi.fn(() => 1);
+  caf = vi.fn();
+  vi.stubGlobal('requestAnimationFrame', raf);
+  vi.stubGlobal('cancelAnimationFrame', caf);
 });
 
 afterEach(() => {
@@ -57,7 +62,9 @@ describe('ProjectileLayer', () => {
   it('prunes projectiles spawning more than 500 ms in the future', () => {
     render(
       <ProjectileLayer
-        projectiles={[proj({ id: 'late', tSpawn: T + 600, tArrival: T + 1600 })]}
+        projectiles={[
+          proj({ id: 'late', tSpawn: T + 600, tArrival: T + 1600 }),
+        ]}
         skewMs={0}
       />
     );
@@ -86,5 +93,42 @@ describe('ProjectileLayer', () => {
     // already resolved server-side.
     render(<ProjectileLayer projectiles={[proj()]} skewMs={1000} />);
     expect(captured.markers).toHaveLength(0);
+  });
+});
+
+describe('ProjectileLayer rAF loop', () => {
+  it('never schedules a frame while the layer is empty', () => {
+    render(<ProjectileLayer projectiles={[]} skewMs={0} />);
+    expect(raf).not.toHaveBeenCalled();
+  });
+
+  it('starts when a projectile appears', () => {
+    const { rerender } = render(
+      <ProjectileLayer projectiles={[]} skewMs={0} />
+    );
+    expect(raf).not.toHaveBeenCalled();
+
+    rerender(<ProjectileLayer projectiles={[proj()]} skewMs={0} />);
+    expect(raf).toHaveBeenCalledTimes(1);
+  });
+
+  it('stops when the last projectile resolves', () => {
+    const { rerender } = render(
+      <ProjectileLayer projectiles={[proj()]} skewMs={0} />
+    );
+    expect(raf).toHaveBeenCalledTimes(1);
+
+    rerender(<ProjectileLayer projectiles={[]} skewMs={0} />);
+    expect(caf).toHaveBeenCalled();
+    // No new frame is scheduled once the layer is empty again.
+    expect(raf).toHaveBeenCalledTimes(1);
+  });
+
+  it('cancels the pending frame on unmount', () => {
+    const { unmount } = render(
+      <ProjectileLayer projectiles={[proj()]} skewMs={0} />
+    );
+    unmount();
+    expect(caf).toHaveBeenCalled();
   });
 });
