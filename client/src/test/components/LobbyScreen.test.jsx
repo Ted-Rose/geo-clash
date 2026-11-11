@@ -2,20 +2,20 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, act } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { makeFakeSocket, socketState } from '../fakeSocket.js';
-import LobbyScreen from '../../components/LobbyScreen.jsx';
+import LobbyScreen from '../../shared/LobbyScreen.jsx';
 
 const roomsMock = vi.hoisted(() => ({
   current: { rooms: [], loading: false, refresh: vi.fn() },
 }));
 
-vi.mock('../../socket.js', () => ({
+vi.mock('../../shared/socket.js', () => ({
   getSocket: () => socketState.current,
   getSessionId: () => 'sess-abc',
   API_BASE: '',
   SERVER_URL: '/',
 }));
 
-vi.mock('../../hooks/useRooms.js', () => ({
+vi.mock('../../shared/hooks/useRooms.js', () => ({
   useRooms: () => roomsMock.current,
 }));
 

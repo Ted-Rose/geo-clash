@@ -1,6 +1,6 @@
 import { describe, it, expect, vi } from 'vitest';
 import { render, act } from '@testing-library/react';
-import SimPanel from '../../components/SimPanel.jsx';
+import SimPanel from '../../clash/SimPanel.jsx';
 
 const STEP = 0.00005;
 

@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
-import { useSound } from '../hooks/useSound.js';
+import { useSound } from '../shared/hooks/useSound.js';
 import { MapContainer, TileLayer } from 'react-leaflet';
-import { getSocket, API_BASE } from '../socket.js';
+import { getSocket, API_BASE } from '../shared/socket.js';
 import SnakeHUD from './HUD.jsx';
 import FoodLayer from './FoodLayer.jsx';
 import SnakeLayer from './SnakeLayer.jsx';

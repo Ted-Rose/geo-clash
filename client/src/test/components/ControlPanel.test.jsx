@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, afterEach } from 'vitest';
 import { render, screen, act } from '@testing-library/react';
-import ControlPanel from '../../components/ControlPanel.jsx';
+import ControlPanel from '../../clash/ControlPanel.jsx';
 
 function baseProps(overrides = {}) {
   return {

@@ -13,14 +13,14 @@ const sounds = vi.hoisted(() => ({
   playShield: vi.fn(),
 }));
 
-vi.mock('../../socket.js', () => ({
+vi.mock('../../shared/socket.js', () => ({
   getSocket: () => socketState.current,
   getSessionId: () => 'sess-test',
   API_BASE: '',
   SERVER_URL: '/',
 }));
 
-vi.mock('../../hooks/useSound.js', () => ({ useSound: () => sounds }));
+vi.mock('../../shared/hooks/useSound.js', () => ({ useSound: () => sounds }));
 
 vi.mock('react-leaflet', async () => {
   const React = await import('react');

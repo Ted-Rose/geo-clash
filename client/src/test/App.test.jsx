@@ -6,21 +6,21 @@ import App from '../App.jsx';
 const lobbyProps = vi.hoisted(() => ({ calls: [] }));
 const clashProps = vi.hoisted(() => ({ calls: [] }));
 
-vi.mock('../socket.js', () => ({
+vi.mock('../shared/socket.js', () => ({
   getSocket: () => socketState.current,
   getSessionId: () => 'sess-xyz',
   API_BASE: '',
   SERVER_URL: '/',
 }));
 
-vi.mock('../hooks/useGeolocation.js', () => ({
+vi.mock('../shared/hooks/useGeolocation.js', () => ({
   useGeolocation: () => ({
     position: { lat: 1, lng: 2, heading: 0 },
     error: null,
   }),
 }));
 
-vi.mock('../components/LobbyScreen.jsx', async () => {
+vi.mock('../shared/LobbyScreen.jsx', async () => {
   const React = await import('react');
   return {
     default: (props) => {
@@ -30,7 +30,7 @@ vi.mock('../components/LobbyScreen.jsx', async () => {
   };
 });
 
-vi.mock('../components/GameScreen.jsx', async () => {
+vi.mock('../clash/GameScreen.jsx', async () => {
   const React = await import('react');
   return {
     default: (props) => {

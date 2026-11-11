@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { render, screen, act } from '@testing-library/react';
 import { makeFakeSocket, socketState } from '../fakeSocket.js';
-import GameScreen from '../../components/GameScreen.jsx';
+import GameScreen from '../../clash/GameScreen.jsx';
 
 const mapProps = vi.hoisted(() => ({ calls: [] }));
 const projProps = vi.hoisted(() => ({ calls: [] }));
@@ -15,16 +15,16 @@ const sounds = vi.hoisted(() => ({
   playShield: vi.fn(),
 }));
 
-vi.mock('../../socket.js', () => ({
+vi.mock('../../shared/socket.js', () => ({
   getSocket: () => socketState.current,
   getSessionId: () => 'sess-test',
   API_BASE: '',
   SERVER_URL: '/',
 }));
 
-vi.mock('../../hooks/useSound.js', () => ({ useSound: () => sounds }));
+vi.mock('../../shared/hooks/useSound.js', () => ({ useSound: () => sounds }));
 
-vi.mock('../../components/MapView.jsx', async () => {
+vi.mock('../../shared/MapView.jsx', async () => {
   const React = await import('react');
   return {
     default: (props) => {
@@ -38,7 +38,7 @@ vi.mock('../../components/MapView.jsx', async () => {
   };
 });
 
-vi.mock('../../components/ProjectileLayer.jsx', () => ({
+vi.mock('../../clash/ProjectileLayer.jsx', () => ({
   default: (props) => {
     projProps.calls.push(props);
     return null;

@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
-import { getSocket, getSessionId } from '../socket.js';
-import { useRooms } from '../hooks/useRooms.js';
+import { getSocket, getSessionId } from './socket.js';
+import { useRooms } from './hooks/useRooms.js';
 
 // Single mobile-first lobby screen. Lets the player set their name + GPS
 // (or simulate) and either create a new room or join an existing one.

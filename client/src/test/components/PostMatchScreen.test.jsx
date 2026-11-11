@@ -1,6 +1,6 @@
 import { describe, it, expect, vi } from 'vitest';
 import { render, screen } from '@testing-library/react';
-import PostMatchScreen from '../../components/PostMatchScreen.jsx';
+import PostMatchScreen from '../../clash/PostMatchScreen.jsx';
 
 const match = [
   { id: 'a', name: 'Winner', squares: 12, color: '#f00' },

@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, afterEach } from 'vitest';
 import { renderHook, act } from '@testing-library/react';
-import { useGeolocation } from '../../hooks/useGeolocation.js';
+import { useGeolocation } from '../../shared/hooks/useGeolocation.js';
 
 function stubGeolocation(overrides = {}) {
   const geo = {
