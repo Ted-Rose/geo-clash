@@ -112,6 +112,48 @@ test('redis CAS-delete refuses to delete a stolen lock', async () => {
   assert.equal(await redis.get('rooms:lock:x'), 'someone-else');
 });
 
+test('redis path releases lock when fn throws', async () => {
+  const redis = new FakeRedis();
+  const lock = new RoomLock(redis);
+  await assert.rejects(
+    lock.withLock('k', async () => {
+      throw new Error('boom');
+    }),
+    /boom/
+  );
+  assert.equal(redis.evalCalls, 1, 'CAS release ran in finally');
+  assert.equal(await redis.get('rooms:lock:k'), null, 'lock key freed');
+});
+
+test('redis ttlMs expiry lets contender acquire; first release cannot steal it back', async () => {
+  const redis = new FakeRedis();
+  const lock = new RoomLock(redis);
+  const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+  let token1;
+
+  const p1 = lock.withLock('k', async () => {
+    token1 = await redis.get('rooms:lock:k');
+    // Wait until the TTL lapses and the contender takes the lock over.
+    for (let i = 0; i < 200; i++) {
+      await sleep(10);
+      const cur = await redis.get('rooms:lock:k');
+      if (cur && cur !== token1) return 'first';
+    }
+    return 'first';
+  }, { ttlMs: 50, maxWaitMs: 2000 });
+
+  const p2 = lock.withLock('k', async () => {
+    // Wait for the first withLock to fully finish (incl. its CAS release).
+    await p1.catch(() => {});
+    return redis.get('rooms:lock:k'); // still ours if CAS did not steal
+  }, { ttlMs: 5000, maxWaitMs: 3000 });
+
+  const [r1, survivor] = await Promise.all([p1, p2]);
+  assert.equal(r1, 'first');
+  assert.ok(survivor, 'second token survived the first holder\'s CAS release');
+  assert.notEqual(survivor, token1);
+});
+
 test('redis path times out if lock never frees', async () => {
   const redis = new FakeRedis();
   // Pre-take the lock with a long TTL so the contender never gets it.

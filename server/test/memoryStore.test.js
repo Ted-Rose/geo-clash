@@ -34,3 +34,27 @@ test('exported leaderboardStore answers top()', async () => {
   const top = await leaderboardStore.top(5);
   assert.ok(Array.isArray(top));
 });
+
+test('MemoryStore full CRUD surface (get/set/del/has/keys/all/clear/size)', async () => {
+  const s = new MemoryStore();
+
+  assert.equal(await s.get('a'), undefined);
+  await s.set('a', 1);
+  await s.set('b', { x: true });
+  await s.set('gone', undefined); // Map stores it; all() skips undefined
+  assert.equal(await s.get('a'), 1);
+  assert.equal(await s.has('a'), true);
+  assert.equal(await s.has('nope'), false);
+
+  assert.deepEqual((await s.keys()).sort(), ['a', 'b', 'gone']);
+  // all() filters entries whose value is undefined
+  assert.deepEqual(new Map(await s.all()), new Map([['a', 1], ['b', { x: true }]]));
+  assert.equal(s.size(), 3, 'size() counts raw Map entries');
+
+  assert.equal(await s.del('a'), true);
+  assert.equal(await s.del('a'), false);
+
+  await s.clear();
+  assert.deepEqual(await s.keys(), []);
+  assert.equal(s.size(), 0);
+});
