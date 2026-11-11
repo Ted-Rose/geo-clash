@@ -8,8 +8,9 @@
   registration); verify with a node --test case asserting the player
   record survives a same-socket rejoin
 - [x] 1.2 server: Add `oldId === newId` early-return in both games'
-  `swapSocketId` and a `socket.data.handlersRegistered` once-guard in
-  `registerClashHandlers`/`registerSnakeHandlers`; verify a test
+  `swapSocketId` and a once-per-(socket, game) binding via
+  `bindGameHandlers` in `registerClashHandlers`/
+  `registerSnakeHandlers`; verify a test
   emitting `room-join` twice on one socket produces exactly one
   `player-attack` handling per emit
 - [ ] 1.3 server: Re-key `projectileStore` `attackerId` values inside

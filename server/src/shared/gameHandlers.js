@@ -9,6 +9,8 @@
 
 // Remove any listeners registered by bindGameHandlers. Safe on bare
 // socket stubs (disconnect-timer fakes, RemoteSocket evictions).
+// Note: under a future multi-node adapter, RemoteSockets carry no
+// _gameListeners and lack .off — rebind-on-join is the fallback there.
 export function unbindGameHandlers(socket) {
   const bound = socket._gameListeners;
   if (Array.isArray(bound) && typeof socket.off === 'function') {
