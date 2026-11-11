@@ -242,8 +242,9 @@ export class RoomRegistry {
 
       const graceDurationMs =
         game.matchActive && typeof game.remainingSeconds === 'number'
-          ? game.remainingSeconds * 1000 + 30_000
-          : 30_000;
+          ? game.remainingSeconds * 1000
+            + EMPTY_ROOM_TTL_MS
+          : EMPTY_ROOM_TTL_MS;
 
       const fakeSocket = { id: socket.id, data: {}, leave: () => {}, join: () => {} };
       const handle = setTimeout(async () => {
@@ -289,7 +290,6 @@ export class RoomRegistry {
     // calls just clean up the registry-owned entries.
     if (game && game.status !== 'ended') {
       try { await game.endMatch(); } catch (err) {
-        // eslint-disable-next-line no-console
         console.error('[roomRegistry] endMatch error:', err.message);
       }
     }
@@ -302,7 +302,6 @@ export class RoomRegistry {
         if (s.data) s.data.roomId = null;
       }
     } catch (err) {
-      // eslint-disable-next-line no-console
       console.error('[roomRegistry] socket evict error:', err.message);
     }
     await this._metaStore.del(roomId);
@@ -315,7 +314,6 @@ export class RoomRegistry {
       const rooms = await this.list();
       this._io.emit('rooms-updated', { rooms });
     } catch (err) {
-      // eslint-disable-next-line no-console
       console.error('[roomRegistry] broadcast list error:', err.message);
     }
   }

@@ -49,7 +49,6 @@ export class RoomLock {
     try {
       await this._redis.eval(RELEASE_LUA, 1, lockKey, token);
     } catch (err) {
-      // eslint-disable-next-line no-console
       console.error('[roomLock] release failed:', err.message);
     }
   }

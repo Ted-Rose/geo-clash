@@ -91,7 +91,6 @@ export default function App() {
     function onError(err) {
       setConnected(false);
       setConnectError(err?.message || 'connect error');
-      // eslint-disable-next-line no-console
       console.error('[geo-clash] socket connect_error:', err);
     }
     socket.on('connect', onConnect);

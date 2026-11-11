@@ -4,11 +4,11 @@
 
 The repo has no lint configuration anywhere, yet the source is
 peppered with `// eslint-disable-next-line no-console` comments —
-dead markers for a tool that does not exist. The new
-`.github/workflows/test.yml` (uncommitted WIP) gates PRs on tests but
-nothing checks style, obvious bugs (unused vars, missing deps in React
-hooks), or the existing `no-console` intent. Adding ESLint closes that
-gap and makes the existing disable comments meaningful again.
+dead markers for a tool that does not exist.
+`.github/workflows/test.yml` gates PRs on tests but nothing checks
+style, obvious bugs (unused vars, missing deps in React hooks), or
+the existing `no-console` intent. Adding ESLint closes that gap and
+makes the existing disable comments meaningful again.
 
 ## What Changes
 

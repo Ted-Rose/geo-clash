@@ -1,7 +1,8 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { spawnFood, isEaten, replenishFood } from '../../src/snake/food.js';
-import { EAT_RADIUS_M, FOOD_COUNT_TARGET, FOOD_SPAWN_RADIUS_M } from '../../src/snake/constants.js';
+import { FOOD_COUNT_TARGET, FOOD_SPAWN_RADIUS_M }
+  from '../../src/snake/constants.js';
 import { distanceMeters } from '../../src/shared/gridUtils.js';
 
 const center = { lat: 51.501, lng: -0.119 };

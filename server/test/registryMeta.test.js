@@ -124,7 +124,7 @@ test('create() calls initGrid when numeric center provided', async (t) => {
   assert.equal(reg.get(centerless.id).grid, null, 'grid stays null without center');
 });
 
-test('destroy() is idempotent and safe on re-entry', async (t) => {
+test('destroy() is idempotent and safe on re-entry', async () => {
   const io = makeIoStub();
   const reg = new RoomRegistry(io);
   const meta = await reg.create({ name: 'Reentry', maxPlayers: 4 });

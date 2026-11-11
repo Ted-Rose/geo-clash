@@ -1,6 +1,7 @@
 {
   "name": "geo-clash",
   "private": true,
+  "type": "module",
   "version": "0.1.0",
   "description": "Real-time geo-territory web MVP (React + Node + Socket.io + Leaflet).",
   "scripts": {
@@ -9,9 +10,14 @@
     "dev:server": "npm --prefix server run dev",
     "dev:client": "npm --prefix client run dev",
     "build": "npm --prefix client run build",
+    "lint": "eslint .",
     "test": "npm --prefix server test && npm --prefix client test"
   },
   "devDependencies": {
-    "concurrently": "^9.0.1"
+    "@eslint/js": "10.0.1",
+    "concurrently": "^9.0.1",
+    "eslint": "10.14.0",
+    "eslint-plugin-react-hooks": "7.1.1",
+    "globals": "17.14.0"
   }
 }

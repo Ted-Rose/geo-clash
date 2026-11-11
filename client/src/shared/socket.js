@@ -12,7 +12,6 @@ export const SERVER_URL = import.meta.env.VITE_SERVER_URL || '/';
 export const API_BASE = SERVER_URL === '/' ? '' : SERVER_URL;
 
 if (import.meta.env.PROD && SERVER_URL === '/') {
-  // eslint-disable-next-line no-console
   console.warn(
     '[geo-clash] VITE_SERVER_URL is not set for the production build. ' +
       'Socket.io will try to connect to the Vercel origin and fail silently. ' +

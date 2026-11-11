@@ -2,10 +2,9 @@
 // Quick smoke test for the snake server-side state machine.
 // Run: node server/scripts/snake-smoke.mjs
 
-import assert from 'node:assert/strict';
 import { SnakeGameState } from '../src/snake/gameState.js';
 import { metersToDegLat } from '../src/shared/gridUtils.js';
-import { MIN_MOVE_M, EAT_RADIUS_M, FOOD_COUNT_TARGET } from '../src/snake/constants.js';
+import { MIN_MOVE_M, FOOD_COUNT_TARGET } from '../src/snake/constants.js';
 
 let passed = 0;
 let failed = 0;

@@ -77,7 +77,7 @@ test('imagery older than maxAge returns 404 and skips tile fetch', async (t) => 
 });
 
 test('maxAge query param adjusts cutoff; invalid value uses default 3', async (t) => {
-  const counts = installFetchStub(t, { onMetadata: oldMetadata, onTile: pngTile });
+  installFetchStub(t, { onMetadata: oldMetadata, onTile: pngTile });
   const base = await startTileApp(t);
 
   // Same 5y-old imagery, but maxAge=10 years allows it.
@@ -174,7 +174,7 @@ test('tileToBBox produces correct envelope (via geometry param)', async (t) => {
   assert.equal(s, 0);
 
   // z=2,x=2,y=1 → west=0, east=90
-  [w, s, e, n] = await geometryFor(2, 1, 2);
+  [w, , e] = await geometryFor(2, 1, 2);
   assert.equal(w, 0);
   assert.equal(e, 90);
 });
