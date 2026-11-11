@@ -24,9 +24,11 @@ top-level
 folders unless introducing a genuinely new deployable.
 
 ## High-level architecture
-- **Authoritative server.** All gameplay rules, timers, ownership, hit
-  detection,
-  and scoring live in `server/`. Clients are dumb renderers + input sources.
+- **Server-arbitrated, client-reporting.** All gameplay rules, timers,
+  ownership, hit detection, and scoring live in `server/`. While
+  connected, clients are dumb renderers + input sources; while
+  disconnected they keep playing locally and report their truth on
+  reconnect (see "Connectivity & trust model" below).
 - **Transport.** Socket.io over WebSocket. Events are small JSON payloads named
   in
   `kebab-case` (`location-update`, `grid-update`, `player-attack`, …). Snake
@@ -60,10 +62,10 @@ folders unless introducing a genuinely new deployable.
 - **Leaflet via `react-leaflet`** with OpenStreetMap tiles — **no API keys**.
   Keep
   it that way so localhost-only testing works.
-- **Single source of truth** for gameplay state is the server snapshot +
-  deltas;
-  the client only holds derived/UI state (animations, transient effects, input
-  buffers). Don't simulate gameplay on the client.
+- **Single source of truth while connected** is the server snapshot +
+  deltas; the client otherwise holds only derived/UI state
+  (animations, transient effects, input buffers). The exception is
+  offline play — see "Connectivity & trust model".
 - **Mobile first.** All UI must work in a phone browser in
   portrait. Touch targets ≥ 44 px. The HUD overlays the map;
   never push the map below the fold.
@@ -79,6 +81,31 @@ folders unless introducing a genuinely new deployable.
   the `GameState` instance constructed in the server entrypoint.
 - **Socket handlers stay thin.** Validate input shape, delegate to game-state
   methods, never mutate state inline.
+
+## Connectivity & trust model
+The game is played on phones moving through a real-world arena on
+consumer Wi-Fi — **disconnects are routine, not exceptional**. Keep
+this model in mind for every gameplay change:
+
+- **No lost progress.** A player who drops off Wi-Fi and returns keeps
+  locally-earned progress. The client buffers its own truth
+  (positions, captures, attacks) while offline and reports it on
+  reconnect; the server reconciles rather than hard-rejecting.
+- **Clients report, server reconciles.** Each client is the source of
+  truth for *its own* offline actions; the server stays the arbiter
+  that merges competing claims (same-cell captures, hits registered
+  while one side was offline).
+- **Fair to the disconnected.** Resolve collisions with common sense —
+  don't let an online player trivially overwrite what a
+  briefly-offline player earned. Prefer timestamps and grace windows
+  over "last write wins" or "online always wins".
+- **Offline is never an advantage.** Disconnecting must not be a cheat
+  vector: no dodging deaths by going dark, no retroactive claims
+  contradicting what online players already saw. When in doubt, pick
+  the interpretation a cheater couldn't abuse.
+- **Size everything for flaky mobile links.** Prefer small deltas over
+  resending full snapshots, keep reconnect/resync cost bounded, and
+  don't let a stalled socket block tick loops or other players.
 
 ## Cross-cutting rules
 - **Don't hardcode credentials, tokens, or production URLs.** This project must
