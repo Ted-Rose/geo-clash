@@ -11,9 +11,17 @@ const GAME_HANDLERS = {
   snake: registerSnakeHandlers,
 };
 
+// `room-create` is unauthenticated, so cap rooms per connection: a legit
+// host creates one room, maybe a couple across a session — 5 is far past
+// real use but still blocks a single socket flooding the lobby. A fresh
+// connection resets the counter; determined abuse is better stopped by
+// the per-IP REST limiter and is out of scope for this MVP guard.
+const MAX_ROOMS_PER_SOCKET = 5;
+
 export function registerSocketHandlers(io, registry) {
   io.on('connection', async (socket) => {
     socket.data.roomId = null;
+    socket.data.roomsCreated = 0;
 
     // Initial handshake: send the current room list so the lobby can render.
     socket.emit('rooms-updated', { rooms: await registry.list() });
@@ -25,6 +33,12 @@ export function registerSocketHandlers(io, registry) {
     });
 
     socket.on('room-create', async (payload, ack) => {
+      if (socket.data.roomsCreated >= MAX_ROOMS_PER_SOCKET) {
+        if (typeof ack === 'function') {
+          ack({ ok: false, reason: 'room-create-limit' });
+        }
+        return;
+      }
       try {
         const room = await registry.create({
           name: payload?.name,
@@ -42,6 +56,7 @@ export function registerSocketHandlers(io, registry) {
           maxAmmo: payload?.maxAmmo ?? null,
           ammoRenewalMs: payload?.ammoRenewalMs ?? 5000,
         });
+        socket.data.roomsCreated += 1;
         if (typeof ack === 'function') ack({ ok: true, room });
       } catch (err) {
         if (typeof ack === 'function') ack({ ok: false, reason: err.message });
@@ -51,7 +66,9 @@ export function registerSocketHandlers(io, registry) {
     socket.on('room-join', async (payload, ack) => {
       const { roomId, name, lat, lng, sessionId } = payload || {};
       if (!roomId) {
-        if (typeof ack === 'function') ack({ ok: false, reason: 'no-room-id' });
+        if (typeof ack === 'function') {
+          ack({ ok: false, reason: 'no-room-id' });
+        }
         return;
       }
       const result = await registry.join(roomId, socket, name, sessionId);

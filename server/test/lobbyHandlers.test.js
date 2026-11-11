@@ -83,7 +83,11 @@ test('connection emits rooms-updated and registers handlers', async () => {
   assert.ok(first, 'initial rooms-updated emitted');
   assert.deepEqual(first.payload, { rooms: [] });
 
-  for (const ev of ['time-sync', 'rooms-list', 'room-create', 'room-join', 'room-leave', 'disconnect']) {
+  const lobbyEvents = [
+    'time-sync', 'rooms-list', 'room-create', 'room-join', 'room-leave',
+    'disconnect',
+  ];
+  for (const ev of lobbyEvents) {
     assert.ok(sock._handlers.has(ev), `handler registered for ${ev}`);
   }
   assert.equal(sock.data.roomId, null);
@@ -106,7 +110,7 @@ test('rooms-list ack returns rooms; missing ack tolerated', async (t) => {
   await assert.doesNotReject(() => sock.trigger('rooms-list'));
 });
 
-test('room-create acks ok with defaults; bad gameType acks fail', async (t) => {
+test('room-create acks ok; bad gameType acks fail', async (t) => {
   const { io, reg } = makeHarness();
   const sock = fakeSocket('c3', io);
   await io._conn(sock);
@@ -120,7 +124,10 @@ test('room-create acks ok with defaults; bad gameType acks fail', async (t) => {
   created.push(res1.room.id);
   assert.equal(res1.room.gameType, 'clash', 'default gameType');
   assert.equal(res1.room.hostId, 'c3', 'hostId is the creating socket');
-  assert.ok(!('maxAmmo' in res1.room), 'maxAmmo default null → absent from meta');
+  assert.ok(
+    !('maxAmmo' in res1.room),
+    'maxAmmo default null → absent from meta'
+  );
 
   const ack2 = ackSpy();
   await sock.trigger('room-create', { name: 's', gameType: 'snake' }, ack2);
@@ -132,9 +139,46 @@ test('room-create acks ok with defaults; bad gameType acks fail', async (t) => {
 
   const ack3 = ackSpy();
   await sock.trigger('room-create', { name: 'b', gameType: 'bogus' }, ack3);
-  assert.deepEqual(ack3.calls[0][0], { ok: false, reason: 'unsupported-game-type:bogus' });
+  assert.deepEqual(
+    ack3.calls[0][0],
+    { ok: false, reason: 'unsupported-game-type:bogus' }
+  );
 
-  await assert.doesNotReject(() => sock.trigger('room-create', { name: 'noack' }));
+  await assert.doesNotReject(
+    () => sock.trigger('room-create', { name: 'noack' })
+  );
+});
+
+test('room-create is capped per socket connection', async (t) => {
+  const { io, reg } = makeHarness();
+  const sock = fakeSocket('cap1', io);
+  await io._conn(sock);
+  const created = [];
+  t.after(async () => { for (const id of created) await reg.destroy(id); });
+
+  // MAX_ROOMS_PER_SOCKET is 5 — the first five succeed.
+  for (let i = 0; i < 5; i++) {
+    const ack = ackSpy();
+    await sock.trigger('room-create', { name: `r${i}` }, ack);
+    assert.equal(ack.calls[0][0].ok, true, `create ${i + 1} ok`);
+    created.push(ack.calls[0][0].room.id);
+  }
+
+  const ack6 = ackSpy();
+  await sock.trigger('room-create', { name: 'r6' }, ack6);
+  assert.deepEqual(
+    ack6.calls[0][0],
+    { ok: false, reason: 'room-create-limit' },
+    'sixth room-create on one socket is rejected'
+  );
+
+  // A fresh connection gets a fresh counter.
+  const sock2 = fakeSocket('cap2', io);
+  await io._conn(sock2);
+  const ack7 = ackSpy();
+  await sock2.trigger('room-create', { name: 'r7' }, ack7);
+  assert.equal(ack7.calls[0][0].ok, true, 'new socket creates again');
+  created.push(ack7.calls[0][0].room.id);
 });
 
 test('room-join without roomId acks no-room-id', async () => {
@@ -151,7 +195,7 @@ test('room-join without roomId acks no-room-id', async () => {
   assert.deepEqual(ack2.calls[0][0], { ok: false, reason: 'no-room-id' });
 });
 
-test('room-join happy path: joined+snapshot, broadcast, clash handlers', async (t) => {
+test('room-join happy path: joined+snapshot, clash handlers', async (t) => {
   const { io, reg } = makeHarness();
   const meta = await reg.create({ name: 'Arena', maxPlayers: 4 });
   t.after(() => reg.destroy(meta.id));
@@ -159,7 +203,11 @@ test('room-join happy path: joined+snapshot, broadcast, clash handlers', async (
   const sock = fakeSocket('c5', io);
   await io._conn(sock);
   const ack = ackSpy();
-  await sock.trigger('room-join', { roomId: meta.id, name: 'A', lat: 51.5, lng: -0.12 }, ack);
+  await sock.trigger(
+    'room-join',
+    { roomId: meta.id, name: 'A', lat: 51.5, lng: -0.12 },
+    ack
+  );
 
   const res = ack.calls[0][0];
   assert.equal(res.ok, true);
@@ -168,15 +216,23 @@ test('room-join happy path: joined+snapshot, broadcast, clash handlers', async (
   const joinedIdx = events.indexOf('joined');
   const snapIdx = events.indexOf('snapshot');
   assert.ok(joinedIdx !== -1 && snapIdx > joinedIdx, 'joined then snapshot');
-  assert.deepEqual(sock._emitted[joinedIdx].payload, { id: 'c5', roomId: meta.id });
+  assert.deepEqual(
+    sock._emitted[joinedIdx].payload,
+    { id: 'c5', roomId: meta.id }
+  );
 
-  const pj = io._events.find((e) => e.scope === meta.id && e.event === 'player-joined');
+  const pj = io._events.find(
+    (e) => e.scope === meta.id && e.event === 'player-joined'
+  );
   assert.ok(pj, 'player-joined broadcast to room');
   assert.deepEqual(pj.payload, { id: 'c5' });
 
   assert.equal(sock.data.roomId, meta.id);
   assert.equal(sock.data.gameType, 'clash');
-  for (const ev of ['location-update', 'player-attack', 'player-shield', 'player-respawn']) {
+  const clashEvents = [
+    'location-update', 'player-attack', 'player-shield', 'player-respawn',
+  ];
+  for (const ev of clashEvents) {
     assert.ok(sock._handlers.has(ev), `clash handler ${ev} registered`);
   }
 
@@ -195,14 +251,20 @@ test('room-join snake room registers snake handlers', async (t) => {
   const sock = fakeSocket('c6', io);
   await io._conn(sock);
   const ack = ackSpy();
-  await sock.trigger('room-join', { roomId: meta.id, name: 'S', lat: 51.5, lng: -0.12 }, ack);
+  await sock.trigger(
+    'room-join',
+    { roomId: meta.id, name: 'S', lat: 51.5, lng: -0.12 },
+    ack
+  );
 
   assert.equal(ack.calls[0][0].ok, true);
   assert.equal(sock.data.gameType, 'snake');
   for (const ev of ['location-update', 'eat_food', 'clash_ack']) {
     assert.ok(sock._handlers.has(ev), `snake handler ${ev} registered`);
   }
-  assert.equal(sock._handlers.has('player-attack'), false, 'no clash handlers');
+  assert.equal(
+    sock._handlers.has('player-attack'), false, 'no clash handlers'
+  );
 });
 
 test('room-join with non-numeric lat/lng still joins', async (t) => {
@@ -213,7 +275,9 @@ test('room-join with non-numeric lat/lng still joins', async (t) => {
   const sock = fakeSocket('c7', io);
   await io._conn(sock);
   const ack = ackSpy();
-  await sock.trigger('room-join', { roomId: meta.id, name: 'A', lat: 'x' }, ack);
+  await sock.trigger(
+    'room-join', { roomId: meta.id, name: 'A', lat: 'x' }, ack
+  );
 
   const res = ack.calls[0][0];
   assert.equal(res.ok, true);
@@ -221,7 +285,7 @@ test('room-join with non-numeric lat/lng still joins', async (t) => {
   assert.equal(reg.get(meta.id).grid, null, 'no grid without numeric lat/lng');
 });
 
-test('room-join reconnect path returns reconnected and skips re-broadcast', async (t) => {
+test('room-join reconnect: reconnected, no re-broadcast', async (t) => {
   const { io, reg } = makeHarness();
   const meta = await reg.create({ name: 'ReJ', maxPlayers: 4 });
   t.after(() => reg.destroy(meta.id));
@@ -230,7 +294,11 @@ test('room-join reconnect path returns reconnected and skips re-broadcast', asyn
   const s1 = fakeSocket('c8a', io);
   await io._conn(s1);
   const ack1 = ackSpy();
-  await s1.trigger('room-join', { roomId: meta.id, name: 'A', sessionId: 'sess-9' }, ack1);
+  await s1.trigger(
+    'room-join',
+    { roomId: meta.id, name: 'A', sessionId: 'sess-9' },
+    ack1
+  );
   assert.equal(ack1.calls[0][0].ok, true);
 
   // Simulate the socket dropping — softDisconnect via the socket path.
@@ -241,7 +309,11 @@ test('room-join reconnect path returns reconnected and skips re-broadcast', asyn
   await io._conn(s2);
   io._events.length = 0;
   const ack2 = ackSpy();
-  await s2.trigger('room-join', { roomId: meta.id, name: 'A', sessionId: 'sess-9' }, ack2);
+  await s2.trigger(
+    'room-join',
+    { roomId: meta.id, name: 'A', sessionId: 'sess-9' },
+    ack2
+  );
 
   const res = ack2.calls[0][0];
   assert.equal(res.ok, true);
@@ -274,13 +346,15 @@ test('room-leave delegates to registry.leave', async (t) => {
 
   await sock.trigger('room-leave');
 
-  const left = io._events.find((e) => e.scope === meta.id && e.event === 'player-left');
+  const left = io._events.find(
+    (e) => e.scope === meta.id && e.event === 'player-left'
+  );
   assert.ok(left, 'player-left broadcast');
   assert.equal(sock.data.roomId, null);
   assert.equal(reg.get(meta.id), null, 'room destroyed once empty');
 });
 
-test('disconnect softDisconnects; disconnect outside a room is a no-op', async (t) => {
+test('disconnect softDisconnects; idle disconnect is a no-op', async (t) => {
   const { io, reg } = makeHarness();
   const meta = await reg.create({ name: 'DC', maxPlayers: 4 });
   t.after(() => reg.destroy(meta.id));
@@ -295,7 +369,9 @@ test('disconnect softDisconnects; disconnect outside a room is a no-op', async (
 
   await sock.trigger('disconnect');
 
-  const dc = io._events.find((e) => e.scope === meta.id && e.event === 'player-disconnected');
+  const dc = io._events.find(
+    (e) => e.scope === meta.id && e.event === 'player-disconnected'
+  );
   assert.ok(dc, 'player-disconnected broadcast via socket path');
   assert.ok(reg._disconnectTimers.has('c10'), 'grace timer pending');
   assert.equal(sock.data.roomId, null);
