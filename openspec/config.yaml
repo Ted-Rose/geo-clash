@@ -1,0 +1,89 @@
+schema: spec-driven
+
+# Project context
+# Constraints an agent cannot infer by reading the code.
+context: |
+  Monorepo, two npm workspaces orchestrated from the root:
+  - server/  Node.js realtime backend (Express + Socket.io), ES modules.
+             Authoritative for all gameplay rules. Sub-layout:
+             src/clash/ (territory game), src/snake/ (geo-snake game),
+             src/shared/ (stores, grid math, room lock, time sync).
+             Some top-level src/*.js files (gameState, gridUtils,
+             memoryStore, projectiles, roomLock, valkeyStore) are
+             backward-compat re-export shims; index, socketHandlers,
+             roomRegistry, tileProxy are real modules.
+  - client/  React (Vite) + Leaflet + Tailwind. Dumb renderer + input
+             source; the server snapshot + deltas are the single source
+             of truth for gameplay state. Sub-layout: src/components/
+             (clash UI), src/snake/, src/hooks/, root socket.js;
+             src/clash/ and src/shared/ are backward-compat re-export
+             shims only.
+  - terraform/  GCP infra. Never add a new google_secret_manager_secret
+             per credential — append KEY=VALUE to the shared env-file
+             secret (each extra secret adds cost).
+
+  Specs describe CURRENT, code-verified behavior — not aspirational
+  design. When docs (AGENTS.md, README, feature-plan.md) disagree with
+  the code, the code wins; write the spec from the code.
+
+  Branch model: `main` is the default/integration branch. Work happens
+  on `feature/*` or `chore/*` branches and lands via squash-merge PR.
+  Commit messages use lowercase conventional-commit prefixes:
+  `feat:`, `fix:`, `docs:`, `refactor:`, `test:`, `chore:`.
+
+  Conventions to respect in artifacts and implementation:
+  - No hardcoded credentials, tokens, production URLs, or ports.
+    Server defaults to PORT 3001, client dev server to 5173; both are
+    env-configurable. Client code never hardcodes the server origin —
+    dev uses the Vite proxy for /socket.io, prod uses VITE_SERVER_URL.
+  - Mock/debug surfaces are first-class: any feature depending on
+    hardware (GPS, accelerometer, compass, NFC) MUST ship with a
+    UI-button fallback (e.g. Simulate Movement + WASD, bot spawning).
+  - No database or ORM. The in-memory store contract
+    (server/src/shared/memoryStore.js) is intentional for the MVP; the
+    upgrade path is a Redis/Valkey-shaped impl behind the same async
+    facade (VALKEY_URL env), not a relational schema.
+  - Transport is Socket.io over WebSocket; lobby also exposes thin REST
+    endpoints (/api/rooms, /api/leaderboard). Prefer the existing tick
+    loops over spawning competing timers.
+  - Mobile-first UI: portrait phone browser, touch targets >= 44 px,
+    HUD overlays the map (never push the map below the fold).
+  - Leaflet + OpenStreetMap tiles only — no keyed map providers.
+  - Root feature-plan.md is a historical artifact; new planning goes
+    through `openspec changes` — never create new plan/feature-plan
+    Markdown files.
+
+rules:
+  proposal:
+    - State which workspace(s) the change touches (server/, client/, or
+      both) and whether the socket event contract or a seeded spec is
+      affected.
+    - If the change adds a hardware-dependent feature, the proposal MUST
+      include the mock/debug fallback path.
+  design:
+    - Server-side state mutations belong in the per-game game-state
+      modules; socket handlers stay thin (validate shape, delegate).
+    - New persistent collections use a MemoryStore-style async facade,
+      never a bare Map in business logic.
+  tasks:
+    - Prefix every tasks.md item with `server:`, `client:`, or `both:`
+      to name the target workspace (`both:` for changes that must land
+      together, e.g. a new socket event and its client wiring).
+    - Socket-event changes MUST include a `both:` task covering the
+      server emit/on and the matching client on/emit.
+
+operations:
+  apply:
+    guidance:
+      - Keep socket handlers thin — input-shape validation only;
+        delegate to the game-state module.
+      - Run server tests with `npm --prefix server test` (node --test);
+        there is no client test suite — verify UI changes manually.
+  archive:
+    guidance:
+      - Archive in the implementing PR when feasible so specs, code and
+        history land atomically; otherwise archive immediately after
+        merge on main. Never leave a merged change unarchived.
+      - If shipped behavior diverged from the delta written during
+        planning, fix the delta before archiving so merged specs match
+        the code.

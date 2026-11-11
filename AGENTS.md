@@ -23,14 +23,19 @@ folders unless introducing a genuinely new deployable.
 - **Authoritative server.** All gameplay rules, timers, ownership, hit detection,
   and scoring live in `server/`. Clients are dumb renderers + input sources.
 - **Transport.** Socket.io over WebSocket. Events are small JSON payloads named in
-  `kebab-case` (`location-update`, `grid-update`, `player-attack`, …).
-- **State store.** A small async KV facade (`server/src/memoryStore.js`) backs
+  `kebab-case` (`location-update`, `grid-update`, `player-attack`, …). Snake keeps
+  three legacy snake_case events (`eat_food`, `clash_ack`, `clash_verify`) until a
+  deliberate both-ends rename.
+- **State store.** A small async KV facade (`server/src/shared/memoryStore.js`;
+  `server/src/memoryStore.js` is a backward-compat re-export shim) backs
   every persistent collection. Default impl is an in-process `Map`; it is designed
   to be swappable for Redis/Valkey **without changing call sites**. Preserve that
   contract.
-- **Tick loop.** A single interval inside the game-state module advances per-cell
-  capture progress, expires shields, decrements the match timer, and broadcasts
-  diffs. Avoid spawning competing timers — extend the existing tick instead.
+- **Tick loops.** Each per-game state module (`server/src/clash/gameState.js`,
+  `server/src/snake/gameState.js`) runs its own interval — clash drives capture
+  progress/shield expiry/match timer; snake relays updates and runs a second
+  food-respawn interval. Avoid spawning competing timers — extend the existing
+  ticks instead.
 - **Geo math.** Bounding-box → grid slicing uses a local equirectangular
   approximation, which is fine at <1 km scales. Don't reach for full geodesics
   unless arenas grow significantly.
@@ -83,7 +88,8 @@ Server default port: `3001`. Client dev server: `5173`. Both are configurable vi
 env if the need arises — don't bake new ports into multiple files.
 
 ## Git workflow
-- Default working branch: `development`. `main` is for known-good states.
+- `main` is the default and integration branch — work lands on it via
+  squash-merge PRs from `feature/*`/`chore/*` branches.
 - Conventional-commit style messages (`feat:`, `fix:`, `chore:`, `refactor:`, …).
 - Commit in small, themed steps; don't bundle unrelated changes.
 - Never commit `node_modules`, build artifacts, secrets, or editor scratch files.
@@ -91,9 +97,11 @@ env if the need arises — don't bake new ports into multiple files.
 
 ## When extending the game
 Typical extension checklist:
-1. Add/modify a Socket.io event in **both** `server/src/socketHandlers.js` and the
-   client wiring.
-2. Mutate authoritative state only inside the game-state module; broadcast a diff.
+1. Add/modify a Socket.io event in **both** the matching
+   `server/src/<game>/socketHandlers.js` (dispatched by `gameType` from
+   `server/src/socketHandlers.js`) and the client wiring.
+2. Mutate authoritative state only inside the per-game game-state module
+   (`server/src/clash/` or `server/src/snake/`); broadcast a diff.
 3. Update the snapshot payload if a new client needs to render the new field on
    first connect.
 4. Add a debug/mock path so the feature is exercisable on desktop without
@@ -112,12 +120,46 @@ Typical extension checklist:
 - Build native mobile (React Native, Capacitor, Cordova). This is a web app.
 
 ## Where to look first
-- Game rules & tick → server game-state module.
-- Geo helpers → server grid utils.
-- Realtime wiring (server) → server socket handlers.
+- Game rules & ticks → `server/src/clash/gameState.js` and
+  `server/src/snake/gameState.js`.
+- Geo helpers → `server/src/shared/gridUtils.js`.
+- Realtime wiring (server) → `server/src/socketHandlers.js` (lobby +
+  dispatch) and `server/src/<game>/socketHandlers.js` (gameplay).
 - Realtime wiring (client) → client `App.jsx` and `socket.js`.
 - Map rendering → client `MapView` component.
 - HUD / inputs → client `HUD`, `ControlPanel`, `SimPanel` components.
+
+## OpenSpec
+
+`openspec/` at the repo root is the spec-driven planning layer (npm
+`@fission-ai/openspec`, v1.14.x). `openspec/specs/` holds capability
+specs describing CURRENT code-verified behavior (source of truth);
+`openspec/changes/` holds proposed changes (`proposal.md`, `design.md`,
+`tasks.md`, delta `specs/`) that merge into `specs/` on archive.
+
+- Run `openspec` commands from the repo root where `openspec/` lives.
+- The CLI is a global npm install under `/opt/homebrew/bin` — export it
+  onto PATH first: `export PATH="/opt/homebrew/bin:$PATH"`.
+- Always run `openspec validate --all --strict` after touching
+  `openspec/`; it must pass before committing.
+- `tasks.md` items MUST be prefixed `server:`, `client:`, or `both:` to
+  name the target workspace (`both:` for changes that must land
+  together, e.g. a new socket event and its client wiring).
+- Workflow skills live in `.devin/skills/openspec-*` (frontmatter
+  stripped to `name`/`description` for Devin discovery). The
+  `.agents/skills/openspec-*/` originals are upstream artifacts owned by
+  `openspec update` — keep them verbatim; re-copy + re-strip the
+  `.devin` copies after each update.
+- Workflow: `openspec-propose` → implement via `openspec-apply-change`
+  → `openspec-archive-change`. Archive in the implementing PR when
+  feasible; otherwise archive immediately after merge on `main`. Never
+  leave a merged change unarchived.
+- Any change that alters behavior covered by `openspec/specs/` MUST
+  update the affected spec in the same PR — whether via an archived
+  delta or a direct spec edit.
+- When to use it: features, contract changes, anything a reviewer would
+  ask "why?" about. Skip the ceremony for bug fixes restoring spec'd
+  behavior, typos, config/dep bumps, and tests.
 
 ## Feature Development, Planning, & Branch Management Workflow
 When instructed to implement a broader feature (anything requiring more than a
@@ -125,35 +167,43 @@ few lines of code or necessitating multiple Git commits for proper tracking),
 strictly adhere to this multi-step workflow:
 
 **1. Planning Phase**
-Before writing any code, present a comprehensive implementation plan to the
-user for approval. Write the approved plan into a Markdown file (e.g.,
-`feature-plan.md`) at the project root. This file is the single source of
-truth and checklist for the implementation.
+Planning goes through OpenSpec — run the `openspec-propose` workflow to
+draft the change (`proposal.md`, `design.md`, `tasks.md`, spec deltas under
+`openspec/changes/<name>/`) and present it to the user for approval. Do NOT
+create plan/feature-plan Markdown files at the project root — the root
+`feature-plan.md` is a historical artifact, not a template. The approved
+`openspec/changes/<name>/` folder is the single source of truth and
+checklist for the implementation.
 
 **2. Branch Creation**
-Once the plan is finalized, create and switch to a new branch from `main`
-before making any code changes. Use a descriptive kebab-case name that
-reflects the feature (e.g., `feature/user-authentication`).
+Once the change is approved, create and switch to a new branch from the
+default branch (`main`) before making any code changes. Use a descriptive
+kebab-case name that reflects the work (e.g., `feature/user-authentication`,
+`chore/adopt-openspec`).
 
 **3. Incremental Implementation**
-Implement the feature step-by-step, strictly following the plan. Make
-frequent, atomic Git commits as each sub-task is completed. Each commit must
-represent a single cohesive change with a clear, descriptive message.
+Implement the change step-by-step via `openspec-apply-change`, checking off
+`tasks.md` items. Make frequent, atomic Git commits as each sub-task is
+completed. Each commit must represent a single cohesive change with a clear,
+lowercase conventional-commit message (`feat:`, `fix:`, `chore:`, …).
 
 **4. Review & Approval**
-Do not merge upon completing the code. Open a GitHub PR targeting the correct
-base branch, using the `feature-plan.md` file as the PR body:
+Do not merge upon completing the code. Open a GitHub PR targeting `main`,
+writing the body to a temp file and passing it via `--body-file` (summarize
+the change's proposal + tasks — do not commit a PR-body file to the repo):
 ```
-gh pr create --title "<title>" --body-file feature-plan.md --base <base> --head <branch>
+gh pr create --title "<title>" --body-file /tmp/pr-body.md --base main --head <branch>
 ```
 Present the PR URL to the user for final review and validation. Wait for
 explicit approval before proceeding to step 5.
 
 **5. Integration & Cleanup**
 Once approved, perform all of the following in order:
-- Delete the temporary Markdown plan file from the project directory.
-- Squash-merge the development branch into `main` (one clean commit on `main`).
-- Delete the temporary development branch.
+- Archive the change (`openspec-archive-change`) so its spec deltas merge
+  into `openspec/specs/` — in the same PR when feasible, otherwise in a
+  small follow-up commit on `main` right after merge.
+- Squash-merge the working branch into `main` (one clean commit on `main`).
+- Delete the temporary working branch.
 
 ---
 
