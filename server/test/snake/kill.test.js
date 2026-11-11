@@ -11,33 +11,40 @@ function makeIo() {
   };
 }
 
-test('last player alive triggers match-end', async () => {
+test('clash kill resets the victim and credits the killer', async (t) => {
   const io = makeIo();
   const game = new SnakeGameState({
     io,
-    roomId: 'last-alive-test',
+    roomId: 'kill-test',
     centerLat: 51.5,
     centerLng: -0.12,
     arenaSideMeters: 200,
     foodRespawnIntervalMs: 999_999,
   });
+  t.after(() => game.endMatch());
 
   await game.addPlayer('p1', 'Alice');
   await game.addPlayer('p2', 'Bob');
-
-  game._bbox = {
-    south: 51.499, north: 51.501, west: -0.121, east: -0.119,
-  };
-  game._foods = [];
   game.startMatch();
 
-  // Kill p2 directly so p1 is the last snake standing
+  // Give the victim something to lose.
+  const tail = [{ lat: 51.5, lng: -0.12 }, { lat: 51.5001, lng: -0.12 }];
+  await game.updateLocation('p2', 51.5, -0.12, 0, tail, 7);
+
   await game._killPlayer('p2', 'p1');
 
-  // Run tick — should detect 1 alive out of 2 total and call endMatch
-  await game._tick();
+  const victim = await game.playerStore.get('p2');
+  assert.equal(victim.score, 0, 'victim score reset');
+  assert.deepEqual(victim.tailPoints, [], 'victim tail cleared');
 
-  const matchEnd = io._events.find((e) => e.event === 'match-end');
-  assert.ok(matchEnd, 'match-end event should be emitted');
-  assert.equal(game.status, 'ended', 'game status should be ended');
+  const killer = await game.playerStore.get('p1');
+  assert.equal(killer.kills, 1, 'killer kill count incremented');
+  assert.equal(killer.score, 5, 'killer awarded kill bonus');
+
+  const hit = io._events.find((e) => e.event === 'snake-hit');
+  assert.ok(hit, 'snake-hit broadcast');
+  assert.deepEqual(hit.payload, { victimId: 'p2', killerId: 'p1' });
+
+  const reset = io._events.find((e) => e.event === 'snake-reset');
+  assert.ok(reset, 'victim told to reset its local snake');
 });
