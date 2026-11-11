@@ -1,10 +1,11 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { render, screen, act } from '@testing-library/react';
+import { render, screen, act, fireEvent } from '@testing-library/react';
 import { makeFakeSocket, socketState } from '../fakeSocket.js';
 import GameScreen from '../../clash/GameScreen.jsx';
 
 const mapProps = vi.hoisted(() => ({ calls: [] }));
 const projProps = vi.hoisted(() => ({ calls: [] }));
+const botSockets = vi.hoisted(() => ({ list: [] }));
 const sounds = vi.hoisted(() => ({
   playEat: vi.fn(),
   playDie: vi.fn(),
@@ -23,6 +24,21 @@ vi.mock('../../shared/socket.js', () => ({
 }));
 
 vi.mock('../../shared/hooks/useSound.js', () => ({ useSound: () => sounds }));
+
+// spawnBot() dynamically imports socket.io-client; hand it fake sockets
+// so the test can assert disconnect on unmount.
+vi.mock('socket.io-client', () => ({
+  io: vi.fn(() => {
+    const s = {
+      id: `bot-${botSockets.list.length}`,
+      on: vi.fn(),
+      emit: vi.fn(),
+      disconnect: vi.fn(),
+    };
+    botSockets.list.push(s);
+    return s;
+  }),
+}));
 
 vi.mock('../../shared/MapView.jsx', async () => {
   const React = await import('react');
@@ -118,10 +134,12 @@ beforeEach(() => {
   socketState.current = socket;
   mapProps.calls = [];
   projProps.calls = [];
+  botSockets.list = [];
   vi.clearAllMocks();
 });
 
 afterEach(() => {
+  vi.useRealTimers();
   vi.unstubAllGlobals();
   vi.restoreAllMocks();
 });
@@ -151,7 +169,7 @@ describe('clash GameScreen socket wiring', () => {
     expect(screen.getByText('P2')).toBeInTheDocument();
   });
 
-  it('location-update is throttled to ≥250 ms and carries heading default 0', () => {
+  it('location-update throttles ≥250 ms, default heading 0', () => {
     let t = 1_000_000;
     vi.spyOn(Date, 'now').mockImplementation(() => t);
     const pos = (lat) => ({ lat, lng: 0.1 });
@@ -191,7 +209,9 @@ describe('clash GameScreen socket wiring', () => {
     render(<GameScreen {...baseProps()} />);
     act(() =>
       socket._trigger('match-end', {
-        leaderboard: [{ id: 'socket-1', name: 'me', squares: 5, color: '#fff' }],
+        leaderboard: [
+          { id: 'socket-1', name: 'me', squares: 5, color: '#fff' },
+        ],
       })
     );
     expect(fetchSpy).toHaveBeenCalledWith('/api/leaderboard?limit=10');
@@ -209,5 +229,86 @@ describe('clash GameScreen socket wiring', () => {
     expect(
       await screen.findByText('No scores archived yet.')
     ).toBeInTheDocument();
+  });
+
+  it('unmount clears bot interval + disconnects its socket', async () => {
+    vi.useFakeTimers();
+    const setSpy = vi.spyOn(globalThis, 'setInterval');
+    const clearSpy = vi.spyOn(globalThis, 'clearInterval');
+    const { unmount } = render(
+      <GameScreen
+        {...baseProps({ simulate: true, initialSnapshot: snapshot })}
+      />
+    );
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: /\+ Bot/ }));
+      await vi.dynamicImportSettled();
+    });
+
+    expect(botSockets.list).toHaveLength(1);
+    // The bot moves on a 500 ms interval; ControlPanel's shield
+    // countdown (100 ms) is the other interval in this tree.
+    const botCallIdx = setSpy.mock.calls.findIndex((c) => c[1] === 500);
+    expect(botCallIdx).toBeGreaterThanOrEqual(0);
+    const intervalId = setSpy.mock.results[botCallIdx].value;
+
+    unmount();
+    expect(clearSpy).toHaveBeenCalledWith(intervalId);
+    expect(botSockets.list[0].disconnect).toHaveBeenCalled();
+  });
+
+  it('names bots sequentially starting at Bot-1', async () => {
+    render(
+      <GameScreen
+        {...baseProps({ simulate: true, initialSnapshot: snapshot })}
+      />
+    );
+    const spawn = async () => {
+      await act(async () => {
+        fireEvent.click(screen.getByRole('button', { name: /\+ Bot/ }));
+        await vi.dynamicImportSettled();
+      });
+    };
+    const onConnect = (i) =>
+      botSockets.list[i].on.mock.calls.find((c) => c[0] === 'connect')[1];
+
+    await spawn();
+    onConnect(0)();
+    expect(botSockets.list[0].emit).toHaveBeenCalledWith(
+      'room-join',
+      expect.objectContaining({ name: 'Bot-1' })
+    );
+
+    await spawn();
+    onConnect(1)();
+    expect(botSockets.list[1].emit).toHaveBeenCalledWith(
+      'room-join',
+      expect.objectContaining({ name: 'Bot-2' })
+    );
+  });
+
+  it('unmount during spawn import disconnects the bot', async () => {
+    vi.useFakeTimers();
+    const setSpy = vi.spyOn(globalThis, 'setInterval');
+    const clearSpy = vi.spyOn(globalThis, 'clearInterval');
+    const { unmount } = render(
+      <GameScreen
+        {...baseProps({ simulate: true, initialSnapshot: snapshot })}
+      />
+    );
+    fireEvent.click(screen.getByRole('button', { name: /\+ Bot/ }));
+    // Unmount while `await import("socket.io-client")` is pending.
+    unmount();
+    await act(async () => {
+      await vi.dynamicImportSettled();
+    });
+
+    expect(botSockets.list).toHaveLength(1);
+    expect(botSockets.list[0].disconnect).toHaveBeenCalled();
+    const botCallIdx = setSpy.mock.calls.findIndex((c) => c[1] === 500);
+    expect(botCallIdx).toBeGreaterThanOrEqual(0);
+    expect(clearSpy).toHaveBeenCalledWith(
+      setSpy.mock.results[botCallIdx].value
+    );
   });
 });

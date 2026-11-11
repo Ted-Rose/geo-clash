@@ -74,8 +74,8 @@ accepts fabricated claims. Fixing them is what makes the trust model
 
 - Workspaces: **both** — `server/src/roomRegistry.js`,
   `server/src/clash/{gameState,combat,lifecycle,capture}.js`,
-  `server/src/snake/{gameState,clashHandshake}.js`; `client/src/clash/
-  GameScreen.jsx`, `client/src/shared/` (ProjectileLayer).
+  `server/src/snake/{gameState,clashHandshake}.js`;
+  `client/src/clash/{GameScreen,ProjectileLayer}.jsx`.
 - Socket event contract: no new or renamed events; payload shapes
   unchanged except `match-end.scores` actually being populated.
   Semantics of existing events tightened (idempotent rejoin,

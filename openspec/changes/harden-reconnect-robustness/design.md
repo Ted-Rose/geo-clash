@@ -13,14 +13,15 @@ path, `softDisconnect`), `server/src/clash/gameState.js` +
 `combat.js`/`capture.js`/`lifecycle.js` (re-key, projectiles, scores,
 teardown), `server/src/snake/gameState.js` + `clashHandshake.js`
 (re-key, kill ACK, `eat_food`), `client/src/clash/GameScreen.jsx`
-(debug bots), `client/src/shared/ProjectileLayer.jsx` (rAF loop).
+(debug bots), `client/src/clash/ProjectileLayer.jsx` (rAF loop).
 
 ## Goals / Non-Goals
 
 **Goals:**
 - Make `room-join` + `sessionId` idempotent and complete: same-socket
   rejoin is a no-op; a real re-key retargets every stored reference
-  (projectiles, timers); handler registration is once-per-socket.
+  (projectiles, timers); handler registration is once per
+  (socket, game) and re-binds on recovery or room change.
 - Close the two offline-as-exploit vectors (snake kill-dodge,
   fabricated `eat_food`) while staying lenient to genuinely
   disconnected players.
@@ -45,9 +46,15 @@ teardown), `server/src/snake/gameState.js` + `clashHandshake.js`
   `swapSocketId`. Alternative considered: rely only on the registry
   check — rejected, the game-level guard also covers any future
   caller.
-- **Once-per-socket handlers → `socket.data.handlersRegistered`.**
-  Each `register<Game>Handlers` sets the flag and no-ops if already
-  set. Cheaper and more robust than diffing listener counts.
+- **Once-per-(socket, game) handlers → `socket._handlersFor`.**
+  Each `register<Game>Handlers` binds listeners via a shared helper
+  keyed to the GameState instance on a non-persisted socket property
+  (`shared/gameHandlers.js`). A flag on `socket.data` was considered
+  and rejected: connectionStateRecovery restores `socket.data` on a
+  new Socket instance without its listeners, so a data flag would
+  wrongly suppress re-registration, and it could never rebind a
+  socket joining a different room. Re-binding detaches the previous
+  game's tracked listeners via `socket.off`.
 - **Projectile re-key in `swapSocketId`.** Iterate
   `projectileStore`, rewrite `attackerId` when it matches `oldId` —
   same pattern the existing code already uses for grid cells and ammo

@@ -97,7 +97,6 @@ export function scheduleAmmoRecharge(state, playerId) {
 // Resolve the projectile at its scheduled arrival time.
 export function scheduleResolution(state, proj) {
   const delay = Math.max(0, proj.tArrival - Date.now());
-  if (!state._projectileTimers) state._projectileTimers = new Map();
   const handle = setTimeout(() => {
     state._projectileTimers?.delete(proj.id);
     resolveProjectile(state, proj.id).catch((err) => {

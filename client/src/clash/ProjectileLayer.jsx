@@ -11,13 +11,15 @@ function rocketIcon(heading) {
     `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 14 26" ` +
     `width="${w}" height="${h}" style="display:block;">` +
     // Nose cone
-    `<path d="M7,1 L11,9 L3,9 Z" fill="#ef4444" stroke="#fca5a5" stroke-width="0.5"/>` +
+    `<path d="M7,1 L11,9 L3,9 Z" fill="#ef4444" ` +
+    `stroke="#fca5a5" stroke-width="0.5"/>` +
     // Body
     `<rect x="3" y="9" width="8" height="11" rx="1" ` +
     `fill="#f97316" stroke="#fed7aa" stroke-width="0.5"/>` +
     // Cockpit window
     `<ellipse cx="7" cy="13" rx="2" ry="2.5" ` +
-    `fill="rgba(147,210,255,0.65)" stroke="rgba(255,255,255,0.5)" stroke-width="0.5"/>` +
+    `fill="rgba(147,210,255,0.65)" ` +
+    `stroke="rgba(255,255,255,0.5)" stroke-width="0.5"/>` +
     // Left fin
     `<path d="M3,17 L0,24 L3,21 Z" fill="#dc2626"/>` +
     // Right fin
@@ -48,8 +50,12 @@ function rocketIcon(heading) {
 export default function ProjectileLayer({ projectiles, skewMs = 0 }) {
   const [, setTick] = useState(0);
   const rafRef = useRef(null);
+  // The 60 fps re-render loop only runs while something is in flight —
+  // an empty layer on a phone would otherwise burn battery for nothing.
+  const hasProjectiles = projectiles.length > 0;
 
   useEffect(() => {
+    if (!hasProjectiles) return;
     function loop() {
       setTick((n) => (n + 1) & 0xffff);
       rafRef.current = requestAnimationFrame(loop);
@@ -58,7 +64,7 @@ export default function ProjectileLayer({ projectiles, skewMs = 0 }) {
     return () => {
       if (rafRef.current) cancelAnimationFrame(rafRef.current);
     };
-  }, []);
+  }, [hasProjectiles]);
 
   const tServer = Date.now() + skewMs;
 

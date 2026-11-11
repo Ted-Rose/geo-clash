@@ -8,11 +8,14 @@ const CAPTURE_SECONDS = 5;
 
 // Advance capture progress for every occupied cell, claim cells whose
 // progress has completed, purge stale progress on abandoned cells, and
-// broadcast a grid-update when ownership changed.
-export async function processCaptures(state, dt) {
+// broadcast a grid-update when ownership changed. `playerEntries` is the
+// per-tick playerStore.all() snapshot hoisted by tick() — pass it so a
+// tick costs one store read instead of three.
+export async function processCaptures(state, dt, playerEntries) {
   if (!state.grid || !state.matchActive) return;
 
-  const players = (await state.playerStore.all()).map(([, p]) => p);
+  const entries = playerEntries ?? (await state.playerStore.all());
+  const players = entries.map(([, p]) => p);
   const occupiedCells = new Map();
   for (const p of players) {
     if (!p.alive) continue;
@@ -51,7 +54,8 @@ export async function processCaptures(state, dt) {
     await state.gridStore.set(cid, cell);
   }
 
-  for (const [cid, cell] of await state.gridStore.all()) {
+  const cellEntries = await state.gridStore.all();
+  for (const [cid, cell] of cellEntries) {
     if (cell.progress && !occupiedCells.has(cid)) {
       cell.progress = null;
       await state.gridStore.set(cid, cell);
@@ -59,24 +63,34 @@ export async function processCaptures(state, dt) {
   }
 
   if (updates.length) {
-    await recountScores(state);
-    state._emit('grid-update', { cells: updates, scores: scores(state) });
+    // Tally from the lists fetched this tick — a departed player drops
+    // out of scores without an extra recount round-trip.
+    state._emit('grid-update', {
+      cells: updates,
+      scores: tallyScores(entries, cellEntries),
+    });
   }
 }
 
-// Tally owned squares per player from the cached store snapshots.
-export function scores(state) {
+// Pure tally of owned squares per player from store-entry lists
+// ([id, value] pairs as returned by store.all()).
+export function tallyScores(playerEntries, cellEntries) {
   const tally = {};
-  for (const [, p] of state._lastPlayersCache || []) {
+  for (const [, p] of playerEntries || []) {
     if (!p) continue;
     tally[p.id] = { name: p.name, color: p.color, squares: 0 };
   }
-  for (const [, c] of state._lastCellsCache || []) {
+  for (const [, c] of cellEntries || []) {
     if (c && c.ownerId && tally[c.ownerId]) {
       tally[c.ownerId].squares += 1;
     }
   }
   return tally;
+}
+
+// Tally owned squares per player from the cached store snapshots.
+export function scores(state) {
+  return tallyScores(state._lastPlayersCache, state._lastCellsCache);
 }
 
 // Refresh the caches that scores() reads.
