@@ -1,10 +1,17 @@
 // Snake-specific gameplay event handlers.
-// Registered by the top-level socketHandlers.js when socket.data.gameType === 'snake'.
+// Registered by the top-level socketHandlers.js when
+// socket.data.gameType === 'snake'.
 
 export function registerSnakeHandlers(socket, game) {
+  // Once per socket — repeat joins must not stack duplicate listeners.
+  if (socket.data.handlersRegistered) return;
+  socket.data.handlersRegistered = true;
+
   // Client sends its authoritative position + snake state every tick.
   // tailPoints and score are client-owned; we store and relay them as-is.
-  socket.on('location-update', async ({ lat, lng, heading, tailPoints, score } = {}) => {
+  socket.on('location-update', async ({
+    lat, lng, heading, tailPoints, score,
+  } = {}) => {
     if (typeof lat !== 'number' || typeof lng !== 'number') return;
     await game.updateLocation(socket.id, lat, lng, heading, tailPoints, score);
   });

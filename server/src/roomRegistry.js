@@ -15,7 +15,8 @@ import { RoomLock } from './shared/roomLock.js';
 import { registerClashHandlers } from './clash/socketHandlers.js';
 import { registerSnakeHandlers } from './snake/socketHandlers.js';
 
-// Handler map — mirrors GAME_HANDLERS in socketHandlers.js for reconnect path.
+// Handler map — mirrors GAME_HANDLERS in socketHandlers.js for the
+// reconnect path.
 const GAME_HANDLERS = {
   clash: registerClashHandlers,
   snake: registerSnakeHandlers,
@@ -97,7 +98,12 @@ export class RoomRegistry {
     return this._rooms.get(roomId) || null;
   }
 
-  async create({ name, hostId, centerLat, centerLng, maxPlayers = 8, cellSize = 10, squaresPerSide = 10, gameType = 'clash', arenaSideMeters, foodCountTarget, foodRespawnIntervalMs, timeLimitMs = 0, maxAmmo = null, ammoRenewalMs = 5000 }) {
+  async create({
+    name, hostId, centerLat, centerLng, maxPlayers = 8, cellSize = 10,
+    squaresPerSide = 10, gameType = 'clash', arenaSideMeters,
+    foodCountTarget, foodRespawnIntervalMs, timeLimitMs = 0,
+    maxAmmo = null, ammoRenewalMs = 5000,
+  }) {
     return this._lock.withLock('create', async () => {
       const factory = GAME_FACTORIES[gameType];
       if (!factory) throw new Error(`unsupported-game-type:${gameType}`);
@@ -174,6 +180,23 @@ export class RoomRegistry {
             clearTimeout(pendingDc);
             this._disconnectTimers.delete(oldId);
           }
+          // Idempotent rejoin: the session already resolves to this
+          // socket. Re-emit the join payloads but skip the re-key and
+          // handler re-registration (both are once-only operations).
+          if (oldId === socket.id) {
+            await socket.join(roomId);
+            socket.data.roomId = roomId;
+            socket.data.gameType = meta.gameType || 'clash';
+            const snapshot = await game.snapshot();
+            socket.emit('joined', { id: socket.id, roomId });
+            socket.emit('snapshot', snapshot);
+            return {
+              ok: true,
+              reconnected: true,
+              room: meta,
+              snapshot,
+            };
+          }
           await game.swapSocketId(oldId, socket.id);
           await socket.join(roomId);
           socket.data.roomId = roomId;
@@ -246,7 +269,9 @@ export class RoomRegistry {
             + EMPTY_ROOM_TTL_MS
           : EMPTY_ROOM_TTL_MS;
 
-      const fakeSocket = { id: socket.id, data: {}, leave: () => {}, join: () => {} };
+      const fakeSocket = {
+        id: socket.id, data: {}, leave: () => {}, join: () => {},
+      };
       const handle = setTimeout(async () => {
         this._disconnectTimers.delete(socket.id);
         await this.leave(roomId, fakeSocket);

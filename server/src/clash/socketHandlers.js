@@ -1,7 +1,12 @@
 // Clash-specific gameplay event handlers.
-// Called from the top-level socketHandlers.js when socket.data.gameType === 'clash'.
+// Called from the top-level socketHandlers.js when
+// socket.data.gameType === 'clash'.
 
 export function registerClashHandlers(socket, game) {
+  // Once per socket — repeat joins must not stack duplicate listeners.
+  if (socket.data.handlersRegistered) return;
+  socket.data.handlersRegistered = true;
+
   socket.on('location-update', async ({ lat, lng, heading } = {}) => {
     if (typeof lat !== 'number' || typeof lng !== 'number') return;
     await game.updateLocation(socket.id, lat, lng, heading);
