@@ -20,8 +20,16 @@ variable "valkey_url" {
   sensitive   = true
 }
 
+# Allowed browser origin(s) for Express CORS + the Socket.io handshake,
+# comma-separated. An entry containing '*' becomes a pattern where '*'
+# matches one hostname run ([a-z0-9-]+) — the default keeps this
+# project's Vercel preview deployments working. A bare '*' reflects
+# every origin — dev only, never in prod.
 variable "cors_origin" {
-  description = "Allowed CORS origin, e.g. https://your-app.vercel.app"
+  description = "Allowed CORS origin(s), comma-separated"
   type        = string
-  default     = "*"
+  default = join(",", [
+    "https://geoclashers.vercel.app",
+    "https://geo-clash-*-industr-analysers-projects.vercel.app",
+  ])
 }

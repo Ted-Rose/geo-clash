@@ -1,5 +1,12 @@
-project     = "geo-clash-gc798"
-region      = "europe-north2"
-image_tag   = "latest"          # overridden per-deploy
-valkey_url  = "rediss://default:<VALKEY_PASSWORD>@geo-clash-industryanalyser.b.aivencloud.com:16068"
-cors_origin = "https://your-app.vercel.app"
+project   = "geo-clash-gc798"
+region    = "europe-north2"
+image_tag = "latest" # overridden per-deploy
+valkey_url = join("", [
+  "rediss://default:<VALKEY_PASSWORD>@",
+  "geo-clash-industryanalyser.b.aivencloud.com:16068",
+])
+# Exact origin(s) + optional '*' hostname-run wildcards for previews
+cors_origin = join(",", [
+  "https://geoclashers.vercel.app",
+  "https://geo-clash-*-industr-analysers-projects.vercel.app",
+])

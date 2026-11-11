@@ -40,8 +40,14 @@ Geo Clash now supports concurrent matches in independent rooms.
 REST endpoints exposed by the server:
 - `GET  /api/rooms` — list active rooms
 - `POST /api/rooms` — create one
-  (`{ name, centerLat, centerLng, maxPlayers }`)
+  (`{ name, centerLat, centerLng, maxPlayers }`; rate-limited to
+  20 creations / 10 min per IP — it's the only unauthenticated write)
 - `GET  /api/leaderboard?limit=N` — all-time top-N (capped, sorted desc)
+
+All `/api/*` responses carry `helmet` security headers and a generous
+per-IP rate limit (300/min); map-tile requests are exempt — map pans
+legitimately burst. Tile `z`/`y`/`x` params are range-validated (400 on
+non-numeric or out-of-range coordinates).
 
 ## Projectile model
 Attacks are committed by the server as small telemetry packets — `(origin,
@@ -74,10 +80,19 @@ handshake and the *Enter the arena* button does nothing.
     rewrite returns `index.html` for `/socket.io/...`, and the client stays
     forever in a "connecting" state with no thrown error.
 - **Cloud Run (server)** — set:
-  - `CORS_ORIGIN = https://<your-vercel-domain>` (comma-separated list if you
-    have multiple, or a single value; the server reflects it for both Express
-    and Socket.io). Don't leave this unset in production — the dev default
-    reflects all origins, which you don't want in prod.
+  - `CORS_ORIGIN` — allowed browser origins, comma-separated
+    (production: `https://geoclashers.vercel.app`). The server reflects
+    them for both Express CORS and the Socket.io handshake. An entry
+    may contain `*`, matching one hostname run (`[a-z0-9-]+`) — our
+    Terraform default lists `https://geoclashers.vercel.app` plus
+    `https://geo-clash-*-industr-analysers-projects.vercel.app` so
+    this project's Vercel preview deployments keep working; drop the
+    second entry if previews don't need socket access. A bare `*`
+    reflects every origin — fine for dev, never for prod.
+  - In CI it comes from the `CORS_ORIGIN` GitHub Actions secret →
+    `TF_VAR_cors_origin`; `terraform/variables.tf` carries the matching
+    default. Keep the secret value in the same format (comma-separated,
+    optional `*` wildcards).
 
 ### Map tiles
 Tile requests are **same-origin** in every environment: in dev the Vite `/api`
