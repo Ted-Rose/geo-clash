@@ -46,12 +46,12 @@ export class ValkeyStore {
   async clear() {
     const ks = await this.keys();
     if (ks.length) {
-      await this._client.del(ks.map(k => this._k(k)));
+      await this._client.del(...ks.map(k => this._k(k)));
     }
   }
 
-  size() {
-    return 0;
+  async size() {
+    return (await this.keys()).length;
   }
 }
 
@@ -71,7 +71,9 @@ export class ValkeyZSetStore {
     await this._client.zadd(this._key, ...args);
   }
   async topRev(limit) {
-    const raw = await this._client.zrevrange(this._key, 0, limit - 1, 'WITHSCORES');
+    const raw = await this._client.zrevrange(
+      this._key, 0, limit - 1, 'WITHSCORES',
+    );
     const out = [];
     for (let i = 0; i < raw.length; i += 2) {
       out.push({ member: raw[i], score: Number(raw[i + 1]) });
