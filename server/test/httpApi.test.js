@@ -45,7 +45,7 @@ test('GET /api/rooms returns registry list', async (t) => {
   assert.equal(found.name, 'REST-room');
 });
 
-test('POST /api/rooms → 201 {room}; registry throw → 500 {error}', async (t) => {
+test('POST /api/rooms → 201; registry throw → 500 {error}', async (t) => {
   const { base, registry } = await startServer(t);
 
   const created = await fetch(`${base}/api/rooms`, {
@@ -87,7 +87,8 @@ test('GET /api/leaderboard clamps limit and passes gameType', async (t) => {
   }
   const { base } = await startServer(t, { leaderboard });
 
-  const top = async (q = '') => (await fetch(`${base}/api/leaderboard${q}`)).json();
+  const top = async (q = '') =>
+    (await fetch(`${base}/api/leaderboard${q}`)).json();
 
   let body = await top('?limit=5');
   assert.equal(body.top.length, 5);
@@ -103,7 +104,10 @@ test('GET /api/leaderboard clamps limit and passes gameType', async (t) => {
   assert.equal(body.top.length, 25, 'absent → default 25');
 
   body = await top('?gameType=snake&limit=100');
-  assert.ok(body.top.every((e) => e.gameType === 'snake'), 'gameType filter applied');
+  assert.ok(
+    body.top.every((e) => e.gameType === 'snake'),
+    'gameType filter applied'
+  );
 });
 
 test('CORS origin handling: reflect-all, single, list, blocked', async (t) => {
@@ -123,7 +127,10 @@ test('CORS origin handling: reflect-all, single, list, blocked', async (t) => {
   res = await fetch(`${single.base}/health`, {
     headers: { Origin: 'https://a.com' },
   });
-  assert.equal(res.headers.get('access-control-allow-origin'), 'https://a.com');
+  assert.equal(
+    res.headers.get('access-control-allow-origin'),
+    'https://a.com'
+  );
 
   // List: allowed origins get reflected, others get no header at all.
   const listed = await startServer(t, {
@@ -132,7 +139,10 @@ test('CORS origin handling: reflect-all, single, list, blocked', async (t) => {
   res = await fetch(`${listed.base}/health`, {
     headers: { Origin: 'https://b.com' },
   });
-  assert.equal(res.headers.get('access-control-allow-origin'), 'https://b.com');
+  assert.equal(
+    res.headers.get('access-control-allow-origin'),
+    'https://b.com'
+  );
 
   res = await fetch(`${listed.base}/health`, {
     headers: { Origin: 'https://evil.com' },
@@ -141,6 +151,30 @@ test('CORS origin handling: reflect-all, single, list, blocked', async (t) => {
     res.headers.get('access-control-allow-origin'),
     null,
     'non-listed origin gets no CORS header'
+  );
+
+  // Wildcard entries (Vercel preview hostnames) match via RegExp.
+  const preview = await startServer(t, {
+    corsOrigin: parseCorsOrigin(
+      'https://a.com,https://app-*-team.vercel.app'
+    ),
+  });
+  res = await fetch(`${preview.base}/health`, {
+    headers: { Origin: 'https://app-x1y2z3-team.vercel.app' },
+  });
+  assert.equal(
+    res.headers.get('access-control-allow-origin'),
+    'https://app-x1y2z3-team.vercel.app',
+    'preview hostname matches the wildcard entry'
+  );
+
+  res = await fetch(`${preview.base}/health`, {
+    headers: { Origin: 'https://app-x1y2z3-team.vercel.app.evil.com' },
+  });
+  assert.equal(
+    res.headers.get('access-control-allow-origin'),
+    null,
+    'wildcard must not match a suffix-spoofed origin'
   );
 });
 
@@ -154,5 +188,20 @@ test('parseCorsOrigin unit cases', () => {
     parseCorsOrigin('https://a.com, https://b.com ,,https://c.com'),
     ['https://a.com', 'https://b.com', 'https://c.com'],
     'trims entries and drops empties'
+  );
+
+  const wildcard = parseCorsOrigin(
+    'https://app-*-team.vercel.app,https://a.com'
+  );
+  assert.ok(wildcard[0] instanceof RegExp, "'*' entry becomes a RegExp");
+  assert.equal(wildcard[1], 'https://a.com');
+  assert.ok(wildcard[0].test('https://app-abc123-team.vercel.app'));
+  assert.ok(!wildcard[0].test('https://app-abc123-team.vercel.app.evil.com'));
+  assert.ok(!wildcard[0].test('https://other-team.vercel.app'));
+
+  assert.equal(
+    parseCorsOrigin('https://a.com,*'),
+    true,
+    "a '*' anywhere in the list reflects all origins"
   );
 });

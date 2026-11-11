@@ -96,7 +96,7 @@ test('maxAge param adjusts cutoff; invalid uses default 3', async (t) => {
   const invalid = await realFetch(`${base}/t/13/1006/1007?maxAge=abc`);
   assert.equal(invalid.status, 404);
 
-  // maxAge=0 → falsy → default 3 → too old.
+  // maxAge=0 → clamped to >=1 year → still too old for 5y imagery.
   const zero = await realFetch(`${base}/t/13/1008/1009?maxAge=0`);
   assert.equal(zero.status, 404);
 });
@@ -159,6 +159,34 @@ test('metadata cache dedupes and expires after TTL', async (t) => {
   t.mock.timers.tick(3_601_000); // > 1h CACHE_TTL
   await realFetch(`${base}/t/19/1020/1021`);
   assert.equal(counts.metadata, 2, 'cache expired → metadata refetched');
+});
+
+test('invalid z/y/x params return 400 without upstream calls', async (t) => {
+  const counts = installFetchStub(t, {
+    onMetadata: freshMetadata, onTile: pngTile,
+  });
+  const base = await startTileApp(t);
+
+  const cases = [
+    'abc/1/2',        // non-numeric z
+    '11/abc/2',       // non-numeric y
+    '11/1/abc',       // non-numeric x
+    '-1/0/0',         // negative
+    '23/0/0',         // z above MAX_TILE_ZOOM
+    '11/2048/0',      // y == 2^z out of range
+    '11/0/2048',      // x == 2^z out of range
+    '11/99999/99999', // far out of range
+  ];
+  for (const path of cases) {
+    const res = await realFetch(`${base}/t/${path}`);
+    assert.equal(res.status, 400, `expected 400 for ${path}`);
+    assert.deepEqual(await res.json(), {
+      error: 'Invalid tile coordinates',
+    });
+    assert.equal(res.headers.get('cache-control'), 'no-store');
+  }
+  assert.equal(counts.metadata, 0, 'no upstream metadata calls');
+  assert.equal(counts.tile, 0, 'no upstream tile calls');
 });
 
 test('tileToBBox envelope via geometry param', async (t) => {

@@ -17,6 +17,10 @@ import { Router } from 'express';
 
 const router = Router();
 
+// Esri World_Imagery serves up to ~z23; 22 is a safe cap for our use.
+const MAX_TILE_ZOOM = 22;
+const MAX_AGE_YEARS_CAP = 50;
+
 const ESRI_BASE =
     'https://services.arcgisonline.com/arcgis/rest/services/World_Imagery';
 const METADATA_URL = `${ESRI_BASE}/MapServer/0/query`;
@@ -76,7 +80,7 @@ async function getImageryCaptureDate(z, x, y) {
         metadataCache.set(cacheKey, { date, timestamp: Date.now() });
         return date;
     } catch (err) {
-        return null; 
+        return null;
     }
 }
 
@@ -86,20 +90,37 @@ router.get('/:z/:y/:x', async (req, res) => {
     res.set('Cache-Control', 'no-store');
 
     const { z, y, x } = req.params;
-    const maxAgeYears =
-        parseInt(req.query.maxAge, 10) || DEFAULT_MAX_AGE_YEARS;
+
+    // Reject non-numeric or out-of-range coordinates before any upstream
+    // call — params arrive as raw strings, so 'abc' or '..' must not
+    // reach the Esri metadata/tile URLs.
+    const isUint = (s) => /^\d+$/.test(s);
+    const zi = isUint(z) ? parseInt(z, 10) : NaN;
+    const yi = isUint(y) ? parseInt(y, 10) : NaN;
+    const xi = isUint(x) ? parseInt(x, 10) : NaN;
+    const maxCoord = Math.pow(2, zi);
+    if (
+        Number.isNaN(zi) || zi > MAX_TILE_ZOOM ||
+        Number.isNaN(yi) || yi >= maxCoord ||
+        Number.isNaN(xi) || xi >= maxCoord
+    ) {
+        return res.status(400).json({ error: 'Invalid tile coordinates' });
+    }
+
+    const rawMaxAge = parseInt(req.query.maxAge, 10);
+    const maxAgeYears = Number.isNaN(rawMaxAge)
+        ? DEFAULT_MAX_AGE_YEARS
+        : Math.min(Math.max(rawMaxAge, 1), MAX_AGE_YEARS_CAP);
 
     const cutoffDate = new Date();
     cutoffDate.setFullYear(cutoffDate.getFullYear() - maxAgeYears);
 
-    const captureDate = await getImageryCaptureDate(
-        parseInt(z, 10), parseInt(x, 10), parseInt(y, 10)
-    );
+    const captureDate = await getImageryCaptureDate(zi, xi, yi);
 
     // If imagery is too old, return 404 to trigger client-side overzoom
     if (captureDate && captureDate < cutoffDate) {
         console.log(
-            `[TileProxy] Blocking old tile ${z}/${y}/${x} ` +
+            `[TileProxy] Blocking old tile ${zi}/${yi}/${xi} ` +
             `(${captureDate.toISOString()})`
         );
         return res.status(404).send('Imagery too old');
@@ -107,7 +128,7 @@ router.get('/:z/:y/:x', async (req, res) => {
 
     // Otherwise, proxy the tile
     try {
-        const tileRes = await fetch(`${TILE_SOURCE_URL}/${z}/${y}/${x}`);
+        const tileRes = await fetch(`${TILE_SOURCE_URL}/${zi}/${yi}/${xi}`);
         if (!tileRes.ok) return res.status(tileRes.status).send();
 
         res.set('Content-Type', tileRes.headers.get('Content-Type'));
