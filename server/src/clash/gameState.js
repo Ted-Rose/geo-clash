@@ -114,7 +114,9 @@ export class GameState {
       this._projectileTimers.clear();
     }
     if (this._ammoTimers) {
-      for (const h of this._ammoTimers.values()) clearTimeout(h);
+      for (const rec of this._ammoTimers.values()) {
+        clearTimeout(rec.handle);
+      }
       this._ammoTimers.clear();
     }
 
@@ -223,6 +225,11 @@ export class GameState {
       }
       if (changed) await this.gridStore.set(cid, cell);
     }
+    // Pending ammo recharges keep the player's remaining delay but must
+    // resolve against (and emit to) the new socket id at fire time.
+    for (const rec of this._ammoTimers.values()) {
+      if (rec.playerId === oldId) rec.playerId = newId;
+    }
   }
 
   async removePlayer(id) {
@@ -310,17 +317,21 @@ export class GameState {
 
   _scheduleAmmoRecharge(playerId) {
     const key = `${playerId}:${Date.now()}:${Math.random()}`;
-    const handle = setTimeout(async () => {
+    // Mutable record: swapSocketId rewrites `playerId` so a recharge
+    // scheduled before a reconnect still mutates the re-keyed record.
+    const rec = { playerId, handle: null };
+    rec.handle = setTimeout(async () => {
       this._ammoTimers?.delete(key);
       if (this.maxAmmo === null) return;
-      const p = await this.playerStore.get(playerId);
+      const id = rec.playerId; // resolved at fire time, not schedule time
+      const p = await this.playerStore.get(id);
       if (!p) return;
       p.ammo = Math.min(this.maxAmmo, (p.ammo ?? 0) + 1);
-      await this.playerStore.set(playerId, p);
-      this.io.to(playerId).emit('ammo-update', { ammo: p.ammo, maxAmmo: this.maxAmmo });
+      await this.playerStore.set(id, p);
+      this.io.to(id).emit('ammo-update', { ammo: p.ammo, maxAmmo: this.maxAmmo });
     }, this.ammoRenewalMs);
-    if (typeof handle.unref === 'function') handle.unref();
-    this._ammoTimers.set(key, handle);
+    if (typeof rec.handle.unref === 'function') rec.handle.unref();
+    this._ammoTimers.set(key, rec);
   }
 
   _scheduleResolution(proj) {

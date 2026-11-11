@@ -52,6 +52,27 @@ test('ammo recharges +1 after ammoRenewalMs and emits ammo-update', async (t) =>
   assert.deepEqual(upds[1].payload, { ammo: 2, maxAmmo: 2 });
 });
 
+test('recharge follows the socket id after swapSocketId', async (t) => {
+  const { io, game } = makeGame(t, { maxAmmo: 2, ammoRenewalMs: 500 });
+  await game.addPlayer('A', 'Alice');
+  await game.updateLocation('A', ORIGIN.lat, ORIGIN.lng, 0);
+
+  await game.attack('A');
+  assert.equal((await game.playerStore.get('A')).ammo, 1);
+
+  // sessionId reconnect re-keys the player record mid-recharge
+  await game.swapSocketId('A', 'A2');
+  assert.equal(await game.playerStore.get('A'), undefined);
+  assert.equal((await game.playerStore.get('A2')).ammo, 1);
+
+  await sleep(700); // real wall clock — recharge is a real setTimeout
+  assert.equal((await game.playerStore.get('A2')).ammo, 2);
+  const upds = eventsNamed(io, 'ammo-update');
+  const last = upds[upds.length - 1];
+  assert.equal(last.scope, 'A2', 'ammo-update scoped to the new socket id');
+  assert.deepEqual(last.payload, { ammo: 2, maxAmmo: 2 });
+});
+
 test('recharge never exceeds maxAmmo', async (t) => {
   const { io, game } = makeGame(t, { maxAmmo: 2, ammoRenewalMs: 500 });
   await game.addPlayer('A', 'Alice'); // ammo already at maxAmmo
