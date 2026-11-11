@@ -42,10 +42,10 @@
 
 ## 4. Client leaks and tick hygiene
 
-- [ ] 4.1 client: Keep clash debug bots in a `useRef` and clear their
+- [x] 4.1 client: Keep clash debug bots in a `useRef` and clear their
   intervals/sockets in the unmount effect; verify via vitest that
   unmounting after spawning a bot leaves no running interval
-- [ ] 4.2 client: Gate `ProjectileLayer`'s rAF loop on
+- [x] 4.2 client: Gate `ProjectileLayer`'s rAF loop on
   `projectiles.length > 0`; verify no rAF runs while the layer is
   empty
 - [ ] 4.3 server: Hoist the per-tick `playerStore.all()` once and pass
