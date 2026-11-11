@@ -15,7 +15,8 @@ export function registerSnakeHandlers(socket, game) {
   });
 
   // Client locally detected that it ate a food item.
-  // Server removes it from the authoritative list and awards the point.
+  // Server validates the id (live or recently claimed), removes it
+  // from the authoritative list, and awards the point.
   socket.on('eat_food', async (payload) => {
     const { foodId } = payload || {};
     if (typeof foodId !== 'string') return;
