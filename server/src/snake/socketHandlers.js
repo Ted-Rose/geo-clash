@@ -10,10 +10,10 @@ export function registerSnakeHandlers(socket, game) {
   bindGameHandlers(socket, game, [
     // Client sends its authoritative position + snake state every
     // tick. tailPoints and score are client-owned; we store and
-    // relay them as-is.
-    ['location-update', async ({
-      lat, lng, heading, tailPoints, score,
-    } = {}) => {
+    // relay them as-is. `payload || {}` — an explicit null payload
+    // must not throw.
+    ['location-update', async (payload) => {
+      const { lat, lng, heading, tailPoints, score } = payload || {};
       if (typeof lat !== 'number' || typeof lng !== 'number') return;
       await game.updateLocation(
         socket.id, lat, lng, heading, tailPoints, score
@@ -21,16 +21,18 @@ export function registerSnakeHandlers(socket, game) {
     }],
 
     // Client locally detected that it ate a food item. The server
-    // removes it from the authoritative list and awards the point.
-    ['eat_food', async ({ foodId } = {}) => {
+    // validates the id (live or recently claimed), removes it from
+    // the authoritative list, and awards the point.
+    ['eat_food', async (payload) => {
+      const { foodId } = payload || {};
       if (typeof foodId !== 'string') return;
       await game.eatFood(socket.id, foodId);
     }],
 
-    // Client ACKs a clash_verify from the server, proving it is still
-    // connected. Both participants in a clash must ACK before the
-    // server commits the kill.
-    ['clash_ack', async ({ clashId } = {}) => {
+    // Client ACKs a clash_verify from the server. Only the deciding
+    // participant's ACK commits the kill — the victim's is advisory.
+    ['clash_ack', async (payload) => {
+      const { clashId } = payload || {};
       if (typeof clashId !== 'string') return;
       await game.clashAck(socket.id, clashId);
     }],

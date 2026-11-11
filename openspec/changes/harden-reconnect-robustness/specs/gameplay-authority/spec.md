@@ -4,12 +4,16 @@
 
 ### Requirement: Server-authoritative kill handshake
 On a server-detected collision the server SHALL emit `clash_verify` to
-every participant socket and commit the kill (`snake-hit` + targeted
-`snake-reset` to the victim, +5 score/+1 kill to the killer) once the
-killer answers `clash_ack` within 2000 ms. The victim's ack is
+every participant socket. A kill with a killer commits (`snake-hit` +
+targeted `snake-reset` to the victim, +5 score/+1 kill to the killer)
+once the killer answers `clash_ack` within 2000 ms; an ack arriving
+after the window SHALL be treated as expired. The victim's ack is
 advisory: victim timeout or disconnect SHALL NOT void the kill — a
 participant cannot dodge a committed kill by going silent. The clash
 is cancelled only when the killer fails to ack inside the window.
+Killerless kills (mutual head-on-head, `killerId: null`) have no
+deciding participant, so the server SHALL commit them at detection
+without waiting for any ack.
 
 #### Scenario: Both sides ACK
 - **WHEN** every participant of a pending clash sends `clash_ack`
@@ -25,6 +29,13 @@ is cancelled only when the killer fails to ack inside the window.
 #### Scenario: Unresponsive participant voids the kill
 - **WHEN** the 2000 ms window lapses with the killer's ack outstanding
 - **THEN** the pending clash is dropped and no kill commits
+
+#### Scenario: Mutual head-on kills commit immediately
+- **WHEN** a server-detected collision produces kills with no killer
+  (mutual head-on-head)
+- **THEN** each kill commits at detection — `snake-hit` and a targeted
+  `snake-reset` fire per victim with no `clash_ack` required — and a
+  victim's silence or disconnect cannot void it
 
 ### Requirement: Undeduplicated food claims
 Every well-formed `eat_food` claim during an active match SHALL award
