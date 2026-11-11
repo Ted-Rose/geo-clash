@@ -36,7 +36,7 @@ test('attack is blocked at zero ammo', async (t) => {
   assert.equal(p.ammo, 0, 'never goes negative');
 });
 
-test('ammo recharges +1 after ammoRenewalMs and emits ammo-update', async (t) => {
+test('ammo recharges +1 after ammoRenewalMs', async (t) => {
   const { io, game } = makeGame(t, { maxAmmo: 2, ammoRenewalMs: 500 });
   await game.addPlayer('A', 'Alice');
   await game.updateLocation('A', ORIGIN.lat, ORIGIN.lng, 0);
@@ -97,7 +97,7 @@ test('maxAmmo:null means unlimited', async (t) => {
   assert.equal(eventsNamed(io, 'ammo-update').length, 0);
 });
 
-test('respawn refills ammo to maxAmmo and emits scoped ammo-update', async (t) => {
+test('respawn refills ammo to maxAmmo', async (t) => {
   const { io, game } = makeGame(t, { maxAmmo: 3 });
   await game.initGrid(51.5, -0.12);
   await game.addPlayer('A', 'Alice'); // spawns at base cell center
