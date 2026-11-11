@@ -14,6 +14,7 @@ import { ValkeyStore } from './shared/valkeyStore.js';
 import { RoomLock } from './shared/roomLock.js';
 import { registerClashHandlers } from './clash/socketHandlers.js';
 import { registerSnakeHandlers } from './snake/socketHandlers.js';
+import { unbindGameHandlers } from './shared/gameHandlers.js';
 
 // Handler map — mirrors GAME_HANDLERS in socketHandlers.js for the
 // reconnect path.
@@ -181,15 +182,34 @@ export class RoomRegistry {
             this._disconnectTimers.delete(oldId);
           }
           // Idempotent rejoin: the session already resolves to this
-          // socket. Re-emit the join payloads but skip the re-key and
-          // handler re-registration (both are once-only operations).
+          // socket id. Skip the re-key, re-emit the join payloads, and
+          // rebind gameplay handlers — a no-op on a live socket, but a
+          // recovered Socket instance (connectionStateRecovery
+          // restores socket.data, not listeners) must re-register.
           if (oldId === socket.id) {
             await socket.join(roomId);
             socket.data.roomId = roomId;
             socket.data.gameType = meta.gameType || 'clash';
+            const registerGameHandlers =
+              GAME_HANDLERS[socket.data.gameType];
+            if (registerGameHandlers) {
+              registerGameHandlers(socket, game);
+            }
+            // A rejoin after softDisconnect flips the player back
+            // online and notifies peers; a still-connected
+            // double-join stays silent.
+            const wasOffline = existing.player.connected === false;
+            if (wasOffline) {
+              existing.player.connected = true;
+              await game.playerStore.set(socket.id, existing.player);
+            }
             const snapshot = await game.snapshot();
             socket.emit('joined', { id: socket.id, roomId });
             socket.emit('snapshot', snapshot);
+            if (wasOffline) {
+              this._io.to(roomId)
+                .emit('player-reconnected', { id: socket.id, oldId });
+            }
             return {
               ok: true,
               reconnected: true,
@@ -247,6 +267,7 @@ export class RoomRegistry {
         await game.removePlayer(socket.id);
         socket.leave(roomId);
         socket.data.roomId = null;
+        unbindGameHandlers(socket);
         this._io.to(roomId).emit('player-left', { id: socket.id });
         const meta = await this._metaStore.get(roomId);
         if (meta) {
@@ -288,6 +309,7 @@ export class RoomRegistry {
       await game.removePlayer(socket.id);
       socket.leave(roomId);
       socket.data.roomId = null;
+      unbindGameHandlers(socket);
       this._io.to(roomId).emit('player-left', { id: socket.id });
       let shouldDestroy = false;
       const meta = await this._metaStore.get(roomId);
@@ -325,6 +347,7 @@ export class RoomRegistry {
       for (const s of sockets) {
         s.leave(roomId);
         if (s.data) s.data.roomId = null;
+        unbindGameHandlers(s);
       }
     } catch (err) {
       console.error('[roomRegistry] socket evict error:', err.message);

@@ -33,17 +33,32 @@ keyed as-is and no re-key or removal side effects occur.
 
 #### Scenario: Same-socket rejoin is a no-op
 - **WHEN** `room-join` carries a `sessionId` whose player is already
-  keyed to the joining socket's own id
-- **THEN** the join resolves successfully without re-keying, the player
-  record survives, and no `player-reconnected` is broadcast
+  keyed to the joining socket's own id and is still marked connected
+- **THEN** the join resolves successfully without re-keying, the
+  player record survives, and no `player-reconnected` is broadcast
+
+#### Scenario: Same-socket rejoin after a disconnect restores presence
+- **WHEN** `room-join` carries a `sessionId` whose player is keyed to
+  the joining socket's id but was marked `connected: false` by a prior
+  soft disconnect (e.g. after connectionStateRecovery restored the
+  socket id)
+- **THEN** the player record's `connected` flag is restored to `true`
+  before the `snapshot` is emitted, and the room sees
+  `player-reconnected`
 
 ### Requirement: Per-gameType handler dispatch
 Gameplay handlers SHALL be registered only after a successful join,
 selected by the room's `gameType` via a handler map (`clash` →
 `clash/socketHandlers.js`, `snake` → `snake/socketHandlers.js`), and
-at most once per socket — repeat joins, including same-socket session
-rejoins, MUST NOT stack duplicate listeners. `room-create` with an
-unsupported `gameType` MUST fail.
+at most once per (socket, game instance) — repeat joins, including
+same-socket session rejoins, MUST NOT stack duplicate listeners.
+Handler binding is keyed to the GameState instance on a
+non-persisted socket property: joining a different room, or a
+socket recovered by connectionStateRecovery (whose `socket.data`
+survives but whose listeners do not), SHALL re-bind the listeners to
+the live game. Leaving or being evicted from a room SHALL detach its
+gameplay listeners. `room-create` with an unsupported `gameType`
+MUST fail.
 
 #### Scenario: Snake room gets snake handlers
 - **WHEN** a socket joins a room whose `gameType` is `snake`
