@@ -11,8 +11,10 @@ context: |
              Root src/ holds only real modules: index, app,
              socketHandlers, roomRegistry, tileProxy.
   - client/  React (Vite) + Leaflet + Tailwind. Dumb renderer + input
-             source; the server snapshot + deltas are the single source
-             of truth for gameplay state. Sub-layout: src/clash/
+             source while connected; the server snapshot + deltas are
+             the source of truth for gameplay state. While offline the
+             client buffers its own truth and reports it on reconnect
+             (see connectivity model below). Sub-layout: src/clash/
              (clash UI), src/snake/ (snake UI), src/shared/
              (MapView, LobbyScreen, hooks/, socket.js); src/test/
              mirrors the layout.
@@ -46,6 +48,12 @@ context: |
     loops over spawning competing timers.
   - Mobile-first UI: portrait phone browser, touch targets >= 44 px,
     HUD overlays the map (never push the map below the fold).
+  - Connectivity model: played on phones moving through an arena on
+    flaky field Wi-Fi — disconnects are routine, not exceptional.
+    Clients buffer their own truth while offline and report it on
+    reconnect; the server reconciles competing claims fairly (lenient
+    to the disconnected — no lost progress — but going offline must
+    never be an exploit or a way to dodge consequences).
   - Leaflet + OpenStreetMap tiles only — no keyed map providers.
   - New planning goes through `openspec changes` — never create new
     plan/feature-plan Markdown files.
