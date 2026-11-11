@@ -40,7 +40,11 @@ const STARTING_LIVES = 3;
 
 export class GameState {
   // Args: { io, roomId, stores?, roomName?, onEnd? }
-  constructor({ io, roomId, stores, roomName, onEnd, cellSize = 10, squaresPerSide = 10, maxAmmo = null, ammoRenewalMs = 5000 } = {}) {
+  constructor({
+    io, roomId, stores, roomName, onEnd,
+    cellSize = 10, squaresPerSide = 10,
+    maxAmmo = null, ammoRenewalMs = 5000,
+  } = {}) {
     if (!io) throw new Error('GameState: io required');
     if (!roomId) throw new Error('GameState: roomId required');
     this.io = io;
@@ -54,8 +58,11 @@ export class GameState {
     this.status = 'lobby';
     this.cellSize = cellSize;
     this.squaresPerSide = squaresPerSide;
-    this.maxAmmo = (typeof maxAmmo === 'number' && maxAmmo > 0) ? maxAmmo : null;
-    this.ammoRenewalMs = (typeof ammoRenewalMs === 'number' && ammoRenewalMs >= 500) ? ammoRenewalMs : 5000;
+    const validAmmo = typeof maxAmmo === 'number' && maxAmmo > 0;
+    this.maxAmmo = validAmmo ? maxAmmo : null;
+    const validRenewal =
+      typeof ammoRenewalMs === 'number' && ammoRenewalMs >= 500;
+    this.ammoRenewalMs = validRenewal ? ammoRenewalMs : 5000;
     this._ammoTimers = new Map();
     this.grid = null;
     this.baseCellId = null;
@@ -79,7 +86,9 @@ export class GameState {
     this.baseCellId = baseCellId(this.grid);
     await this.gridStore.clear();
     for (const cell of this.grid.cells) {
-      await this.gridStore.set(cell.id, { ownerId: null, color: null, progress: null });
+      await this.gridStore.set(cell.id, {
+        ownerId: null, color: null, progress: null,
+      });
     }
   }
 
@@ -94,10 +103,12 @@ export class GameState {
     this.status = 'active';
     this.remainingSeconds = MATCH_SECONDS;
     this._lastTick = Date.now();
-    if (!this._tickHandle) this._tickHandle = setInterval(() => this.tick().catch((err) => {
-      // eslint-disable-next-line no-console
-      console.error('[clash/gameState] tick error:', err.message);
-    }), TICK_MS);
+    if (!this._tickHandle) {
+      this._tickHandle = setInterval(() => this.tick().catch((err) => {
+        // eslint-disable-next-line no-console
+        console.error('[clash/gameState] tick error:', err.message);
+      }), TICK_MS);
+    }
     this._emit('match-start', { remainingSeconds: this.remainingSeconds });
   }
 
@@ -114,7 +125,9 @@ export class GameState {
       this._projectileTimers.clear();
     }
     if (this._ammoTimers) {
-      for (const h of this._ammoTimers.values()) clearTimeout(h);
+      for (const rec of this._ammoTimers.values()) {
+        clearTimeout(rec.handle);
+      }
       this._ammoTimers.clear();
     }
 
@@ -223,6 +236,11 @@ export class GameState {
       }
       if (changed) await this.gridStore.set(cid, cell);
     }
+    // Pending ammo recharges keep the player's remaining delay but must
+    // resolve against (and emit to) the new socket id at fire time.
+    for (const rec of this._ammoTimers.values()) {
+      if (rec.playerId === oldId) rec.playerId = newId;
+    }
   }
 
   async removePlayer(id) {
@@ -266,13 +284,16 @@ export class GameState {
       if (cur <= 0) return;
       attacker.ammo = cur - 1;
       await this.playerStore.set(id, attacker);
-      this.io.to(id).emit('ammo-update', { ammo: attacker.ammo, maxAmmo: this.maxAmmo });
+      this.io.to(id).emit('ammo-update', {
+        ammo: attacker.ammo, maxAmmo: this.maxAmmo,
+      });
       this._scheduleAmmoRecharge(id);
     }
     const dir = typeof heading === 'number' ? heading : attacker.heading || 0;
 
     let resolvedTarget = null;
-    if (target && typeof target.lat === 'number' && typeof target.lng === 'number') {
+    if (target && typeof target.lat === 'number'
+        && typeof target.lng === 'number') {
       const dist = distanceMeters(attacker, target);
       if (dist > PROJECTILE_RANGE_M) {
         const scale = PROJECTILE_RANGE_M / dist;
@@ -302,7 +323,9 @@ export class GameState {
         : targetFromHeading(attacker, dir, PROJECTILE_RANGE_M);
     }
 
-    const proj = spawnProjectile({ attacker, target: resolvedTarget, vMps: PROJECTILE_VMPS });
+    const proj = spawnProjectile({
+      attacker, target: resolvedTarget, vMps: PROJECTILE_VMPS,
+    });
     await this.projectileStore.set(proj.id, proj);
     this._emit('projectile-spawn', proj);
     this._scheduleResolution(proj);
@@ -310,17 +333,23 @@ export class GameState {
 
   _scheduleAmmoRecharge(playerId) {
     const key = `${playerId}:${Date.now()}:${Math.random()}`;
-    const handle = setTimeout(async () => {
+    // Mutable record: swapSocketId rewrites `playerId` so a recharge
+    // scheduled before a reconnect still mutates the re-keyed record.
+    const rec = { playerId, handle: null };
+    rec.handle = setTimeout(async () => {
       this._ammoTimers?.delete(key);
       if (this.maxAmmo === null) return;
-      const p = await this.playerStore.get(playerId);
+      const id = rec.playerId; // resolved at fire time, not schedule time
+      const p = await this.playerStore.get(id);
       if (!p) return;
       p.ammo = Math.min(this.maxAmmo, (p.ammo ?? 0) + 1);
-      await this.playerStore.set(playerId, p);
-      this.io.to(playerId).emit('ammo-update', { ammo: p.ammo, maxAmmo: this.maxAmmo });
+      await this.playerStore.set(id, p);
+      this.io.to(id).emit('ammo-update', {
+        ammo: p.ammo, maxAmmo: this.maxAmmo,
+      });
     }, this.ammoRenewalMs);
-    if (typeof handle.unref === 'function') handle.unref();
-    this._ammoTimers.set(key, handle);
+    if (typeof rec.handle.unref === 'function') rec.handle.unref();
+    this._ammoTimers.set(key, rec);
   }
 
   _scheduleResolution(proj) {
@@ -396,7 +425,9 @@ export class GameState {
     await this.playerStore.set(id, p);
     this._emit('player-respawn', { id, lives: p.lives });
     if (this.maxAmmo !== null) {
-      this.io.to(id).emit('ammo-update', { ammo: p.ammo, maxAmmo: this.maxAmmo });
+      this.io.to(id).emit('ammo-update', {
+        ammo: p.ammo, maxAmmo: this.maxAmmo,
+      });
     }
   }
 
@@ -442,7 +473,9 @@ export class GameState {
             color: claimant.color,
             elapsedMs: 0,
           };
-          this._emit('cell-capture-start', { cellId: cid, playerId: claimant.id, color: claimant.color });
+          this._emit('cell-capture-start', {
+            cellId: cid, playerId: claimant.id, color: claimant.color,
+          });
         }
         cell.progress.elapsedMs += dt;
         if (cell.progress.elapsedMs >= CAPTURE_SECONDS * 1000) {
@@ -468,7 +501,9 @@ export class GameState {
     }
 
     this._emit('players-update', {
-      players: (await this.playerStore.all()).map(([, p]) => publicPlayer(p)).filter(Boolean),
+      players: (await this.playerStore.all())
+        .map(([, p]) => publicPlayer(p))
+        .filter(Boolean),
     });
 
     if (this.matchActive) {
@@ -482,7 +517,9 @@ export class GameState {
 
   async snapshot() {
     await this._recountScores();
-    const players = (await this.playerStore.all()).map(([, p]) => publicPlayer(p)).filter(Boolean);
+    const players = (await this.playerStore.all())
+      .map(([, p]) => publicPlayer(p))
+      .filter(Boolean);
     const cells = (await this.gridStore.all()).map(([id, c]) => ({
       id,
       ownerId: c.ownerId,
@@ -499,7 +536,8 @@ export class GameState {
             cols: this.grid.cols,
             cellMeters: this.grid.cellMeters,
             bbox: this.grid.bbox,
-            cells: this.grid.cells.map((c) => ({ id: c.id, polygon: c.polygon })),
+            cells: this.grid.cells
+              .map((c) => ({ id: c.id, polygon: c.polygon })),
             baseCellId: this.baseCellId,
           }
         : null,
