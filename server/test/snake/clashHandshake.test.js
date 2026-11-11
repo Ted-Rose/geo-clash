@@ -1,13 +1,18 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { SnakeGameState } from '../../src/snake/gameState.js';
-import { CLASH_ACK_TIMEOUT_MS, SPAWN_GRACE_MS } from '../../src/snake/constants.js';
+import {
+  CLASH_ACK_TIMEOUT_MS,
+  SPAWN_GRACE_MS,
+} from '../../src/snake/constants.js';
 
 function makeIo() {
   const events = [];
   return {
     _events: events,
-    to: (id) => ({ emit: (e, p) => events.push({ target: id, event: e, payload: p }) }),
+    to: (id) => ({
+      emit: (e, p) => events.push({ target: id, event: e, payload: p }),
+    }),
     emit: (e, p) => events.push({ event: e, payload: p }),
   };
 }
@@ -27,8 +32,14 @@ function makeGame(t, roomId) {
 }
 
 function freezeTimers(game) {
-  if (game._tickHandle) { clearInterval(game._tickHandle); game._tickHandle = null; }
-  if (game._foodInterval) { clearInterval(game._foodInterval); game._foodInterval = null; }
+  if (game._tickHandle) {
+    clearInterval(game._tickHandle);
+    game._tickHandle = null;
+  }
+  if (game._foodInterval) {
+    clearInterval(game._foodInterval);
+    game._foodInterval = null;
+  }
 }
 
 const PAST_GRACE = () => Date.now() - SPAWN_GRACE_MS - 100;
@@ -92,7 +103,7 @@ test('clashAck: ignored when match is not active', async (t) => {
   assert.equal(io._events.filter((e) => e.event === 'snake-hit').length, 0);
 });
 
-test('clashAck: killer ACKs first — kill still waits for victim ACK', async (t) => {
+test('clashAck: killer ACK alone commits the kill', async (t) => {
   const { io, game } = makeGame(t, 'ack-killer-first');
   await setupHeadOnTail(game);
   game.startMatch();
@@ -103,38 +114,125 @@ test('clashAck: killer ACKs first — kill still waits for victim ACK', async (t
   assert.ok(verify, 'clash_verify emitted');
   const clashId = verify.payload.clashId;
 
-  await game.clashAck('p2', clashId); // killer ACKs first
-  assert.equal(
-    io._events.filter((e) => e.event === 'snake-hit').length,
-    0,
-    'no kill until every participant ACKs',
-  );
-  assert.equal(game._pendingClashes.has(clashId), true);
-
-  await game.clashAck('p1', clashId); // victim ACKs — commit
+  await game.clashAck('p2', clashId); // killer ACKs — kill commits now
   assert.equal(io._events.filter((e) => e.event === 'snake-hit').length, 1);
   assert.equal(game._pendingClashes.has(clashId), false);
+
+  const killer = await game.playerStore.get('p2');
+  assert.equal(killer.kills, 1, 'killer credited on its own ACK');
+  assert.equal(killer.score, 5);
+  const victim = await game.playerStore.get('p1');
+  assert.equal(victim.score, 0, 'victim score reset');
+  assert.deepEqual(victim.tailPoints, [], 'victim tail cleared');
+
+  // The victim's late ACK is a no-op — the clash is already committed.
+  await game.clashAck('p1', clashId);
+  assert.equal(io._events.filter((e) => e.event === 'snake-hit').length, 1);
 });
 
-test('clashAck: duplicate ACK from the same socket is idempotent', async (t) => {
+test('clashAck: victim silence cannot dodge the kill', async (t) => {
+  const { io, game } = makeGame(t, 'ack-victim-silent');
+  await setupHeadOnTail(game);
+  game.startMatch();
+  freezeTimers(game);
+  await game._tick();
+
+  const clashId =
+    io._events.find((e) => e.event === 'clash_verify').payload.clashId;
+
+  // Victim goes silent (times out); only the killer ACKs.
+  await game.clashAck('p2', clashId);
+
+  assert.equal(
+    io._events.filter((e) => e.event === 'snake-hit').length,
+    1,
+    'kill commits without the victim ACK',
+  );
+  const victim = await game.playerStore.get('p1');
+  assert.equal(victim.score, 0, 'silent victim still reset');
+});
+
+test('clashAck: victim disconnect cannot dodge the kill', async (t) => {
+  const { io, game } = makeGame(t, 'ack-victim-leave');
+  await setupHeadOnTail(game);
+  game.startMatch();
+  freezeTimers(game);
+  await game._tick();
+
+  const clashId =
+    io._events.find((e) => e.event === 'clash_verify').payload.clashId;
+
+  await game.removePlayer('p1'); // victim hard-leaves before ACKing
+  assert.equal(
+    game._pendingClashes.has(clashId),
+    true,
+    'victim leaving does not cancel the pending clash',
+  );
+
+  await game.clashAck('p2', clashId); // killer ACKs — kill commits
+
+  assert.equal(io._events.filter((e) => e.event === 'snake-hit').length, 1);
+  const killer = await game.playerStore.get('p2');
+  assert.equal(killer.kills, 1, 'killer credited even with victim gone');
+  assert.equal(killer.score, 5);
+});
+
+test('clashAck: killer timeout voids the clash', async (t) => {
+  const { io, game } = makeGame(t, 'ack-killer-timeout');
+  await setupHeadOnTail(game);
+  game.startMatch();
+  freezeTimers(game);
+  await game._tick();
+
+  const clashId =
+    io._events.find((e) => e.event === 'clash_verify').payload.clashId;
+
+  // Victim ACKs (advisory) — the killer stays silent.
+  await game.clashAck('p1', clashId);
+  assert.equal(io._events.filter((e) => e.event === 'snake-hit').length, 0);
+  assert.equal(game._pendingClashes.has(clashId), true);
+
+  // Separate the players so the expiry tick raises no fresh clash,
+  // then age the pending entry past the ACK window.
+  await placePlayer(game, 'p2', { lat: 51.501, lng: -0.12, tailPoints: [] });
+  game._pendingClashes.get(clashId).timestamp =
+    Date.now() - CLASH_ACK_TIMEOUT_MS - 1;
+  await game._tick();
+
+  assert.equal(
+    game._pendingClashes.has(clashId),
+    false,
+    'expired pending clash is dropped',
+  );
+  assert.equal(io._events.filter((e) => e.event === 'snake-hit').length, 0);
+  const killer = await game.playerStore.get('p2');
+  assert.equal(killer.kills, 0, 'silent killer earns nothing');
+});
+
+test('clashAck: duplicate ACK from one socket is idempotent', async (t) => {
   const { io, game } = makeGame(t, 'ack-dup');
   await setupHeadOnTail(game);
   game.startMatch();
   freezeTimers(game);
   await game._tick();
 
-  const clashId = io._events.find((e) => e.event === 'clash_verify').payload.clashId;
+  const clashId =
+    io._events.find((e) => e.event === 'clash_verify').payload.clashId;
 
   await game.clashAck('p1', clashId);
-  await game.clashAck('p1', clashId); // duplicate victim ACK
+  await game.clashAck('p1', clashId); // duplicate victim ACK (advisory)
 
   const pending = game._pendingClashes.get(clashId);
   assert.ok(pending, 'clash still pending — waiting on the killer');
-  assert.deepEqual([...pending.acksNeeded], ['p2']);
+  assert.deepEqual(
+    [...pending.acksNeeded],
+    ['p2'],
+    'acksNeeded holds only the deciding participant (the killer)',
+  );
   assert.equal(io._events.filter((e) => e.event === 'snake-hit').length, 0);
 });
 
-test('_tick: pending clash older than CLASH_ACK_TIMEOUT_MS expires; fresh collisions re-verify', async (t) => {
+test('_tick: expired clash drops; fresh collisions re-verify', async (t) => {
   const { io, game } = makeGame(t, 'ack-timeout');
   await game.addPlayer('p1', 'A');
   await game.addPlayer('p2', 'B');
@@ -164,18 +262,22 @@ test('_tick: pending clash older than CLASH_ACK_TIMEOUT_MS expires; fresh collis
   await placePlayer(game, 'p1', { lat: 51.5005, lng: -0.12 }); // move onto p2
   await game._tick();
   const verifies = io._events.filter((e) => e.event === 'clash_verify');
-  assert.ok(verifies.length >= 1, 'fresh collision produces a new clash_verify');
+  assert.ok(
+    verifies.length >= 1,
+    'fresh collision produces a new clash_verify',
+  );
   assert.notEqual(verifies[0].payload.clashId, 'stale:1');
 });
 
-test('removePlayer: pending clash involving the leaver is cancelled', async (t) => {
+test('removePlayer: killer leaving cancels the pending clash', async (t) => {
   const { io, game } = makeGame(t, 'clash-leaver');
   await setupHeadOnTail(game);
   game.startMatch();
   freezeTimers(game);
   await game._tick();
 
-  const clashId = io._events.find((e) => e.event === 'clash_verify').payload.clashId;
+  const clashId =
+    io._events.find((e) => e.event === 'clash_verify').payload.clashId;
   assert.ok(game._pendingClashes.get(clashId).acksNeeded.has('p2'));
 
   await game.removePlayer('p2'); // disconnect path
@@ -183,7 +285,7 @@ test('removePlayer: pending clash involving the leaver is cancelled', async (t) 
   assert.equal(
     game._pendingClashes.has(clashId),
     false,
-    'clash cancelled when a required participant leaves',
+    'clash cancelled when the deciding participant leaves',
   );
   assert.equal(await game.playerStore.get('p2'), undefined);
 
@@ -191,7 +293,7 @@ test('removePlayer: pending clash involving the leaver is cancelled', async (t) 
   assert.equal(io._events.filter((e) => e.event === 'snake-hit').length, 0);
 });
 
-test('_tick: at most one pending clash per victim (dedup across loop iterations)', async (t) => {
+test('_tick: dedup — at most one pending clash per victim', async (t) => {
   const { io, game } = makeGame(t, 'clash-dedup');
   await game.addPlayer('p1', 'A');
   await game.addPlayer('p2', 'B');

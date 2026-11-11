@@ -22,7 +22,7 @@
 
 ## 2. Score integrity
 
-- [ ] 2.1 server: In snake `endMatch`, compute `finalScores` from the
+- [x] 2.1 server: In snake `endMatch`, compute `finalScores` from the
   pre-purge player list before `playerStore.clear()`; verify
   `match-end.scores` is populated in a test ending a snake match
 - [ ] 2.2 server: Invalidate/recompute clash scores on `addPlayer`/
@@ -32,11 +32,11 @@
 
 ## 3. Offline-is-not-an-exploit hardening
 
-- [ ] 3.1 server: Change `clashHandshake.js` so the kill commits once
+- [x] 3.1 server: Change `clashHandshake.js` so the kill commits once
   the killer ACKs inside the window, treating the victim's ack as
   advisory (victim timeout/disconnect no longer voids); verify tests
   for killer-ack+victim-timeout commits and killer-timeout voids
-- [ ] 3.2 server: Validate `eat_food` against the live food list or
+- [x] 3.2 server: Validate `eat_food` against the live food list or
   `_recentlyEaten` (3000 ms window); verify fabricated `foodId`
   claims award nothing while a second racer's claim still scores
 

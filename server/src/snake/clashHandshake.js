@@ -1,8 +1,10 @@
 // Pending-clash ACK handshake for Geo Snake.
 //
-// The server detects a collision in _tick but only commits the kill once
-// every clash participant has ACKed the `clash_verify` push — proof of
-// liveness on both ends, so a ghost clash never kills anyone.
+// The server detects a collision in _tick and pushes `clash_verify` to
+// every participant, but the kill commits once the DECIDING participant
+// — the killer, or the victim for killerless head-on-head clashes —
+// ACKs inside CLASH_ACK_TIMEOUT_MS. The victim's ACK is advisory only:
+// victim timeout or disconnect never voids a killer-acknowledged kill.
 // Free functions that take the SnakeGameState instance, matching the
 // collisions.js/food.js helper style; the class owns `_pendingClashes`
 // (clashId → { victimId, killerId, acksNeeded: Set, timestamp }).
@@ -10,7 +12,8 @@
 import { CLASH_ACK_TIMEOUT_MS } from './constants.js';
 
 // Called when a socket ACKs a pending clash_verify.
-// The kill only executes once every participant has ACKed.
+// acksNeeded holds only the deciding participant, so the kill executes
+// the moment the killer ACKs — victim ACKs are ignored.
 export async function clashAck(game, socketId, clashId) {
   if (!game.matchActive) return;
   const pending = game._pendingClashes.get(clashId);
@@ -24,8 +27,10 @@ export async function clashAck(game, socketId, clashId) {
   }
 }
 
-// Called on socket disconnect — cancel any pending clashes where the
-// disconnected player was a required participant (no kill for ghost clash).
+// Called on socket disconnect — cancel pending clashes where the
+// departed player was the deciding participant (the killer, or the
+// victim of a killerless clash). A victim leaving a killered clash
+// does NOT cancel it: the killer can still ACK and collect the kill.
 export function cancelClashesFor(game, socketId) {
   for (const [clashId, entry] of game._pendingClashes) {
     if (entry.acksNeeded.has(socketId)) {
@@ -44,7 +49,8 @@ export function rekeyClashesFor(game, oldId, newId) {
   }
 }
 
-// Drop pending clashes whose ACK window has closed without all ACKs.
+// Drop pending clashes whose ACK window has closed without the
+// deciding participant's ACK — a killer who never ACKs voids the kill.
 export function expirePendingClashes(game, now) {
   for (const [clashId, entry] of game._pendingClashes) {
     if (now - entry.timestamp > CLASH_ACK_TIMEOUT_MS) {
@@ -54,8 +60,9 @@ export function expirePendingClashes(game, now) {
 }
 
 // Turn fresh collision results into pending clashes: dedup one pending
-// clash per victim, register the required ACKs, and push clash_verify to
-// every participant.
+// clash per victim, register the deciding participant's ACK (the
+// killer; the victim when the collision has no killer), and push
+// clash_verify to every participant.
 export function initiateClashes(game, kills, now) {
   for (const { killerId, victimId } of kills) {
     // Dedup: skip if a pending clash already exists for this victim.
@@ -65,8 +72,8 @@ export function initiateClashes(game, kills, now) {
     if (alreadyPending) continue;
 
     const clashId = `${victimId}:${now}`;
-    const acksNeeded = new Set([victimId]);
-    if (killerId) acksNeeded.add(killerId);
+    // The victim's ACK is advisory — only the decider must respond.
+    const acksNeeded = new Set([killerId || victimId]);
 
     game._pendingClashes.set(clashId, {
       victimId,
@@ -75,7 +82,7 @@ export function initiateClashes(game, kills, now) {
       timestamp: now,
     });
 
-    // Notify all participants — each must ACK to prove liveness.
+    // Notify all participants; the victim's reply is informational.
     game.io.to(victimId).emit('clash_verify', { clashId });
     if (killerId) game.io.to(killerId).emit('clash_verify', { clashId });
   }
@@ -83,25 +90,34 @@ export function initiateClashes(game, kills, now) {
 
 // Commit a confirmed kill: reset the victim in place, credit the killer,
 // emit snake-hit to the room and snake-reset to the victim's socket.
+// A victim whose record is already gone (hard leave mid-handshake)
+// cannot dodge the outcome — the killer is still credited.
 export async function killPlayer(game, victimId, killerId) {
   const victim = await game.playerStore.get(victimId);
-  if (!victim) return;
-  victim.score = 0;
-  victim.tailPoints = [];
-  victim.spawnedAt = Date.now();
-  await game.playerStore.set(victimId, victim);
+  if (victim) {
+    victim.score = 0;
+    victim.tailPoints = [];
+    victim.spawnedAt = Date.now();
+    await game.playerStore.set(victimId, victim);
+  }
 
+  let killerCredited = false;
   if (killerId) {
     const killer = await game.playerStore.get(killerId);
     if (killer) {
       killer.kills = (killer.kills || 0) + 1;
       killer.score += 5;
       await game.playerStore.set(killerId, killer);
+      killerCredited = true;
     }
   }
+
+  if (!victim && !killerCredited) return; // nothing changed — no events
 
   game._emit('snake-hit', { victimId, killerId: killerId || null });
 
   // Tell the victim's own socket to reset its local state
-  game.io.to(victimId).emit('snake-reset', { spawnedAt: victim.spawnedAt });
+  if (victim) {
+    game.io.to(victimId).emit('snake-reset', { spawnedAt: victim.spawnedAt });
+  }
 }

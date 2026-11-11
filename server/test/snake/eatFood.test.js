@@ -11,7 +11,9 @@ function makeIo() {
   const events = [];
   return {
     _events: events,
-    to: (id) => ({ emit: (e, p) => events.push({ target: id, event: e, payload: p }) }),
+    to: (id) => ({
+      emit: (e, p) => events.push({ target: id, event: e, payload: p }),
+    }),
     emit: (e, p) => events.push({ event: e, payload: p }),
   };
 }
@@ -31,11 +33,17 @@ function makeGame(t, roomId) {
 }
 
 function freezeTimers(game) {
-  if (game._tickHandle) { clearInterval(game._tickHandle); game._tickHandle = null; }
-  if (game._foodInterval) { clearInterval(game._foodInterval); game._foodInterval = null; }
+  if (game._tickHandle) {
+    clearInterval(game._tickHandle);
+    game._tickHandle = null;
+  }
+  if (game._foodInterval) {
+    clearInterval(game._foodInterval);
+    game._foodInterval = null;
+  }
 }
 
-test('eatFood: first claim removes food, awards point, emits snake-ate + food-update', async (t) => {
+test('eatFood: first claim removes food and emits updates', async (t) => {
   const { io, game } = makeGame(t, 'eat-first');
   game._foods = [{ id: 'food1', lat: 51.5, lng: -0.12 }];
   await game.addPlayer('p1', 'Alice');
@@ -44,14 +52,21 @@ test('eatFood: first claim removes food, awards point, emits snake-ate + food-up
 
   await game.eatFood('p1', 'food1');
 
-  assert.equal(game._foods.length, 0, 'food1 must be removed from the live list');
+  assert.equal(
+    game._foods.length, 0,
+    'food1 must be removed from the live list',
+  );
   const p = await game.playerStore.get('p1');
   assert.equal(p.score, FOOD_SCORE_PER_ITEM);
 
   const ate = io._events.find((e) => e.event === 'snake-ate');
   assert.ok(ate, 'snake-ate event emitted');
   assert.deepEqual(
-    { playerId: ate.payload.playerId, foodId: ate.payload.foodId, score: ate.payload.score },
+    {
+      playerId: ate.payload.playerId,
+      foodId: ate.payload.foodId,
+      score: ate.payload.score,
+    },
     { playerId: 'p1', foodId: 'food1', score: FOOD_SCORE_PER_ITEM },
   );
   const foodUpdate = io._events.find((e) => e.event === 'food-update');
@@ -59,7 +74,7 @@ test('eatFood: first claim removes food, awards point, emits snake-ate + food-up
   assert.equal(foodUpdate.payload.foods.length, 0);
 });
 
-test('eatFood: second player reporting same foodId inside race window still scores', async (t) => {
+test('eatFood: second claim on just-eaten foodId still scores', async (t) => {
   const { io, game } = makeGame(t, 'eat-race');
   game._foods = [{ id: 'food1', lat: 51.5, lng: -0.12 }];
   await game.addPlayer('p1', 'Alice');
@@ -79,8 +94,8 @@ test('eatFood: second player reporting same foodId inside race window still scor
   assert.equal(ates.length, 2, 'a snake-ate is emitted per reporting player');
 });
 
-test('eatFood: unknown foodId never seen still awards point (unconditional award)', async (t) => {
-  const { io, game } = makeGame(t, 'eat-unknown');
+test('eatFood: fabricated foodId awards nothing, no events', async (t) => {
+  const { io, game } = makeGame(t, 'eat-fabricated');
   game._foods = [{ id: 'real-food', lat: 51.5, lng: -0.12 }];
   await game.addPlayer('p1', 'Alice');
   game.startMatch();
@@ -89,16 +104,40 @@ test('eatFood: unknown foodId never seen still awards point (unconditional award
   await game.eatFood('p1', 'never-existed');
 
   const p = await game.playerStore.get('p1');
-  assert.equal(p.score, FOOD_SCORE_PER_ITEM);
-  const ate = io._events.find((e) => e.event === 'snake-ate');
-  assert.ok(ate, 'snake-ate still emitted for unknown foodId');
-  // No food-update: nothing was removed from the live list.
+  assert.equal(p.score, 0, 'fabricated foodId scores nothing');
+  assert.equal(
+    io._events.filter((e) => e.event === 'snake-ate').length,
+    0,
+    'no snake-ate for a fabricated foodId',
+  );
   assert.equal(
     io._events.filter((e) => e.event === 'food-update').length,
     0,
     'food-update only fires when a live food item is removed',
   );
   assert.equal(game._foods.length, 1, 'live food list untouched');
+});
+
+test('eatFood: stale claim outside race window is ignored', async (t) => {
+  const { io, game } = makeGame(t, 'eat-stale-claim');
+  game._foods = [{ id: 'live1', lat: 51.5, lng: -0.12 }];
+  await game.addPlayer('p1', 'Alice');
+  game.startMatch();
+  freezeTimers(game);
+
+  // Eaten long ago — already purged from the 3000 ms race window.
+  game._recentlyEaten.set('old-food', Date.now() - 4000);
+
+  await game.eatFood('p1', 'old-food');
+
+  const p = await game.playerStore.get('p1');
+  assert.equal(p.score, 0, 'long-stale claim scores nothing');
+  assert.equal(
+    io._events.filter((e) => e.event === 'snake-ate').length,
+    0,
+    'no snake-ate for a stale claim',
+  );
+  assert.equal(game._recentlyEaten.has('old-food'), false, 'entry purged');
 });
 
 test('eatFood: no-op when match not active', async (t) => {
@@ -113,7 +152,9 @@ test('eatFood: no-op when match not active', async (t) => {
   assert.equal(p.score, 0);
   assert.equal(game._foods.length, 1);
   assert.equal(
-    io._events.filter((e) => e.event === 'snake-ate' || e.event === 'food-update').length,
+    io._events.filter(
+      (e) => e.event === 'snake-ate' || e.event === 'food-update',
+    ).length,
     0,
     'no events emitted while the match is inactive',
   );
@@ -130,13 +171,15 @@ test('eatFood: no-op for unknown player id', async (t) => {
   assert.equal(await game.playerStore.get('ghost'), undefined);
   assert.equal(game._foods.length, 1, 'live food untouched by ghost claim');
   assert.equal(
-    io._events.filter((e) => e.event === 'snake-ate' || e.event === 'food-update').length,
+    io._events.filter(
+      (e) => e.event === 'snake-ate' || e.event === 'food-update',
+    ).length,
     0,
     'no events emitted for unknown player',
   );
 });
 
-test('eatFood: stale _recentlyEaten entries (> EAT_RACE_WINDOW_MS) are purged', async (t) => {
+test('eatFood: stale _recentlyEaten entries are purged', async (t) => {
   const { game } = makeGame(t, 'eat-purge');
   game._foods = [{ id: 'live1', lat: 51.5, lng: -0.12 }];
   await game.addPlayer('p1', 'Alice');
@@ -148,6 +191,10 @@ test('eatFood: stale _recentlyEaten entries (> EAT_RACE_WINDOW_MS) are purged', 
 
   await game.eatFood('p1', 'live1');
 
-  assert.equal(game._recentlyEaten.has('old-food'), false, 'stale entry purged');
-  assert.equal(game._recentlyEaten.has('live1'), true, 'fresh claim recorded');
+  assert.equal(
+    game._recentlyEaten.has('old-food'), false, 'stale entry purged',
+  );
+  assert.equal(
+    game._recentlyEaten.has('live1'), true, 'fresh claim recorded',
+  );
 });

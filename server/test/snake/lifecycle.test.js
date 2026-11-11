@@ -7,7 +7,9 @@ function makeIo() {
   const events = [];
   return {
     _events: events,
-    to: (id) => ({ emit: (e, p) => events.push({ target: id, event: e, payload: p }) }),
+    to: (id) => ({
+      emit: (e, p) => events.push({ target: id, event: e, payload: p }),
+    }),
     emit: (e, p) => events.push({ event: e, payload: p }),
   };
 }
@@ -27,8 +29,14 @@ function makeGame(t, opts) {
 }
 
 function freezeTimers(game) {
-  if (game._tickHandle) { clearInterval(game._tickHandle); game._tickHandle = null; }
-  if (game._foodInterval) { clearInterval(game._foodInterval); game._foodInterval = null; }
+  if (game._tickHandle) {
+    clearInterval(game._tickHandle);
+    game._tickHandle = null;
+  }
+  if (game._foodInterval) {
+    clearInterval(game._foodInterval);
+    game._foodInterval = null;
+  }
 }
 
 // endMatch() archives into the module-level leaderboardStore singleton —
@@ -45,7 +53,7 @@ function stubArchive(t) {
   return calls;
 }
 
-test('endMatch: archives every player (gameType snake, metric kills), emits match-end sorted desc', async (t) => {
+test('endMatch: archives players, emits sorted match-end', async (t) => {
   const archived = stubArchive(t);
   const { io, game } = makeGame(t, { roomId: 'end-archive' });
   await game.addPlayer('p1', 'Alice');
@@ -78,12 +86,15 @@ test('endMatch: archives every player (gameType snake, metric kills), emits matc
     'leaderboard sorted by score desc',
   );
   assert.equal(matchEnd.payload.leaderboard[0].score, 10);
-  // playerStore is purged before the emit, so `scores` is always {} —
-  // clients consume the sorted `leaderboard` array instead.
-  assert.deepEqual(matchEnd.payload.scores, {});
+  // `scores` is computed from the pre-purge player list, so it carries
+  // the real final tally for every player.
+  assert.deepEqual(matchEnd.payload.scores, {
+    p1: { name: 'Alice', color: p1.color, score: 10, kills: 0 },
+    p2: { name: 'Bob', color: p2.color, score: 3, kills: 0 },
+  });
 });
 
-test('endMatch: clears playerStore, sets status ended, clears intervals, calls _onEnd', async (t) => {
+test('endMatch: purges, ends, clears intervals, calls _onEnd', async (t) => {
   stubArchive(t);
   let onEndCalls = 0;
   const { game } = makeGame(t, {
@@ -123,9 +134,11 @@ test('endMatch: second call is a no-op (idempotent)', async (t) => {
   );
 });
 
-test('startMatch: emits match-start with {bbox, foods, timeLimitMs, matchStartAt}', async (t) => {
+test('startMatch: emits match-start with the full payload', async (t) => {
   stubArchive(t);
-  const { io, game } = makeGame(t, { roomId: 'start-payload', timeLimitMs: 60_000 });
+  const { io, game } = makeGame(t, {
+    roomId: 'start-payload', timeLimitMs: 60_000,
+  });
   await game.addPlayer('p1', 'Alice');
 
   const before = Date.now();
@@ -174,7 +187,7 @@ test('startMatch: after endMatch it does not restart', async (t) => {
   );
 });
 
-test('_tick: emits snake-update with public-shaped players + scores map', async (t) => {
+test('_tick: emits snake-update with players and scores', async (t) => {
   stubArchive(t);
   const { io, game } = makeGame(t, { roomId: 'tick-update' });
   await game.addPlayer('p1', 'Alice');
@@ -189,7 +202,10 @@ test('_tick: emits snake-update with public-shaped players + scores map', async 
   const [pl] = update.payload.players;
   assert.deepEqual(
     Object.keys(pl).sort(),
-    ['alive', 'color', 'heading', 'id', 'kills', 'lat', 'lng', 'name', 'score', 'spawnedAt', 'tailPoints'],
+    [
+      'alive', 'color', 'heading', 'id', 'kills', 'lat', 'lng',
+      'name', 'score', 'spawnedAt', 'tailPoints',
+    ],
     'public player shape only — no private fields like lastSeen',
   );
   assert.equal(pl.id, 'p1');

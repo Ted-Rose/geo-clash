@@ -5,13 +5,15 @@
 //
 // Flow:
 //   location-update  → server stores client-supplied state, relays to peers
-//   eat_food         → server removes food (tolerates duplicate claims),
-//                      awards point to reporting player, broadcasts food-update
+//   eat_food         → server validates the claim against live or
+//                      recently-claimed food, awards the point to the
+//                      reporting player, broadcasts food-update
 //   _tick            → server detects collisions from stored
 //                      positions;
 //                      emits clash_verify to both participants
-//   clash_ack        → both clients must ACK within CLASH_ACK_TIMEOUT_MS;
-//                      only then does the server commit the kill
+//   clash_ack        → the killer's ACK inside CLASH_ACK_TIMEOUT_MS
+//                      commits the kill; the victim's ACK is advisory
+//                      and its absence can never void the kill
 
 import { makeRoomStores, leaderboardStore } from '../shared/memoryStore.js';
 import { bboxAround } from '../shared/gridUtils.js';
@@ -82,6 +84,8 @@ export class SnakeGameState {
     // foodId → timestamp of when it was eaten (race-condition window)
     this._recentlyEaten = new Map();
     // clashId → { victimId, killerId, acksNeeded: Set, timestamp }
+    // acksNeeded holds only the deciding participant — the killer, or
+    // the victim for killerless head-on-head clashes.
     this._pendingClashes = new Map();
     if (this._centerLat !== null && this._centerLng !== null) {
       this._initArena(this._centerLat, this._centerLng);
@@ -126,7 +130,9 @@ export class SnakeGameState {
     this._lastTick = this._matchStartAt;
     if (!this._tickHandle) {
       this._tickHandle = setInterval(
-        () => this._tick().catch(() => {}), TICK_MS,
+        () => this._tick().catch((err) => {
+          console.error('[snake/gameState] tick error:', err.message);
+        }), TICK_MS,
       );
     }
     if (!this._foodInterval) {
@@ -164,8 +170,9 @@ export class SnakeGameState {
     }
 
     let archived = [];
+    let players = [];
     try {
-      const players = (await this.playerStore.all()).map(([, p]) => p);
+      players = (await this.playerStore.all()).map(([, p]) => p);
       const matchId = `${this.roomId}:${Date.now()}`;
       for (const p of players) {
         await leaderboardStore.archive({
@@ -194,7 +201,9 @@ export class SnakeGameState {
       console.error('[snake/gameState] purge error:', err.message);
     }
 
-    const finalScores = this._scores(await this._allPlayers());
+    // Final scores come from the pre-purge player list — after clear()
+    // the store is empty and the tally would always be {}.
+    const finalScores = this._scores(players);
     this._emit('match-end', { scores: finalScores, leaderboard: archived });
     this.status = 'ended';
     this._onEnd?.();
@@ -270,10 +279,10 @@ export class SnakeGameState {
   // ---- food authority ----------------------------------------------------
 
   // Called when a client reports eating a food item.
-  // Awards FOOD_SCORE_PER_ITEM to the player unconditionally — if a second
-  // client reports the same food within EAT_RACE_WINDOW_MS we still award
-  // points to tolerate network-lag race conditions. The food is removed from
-  // the live list on the first claim.
+  // Awards FOOD_SCORE_PER_ITEM only when the foodId is live or was
+  // claimed inside EAT_RACE_WINDOW_MS — fabricated or long-stale claims
+  // are ignored outright. A second client reporting a just-eaten foodId
+  // inside the race window still scores (deliberate race tolerance).
   async eatFood(playerId, foodId) {
     if (!this.matchActive) return;
     const p = await this.playerStore.get(playerId);
@@ -292,9 +301,10 @@ export class SnakeGameState {
       this._foods.splice(foodIdx, 1);
       this._recentlyEaten.set(foodId, now);
       this._emit('food-update', { foods: this._foods });
+    } else if (!this._recentlyEaten.has(foodId)) {
+      // Fabricated or long-stale foodId — no point, no snake-ate.
+      return;
     }
-    // else: food already gone — check if it was eaten within the race window
-    // and still grant the point if so (or if not tracked at all, still award).
 
     p.score = (p.score || 0) + FOOD_SCORE_PER_ITEM;
     await this.playerStore.set(playerId, p);
