@@ -2,14 +2,15 @@
 
 ## 1. Reconnect idempotency and re-key completeness
 
-- [ ] 1.1 server: In `roomRegistry.js` reconnect path, treat a
+- [x] 1.1 server: In `roomRegistry.js` reconnect path, treat a
   `sessionId` rejoin resolving to the same socket id as an idempotent
   join (re-emit `joined` + `snapshot`, skip `swapSocketId` and handler
   registration); verify with a node --test case asserting the player
   record survives a same-socket rejoin
-- [ ] 1.2 server: Add `oldId === newId` early-return in both games'
-  `swapSocketId` and a `socket.data.handlersRegistered` once-guard in
-  `registerClashHandlers`/`registerSnakeHandlers`; verify a test
+- [x] 1.2 server: Add `oldId === newId` early-return in both games'
+  `swapSocketId` and a once-per-(socket, game) binding via
+  `bindGameHandlers` in `registerClashHandlers`/
+  `registerSnakeHandlers`; verify a test
   emitting `room-join` twice on one socket produces exactly one
   `player-attack` handling per emit
 - [x] 1.3 server: Re-key `projectileStore` `attackerId` values inside

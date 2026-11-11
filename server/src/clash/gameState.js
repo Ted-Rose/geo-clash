@@ -158,6 +158,7 @@ export class GameState {
   }
 
   async swapSocketId(oldId, newId) {
+    if (oldId === newId) return; // no-op: set+del on one key loses the record
     const p = await this.playerStore.get(oldId);
     if (!p) return;
     p.id = newId;

@@ -6,7 +6,8 @@
 // Flow:
 //   location-update  → server stores client-supplied state, relays to peers
 //   eat_food         → server removes food (tolerates duplicate claims),
-//                      awards point to reporting player, broadcasts food-update
+//                      awards point to reporting player, broadcasts
+//                      food-update
 //   _tick            → server detects collisions from stored
 //                      positions;
 //                      emits clash_verify to both participants
@@ -234,6 +235,7 @@ export class SnakeGameState {
   }
 
   async swapSocketId(oldId, newId) {
+    if (oldId === newId) return; // no-op: set+del on one key loses the record
     const p = await this.playerStore.get(oldId);
     if (!p) return;
     p.id = newId;

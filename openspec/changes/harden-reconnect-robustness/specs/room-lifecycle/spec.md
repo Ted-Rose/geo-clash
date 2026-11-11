@@ -6,8 +6,12 @@
 
 When a `room-join` carrying a `sessionId` resolves to a player already
 keyed to the *same* socket id, the rejoin SHALL succeed as a no-op:
-the player record, room membership, and registered handlers are left
-untouched and no re-key or hard-leave side effects occur.
+the player record and room membership are left untouched, gameplay
+handler binding is refreshed only when the socket is not already
+bound to the live game, and no re-key or hard-leave side effects
+occur. If the player was marked `connected: false` by a prior soft
+disconnect, the rejoin SHALL restore `connected: true` and broadcast
+`player-reconnected`.
 
 #### Scenario: Rejoin echo on the same socket
 
@@ -15,6 +19,15 @@ untouched and no re-key or hard-leave side effects occur.
   of its own live player record
 - **THEN** the join resolves successfully, the player record survives
   intact, and no `player-left` or duplicate gameplay state results
+
+#### Scenario: Recovered socket rejoins after soft disconnect
+
+- **WHEN** a recovered Socket instance (same id, restored
+  `socket.data`, no listeners) emits `room-join` for a player marked
+  `connected: false`
+- **THEN** gameplay handlers are re-registered on the new instance,
+  `connected` is restored to `true`, and the room sees
+  `player-reconnected`
 
 ### Requirement: Re-key retargets in-flight references
 
