@@ -70,9 +70,10 @@ rooms are destroyed and joins then fail `no-such-room`.
 `softDisconnect` SHALL mark the player `connected: false`, emit
 `player-disconnected`, and schedule a hard leave after a grace window —
 30 s, or remaining match time + 30 s during an active match. A
-`sessionId` rejoin inside the window cancels the timer — but only in
-games implementing the session interface (clash). Snake ignores
-`sessionId`, so its timer still fires and hard-leaves the stale record.
+`sessionId` rejoin inside the window cancels the timer — both games
+implement the session interface (`getPlayerBySessionId`/`swapSocketId`),
+so the stored player is re-keyed to the new socket instead of being
+hard-left.
 
 #### Scenario: Mobile reconnect within grace
 
@@ -81,12 +82,13 @@ games implementing the session interface (clash). Snake ignores
 - **THEN** the player record is re-keyed to the new socket, its cells
   and progress are preserved, and `player-reconnected` is broadcast
 
-#### Scenario: Snake reconnect leaves a stale record
+#### Scenario: Snake reconnect preserves the player
 
 - **WHEN** a snake player rejoins with its `sessionId` inside the grace
   window
-- **THEN** a fresh player record is created and the stale one is
-  removed when the grace timer fires, broadcasting `player-left`
+- **THEN** the player record is re-keyed to the new socket, its score,
+  tail, and pending-clash references are preserved, and
+  `player-reconnected` is broadcast
 
 #### Scenario: Grace expiry removes the player
 
