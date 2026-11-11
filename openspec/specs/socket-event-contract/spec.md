@@ -43,6 +43,21 @@ result (`{ rooms }`, `{ ok, room }`, or `{ ok: false, reason }`).
   `room-full`; the `ended` reason branch exists but is unreachable —
   ended rooms are destroyed) and no state mutates
 
+### Requirement: Room-create flood cap
+
+`room-create` is unauthenticated, so the server SHALL cap successful
+creates per socket connection at `MAX_ROOMS_PER_SOCKET` (5); further
+`room-create` events ack `{ ok: false, reason: 'room-create-limit' }`.
+The counter lives in `socket.data.roomsCreated` and resets on a fresh
+connection.
+
+#### Scenario: Sixth room-create on one socket is rejected
+
+- **WHEN** a socket has already created 5 rooms and emits another
+  `room-create`
+- **THEN** the ack resolves `{ ok: false, reason: 'room-create-limit' }`
+  and no room is created
+
 ### Requirement: Join handshake sequence
 On a fresh successful join the server SHALL emit `joined` and
 `snapshot`, then broadcast `player-joined`. `sessionId` rejoins

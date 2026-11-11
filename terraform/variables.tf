@@ -28,8 +28,7 @@ variable "valkey_url" {
 variable "cors_origin" {
   description = "Allowed CORS origin(s), comma-separated"
   type        = string
-  default = join(",", [
-    "https://geoclashers.vercel.app",
-    "https://geo-clash-*-industr-analysers-projects.vercel.app",
-  ])
+  # >79-char line justified: variable defaults must be literals and HCL
+  # has no string continuation, so the origin list stays on one line.
+  default = "https://geoclashers.vercel.app,https://geo-clash-*-industr-analysers-projects.vercel.app"
 }

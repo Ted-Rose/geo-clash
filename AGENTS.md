@@ -125,10 +125,15 @@ this model in mind for every gameplay change:
   (comma-separated origins; a `*` inside an entry matches one hostname
   run `[a-z0-9-]+` for Vercel previews). Keep the secret value in the
   same format — the server parses it via `parseCorsOrigin`.
-- **HTTP hardening lives in `server/src/app.js`.** `helmet()` headers,
-  a per-IP `/api` rate limit (tiles exempt — bursts are normal), a
-  tighter cap on `POST /api/rooms`, and `trust proxy 1` for Cloud Run's
-  X-Forwarded-For. Tile `z`/`y`/`x` params are int-range-validated.
+- **HTTP hardening lives in `server/src/app.js`.** `helmet()` headers
+  (`crossOriginResourcePolicy: cross-origin` so self-hosted tile loads
+  via `<img>` keep working), a per-IP `/api` rate limit (tiles exempt —
+  bursts are normal), a tighter cap on `POST /api/rooms`, and
+  `trust proxy 1` for Cloud Run's X-Forwarded-For. Tile `z`/`y`/`x`
+  params are int-range-validated. The socket `room-create` event is
+  capped at `MAX_ROOMS_PER_SOCKET` (5) creates per connection in
+  `server/src/socketHandlers.js` — the real spam vector, since the
+  event is unauthenticated.
 - **Same-origin in dev** is enforced via the Vite proxy for `/socket.io`. Don't
   hardcode `http://localhost:3001` in client code — use the proxy.
 - **Geolocation requires `localhost` or HTTPS** in browsers. Keep the

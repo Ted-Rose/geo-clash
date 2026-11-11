@@ -87,8 +87,9 @@ handshake and the *Enter the arena* button does nothing.
     Terraform default lists `https://geoclashers.vercel.app` plus
     `https://geo-clash-*-industr-analysers-projects.vercel.app` so
     this project's Vercel preview deployments keep working; drop the
-    second entry if previews don't need socket access. A bare `*`
-    reflects every origin — fine for dev, never for prod.
+    second entry if previews don't need socket access. A bare `*` as
+    the *only* entry reflects every origin — fine for dev, never for
+    prod; mixed into a list it is ignored with a warning.
   - In CI it comes from the `CORS_ORIGIN` GitHub Actions secret →
     `TF_VAR_cors_origin`; `terraform/variables.tf` carries the matching
     default. Keep the secret value in the same format (comma-separated,

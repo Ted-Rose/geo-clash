@@ -79,3 +79,24 @@ jobs:
 
       - name: Run lint
         run: npm run lint
+
+  terraform:
+    name: Terraform checks
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+
+      - name: Format check
+        run: terraform fmt -check -recursive
+        working-directory: terraform
+
+      - name: Validate
+        working-directory: terraform
+        run: |
+          terraform init -backend=false
+          terraform validate

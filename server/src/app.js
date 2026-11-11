@@ -20,6 +20,9 @@ import tileProxy from './tileProxy.js';
 //     hostname run ([a-z0-9-]+), e.g. Vercel preview deploys:
 //     "https://app-*-team.vercel.app"
 //   - single value                → allow that one origin
+// A bare '*' is honored ONLY as the sole entry; mixed with real origins
+// it is dropped (warned) — otherwise a stray '*' would silently reopen
+// reflect-all on a list meant to be restrictive.
 function corsEntryToOrigin(entry) {
   if (!entry.includes('*')) return entry;
   const pattern = entry
@@ -35,8 +38,14 @@ export function parseCorsOrigin(raw) {
     .split(',')
     .map((s) => s.trim())
     .filter(Boolean);
-  if (list.includes('*')) return true;
-  const origins = list.map(corsEntryToOrigin);
+  if (list.includes('*')) {
+    if (list.length === 1) return true;
+    console.warn(
+      '[cors] ignoring "*" mixed with explicit origins; ' +
+      'reflect-all requires "*" as the only entry'
+    );
+  }
+  const origins = list.filter((e) => e !== '*').map(corsEntryToOrigin);
   return origins.length === 1 ? origins[0] : origins;
 }
 
@@ -52,7 +61,12 @@ export async function buildServer({
   // Cloud Run sits behind one proxy hop; required so express-rate-limit
   // trusts X-Forwarded-For when deriving req.ip.
   app.set('trust proxy', 1);
-  app.use(helmet());
+  app.use(helmet({
+    // Tiles are a public CDN-style resource: a self-hosted deployment
+    // may load them cross-origin via <img>, which helmet's default
+    // Cross-Origin-Resource-Policy: same-origin would block.
+    crossOriginResourcePolicy: { policy: 'cross-origin' },
+  }));
   app.use(cors({ origin: corsOrigin }));
   app.use(express.json());
   app.use('/api/map/tiles', tileProxy);

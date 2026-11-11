@@ -178,7 +178,9 @@ test('CORS origin handling: reflect-all, single, list, blocked', async (t) => {
   );
 });
 
-test('parseCorsOrigin unit cases', () => {
+test('parseCorsOrigin unit cases', (t) => {
+  // The mixed-'*' cases log a warning; silence it for these assertions.
+  t.mock.method(console, 'warn', () => {});
   assert.equal(parseCorsOrigin(undefined), true);
   assert.equal(parseCorsOrigin(''), true);
   assert.equal(parseCorsOrigin('  '), true);
@@ -201,7 +203,12 @@ test('parseCorsOrigin unit cases', () => {
 
   assert.equal(
     parseCorsOrigin('https://a.com,*'),
-    true,
-    "a '*' anywhere in the list reflects all origins"
+    'https://a.com',
+    "a '*' mixed into a list is dropped, not reflect-all"
+  );
+  assert.deepEqual(
+    parseCorsOrigin('*,https://a.com,https://b.com'),
+    ['https://a.com', 'https://b.com'],
+    "a leading '*' among real origins is ignored"
   );
 });
