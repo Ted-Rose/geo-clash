@@ -76,7 +76,9 @@ export default defineConfig(({ mode }) => {
         workbox: {
           globPatterns: ['**/*.{js,css,html,ico,png,svg,webmanifest}'],
           navigateFallback: 'index.html',
-          navigateFallbackDenylist: [/^\/socket\.io/],
+          // /api (tile proxy) and socket.io are routed off-origin; the
+          // SPA fallback must not swallow navigations to them.
+          navigateFallbackDenylist: [/^\/socket\.io/, /^\/api\//],
           clientsClaim: true,
           skipWaiting: true,
         },

@@ -1,23 +1,25 @@
 # Geo Clash
 
 > **Capture the real world, one 5×5 m square at a time.**
-> A mobile-first, real-time multiplayer territory game played on top of OpenStreetMap.
+> A mobile-first, real-time multiplayer territory game played on top of
+> OpenStreetMap.
 
-Open the app outdoors with a few friends, pick an area, and the world gets sliced
-into a grid of 5×5 meter cells. Stand inside a cell for 5 seconds to paint it your
-color. Shoot arrows by swinging your phone. Raise a shield by drawing a circle.
-Run out of lives? Return to base and tap to respawn. Most squares when the
-5-minute timer hits zero wins.
+Open the app outdoors with a few friends, pick an area, and the world
+gets sliced into a grid of 5×5 meter cells. Stand inside a cell for 5
+seconds to paint it your color. Shoot arrows by swinging your phone.
+Raise a shield by drawing a circle. Run out of lives? Return to base and
+tap to respawn. Most squares when the 5-minute timer hits zero wins.
 
 The MVP is a **pure web app** — no app store, no SDK, no API keys. You can
 playtest it on a city block in five minutes.
 
 ## Tech stack
-- **Frontend** — React (Vite), TailwindCSS, React-Leaflet on OpenStreetMap tiles
+- **Frontend** — React (Vite), TailwindCSS, React-Leaflet on
+  OpenStreetMap tiles
 - **Backend** — Node.js, Express, Socket.io (authoritative server, real-time
   bidirectional state)
-- **State** — Pluggable in-memory KV store with a Redis/Valkey-shaped contract,
-  ready to swap when we outgrow a single process
+- **State** — Pluggable in-memory KV store with a Redis/Valkey-shaped
+  contract, ready to swap when we outgrow a single process
 - **Geo** — Local equirectangular grid math (no heavy GIS deps)
 
 ## Multi-room lobbies
@@ -37,7 +39,8 @@ Geo Clash now supports concurrent matches in independent rooms.
 
 REST endpoints exposed by the server:
 - `GET  /api/rooms` — list active rooms
-- `POST /api/rooms` — create one (`{ name, centerLat, centerLng, maxPlayers }`)
+- `POST /api/rooms` — create one
+  (`{ name, centerLat, centerLng, maxPlayers }`)
 - `GET  /api/leaderboard?limit=N` — all-time top-N (capped, sorted desc)
 
 ## Projectile model
@@ -60,9 +63,9 @@ No GPS on desktop? Tick **Simulate Movement** in the UI and walk around with
 WASD. Spawn bots from the same panel to fill the arena.
 
 ## Production deployment (Vercel + Cloud Run)
-The client and server are deployed to **different origins**, so two env vars are
-mandatory — without them, the realtime socket silently fails to handshake and
-the *Enter the arena* button does nothing.
+The client and server are deployed to **different origins**, so two env
+vars are mandatory — without them, the realtime socket silently fails to
+handshake and the *Enter the arena* button does nothing.
 
 - **Vercel (client)** — set a Project env var:
   - `VITE_SERVER_URL = https://<your-cloud-run-service>.run.app`
@@ -84,14 +87,17 @@ them (upstream `s-maxage=2592000`). Only websockets/REST still go
 cross-origin — `/socket.io` is intentionally *not* routed through Vercel.
 If the Vercel project predates the default-on behaviour, enable **"Cache
 external rewrite responses"** in the project dashboard once after merging.
+The rewrite `destination` hardcodes our Cloud Run hostname — edit
+`vercel.json` for other/self-hosted deployments.
 
 ## Why it might be fun to build
 - Real-world gameplay without writing a single line of native code.
 - Tight, satisfying core loop — capture, shoot, shield, respawn.
 - Lots of room for taste: visual identity, sound, gestures, game modes,
   spectator views, leaderboards, team play, persistent rivalries…
-- Honest physics-of-the-real-world constraints (GPS jitter, accelerometer noise,
-  network latency) that make for genuinely interesting engineering problems.
+- Honest physics-of-the-real-world constraints (GPS jitter,
+  accelerometer noise, network latency) that make for genuinely
+  interesting engineering problems.
 
 ## Want to help?
 We'd love collaborators — designers, gameplay engineers, mobile testers, OSM
