@@ -102,33 +102,12 @@ export class RoomRegistry {
       const factory = GAME_FACTORIES[gameType];
       if (!factory) throw new Error(`unsupported-game-type:${gameType}`);
       const id = ulid();
-      const meta = {
-        id,
-        name: name || `Room-${id.slice(-4)}`,
-        hostId: hostId || null,
-        status: 'lobby',
-        createdAt: this._now(),
-        playerCount: 0,
-        maxPlayers,
-        gameType,
-        centerLat: typeof centerLat === 'number' ? centerLat : null,
-        centerLng: typeof centerLng === 'number' ? centerLng : null,
-        ...(gameType === 'snake' && {
-          foodCountTarget: foodCountTarget ?? 10,
-          foodRespawnIntervalMs: foodRespawnIntervalMs ?? 2000,
-          arenaSideMeters: arenaSideMeters ?? 1000,
-          timeLimitMs: timeLimitMs ?? 0,
-        }),
-        ...(gameType === 'clash' && maxAmmo !== null && {
-          maxAmmo,
-          ammoRenewalMs,
-        }),
-      };
+      const roomName = name || `Room-${id.slice(-4)}`;
       const stores = makeRoomStores(id);
       const game = factory({
         io: this._io,
         roomId: id,
-        roomName: meta.name,
+        roomName,
         stores,
         onEnd: () => { this.destroy(id).catch(() => {}); },
         cellSize,
@@ -142,6 +121,28 @@ export class RoomRegistry {
         foodRespawnIntervalMs,
         timeLimitMs,
       });
+      const meta = {
+        id,
+        name: roomName,
+        hostId: hostId || null,
+        status: 'lobby',
+        createdAt: this._now(),
+        playerCount: 0,
+        maxPlayers,
+        gameType,
+        centerLat: typeof centerLat === 'number' ? centerLat : null,
+        centerLng: typeof centerLng === 'number' ? centerLng : null,
+        ...(gameType === 'snake' && {
+          foodCountTarget: game.foodCountTarget,
+          foodRespawnIntervalMs: game.foodRespawnIntervalMs,
+          arenaSideMeters: game.arenaSideMeters,
+          timeLimitMs: game.timeLimitMs,
+        }),
+        ...(gameType === 'clash' && maxAmmo !== null && {
+          maxAmmo,
+          ammoRenewalMs,
+        }),
+      };
       if (typeof centerLat === 'number' && typeof centerLng === 'number') {
         if (typeof game.initGrid === 'function') {
           await game.initGrid(centerLat, centerLng);

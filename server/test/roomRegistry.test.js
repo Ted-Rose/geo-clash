@@ -1,6 +1,11 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { RoomRegistry } from '../src/roomRegistry.js';
+import {
+  ARENA_SIDE_M,
+  FOOD_COUNT_TARGET,
+  FOOD_RESPAWN_INTERVAL_MS,
+} from '../src/snake/constants.js';
 
 // Minimal io stub: tracks emit/to/in/fetchSockets used by the registry.
 function makeIoStub() {
@@ -87,6 +92,21 @@ test('RoomRegistry.create with gameType snake succeeds', async (t) => {
   assert.equal(meta.gameType, 'snake');
   const game = reg.get(meta.id);
   assert.ok(game, 'snake game instance created');
+});
+
+test('RoomRegistry.create snake meta mirrors effective game defaults', async (t) => {
+  const io = makeIoStub();
+  const reg = new RoomRegistry(io);
+  const meta = await reg.create({ name: 'SnakeDefaults', gameType: 'snake' });
+  t.after(() => reg.destroy(meta.id));
+  const game = reg.get(meta.id);
+  assert.equal(meta.arenaSideMeters, game.arenaSideMeters);
+  assert.equal(meta.foodCountTarget, game.foodCountTarget);
+  assert.equal(meta.foodRespawnIntervalMs, game.foodRespawnIntervalMs);
+  assert.equal(meta.timeLimitMs, game.timeLimitMs);
+  assert.equal(meta.arenaSideMeters, ARENA_SIDE_M);
+  assert.equal(meta.foodCountTarget, FOOD_COUNT_TARGET);
+  assert.equal(meta.foodRespawnIntervalMs, FOOD_RESPAWN_INTERVAL_MS);
 });
 
 test('RoomRegistry.destroy removes from list', async () => {

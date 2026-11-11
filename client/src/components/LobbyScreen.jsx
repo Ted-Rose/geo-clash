@@ -262,7 +262,7 @@ export default function LobbyScreen({
                         <span className="text-xs text-slate-400">
                           {r.playerCount}/{r.maxPlayers} · {r.status}
                           {r.gameType === 'snake' && r.foodCountTarget != null && (
-                            <> · {r.arenaSideMeters ?? 1000}m · {r.foodCountTarget} food · {r.foodRespawnIntervalMs / 1000}s{r.timeLimitMs > 0 ? ` · ${r.timeLimitMs / 60000}m limit` : ''}</>
+                            <> · {r.arenaSideMeters ?? 50}m · {r.foodCountTarget} food · {r.foodRespawnIntervalMs / 1000}s{r.timeLimitMs > 0 ? ` · ${r.timeLimitMs / 60000}m limit` : ''}</>
                           )}
                         </span>
                       </span>
