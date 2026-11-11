@@ -83,7 +83,8 @@ Server default port: `3001`. Client dev server: `5173`. Both are configurable vi
 env if the need arises — don't bake new ports into multiple files.
 
 ## Git workflow
-- Default working branch: `development`. `main` is for known-good states.
+- `main` is the default and integration branch — work lands on it via
+  squash-merge PRs from `feature/*`/`chore/*` branches.
 - Conventional-commit style messages (`feat:`, `fix:`, `chore:`, `refactor:`, …).
 - Commit in small, themed steps; don't bundle unrelated changes.
 - Never commit `node_modules`, build artifacts, secrets, or editor scratch files.
@@ -119,41 +120,81 @@ Typical extension checklist:
 - Map rendering → client `MapView` component.
 - HUD / inputs → client `HUD`, `ControlPanel`, `SimPanel` components.
 
+## OpenSpec
+
+`openspec/` at the repo root is the spec-driven planning layer (npm
+`@fission-ai/openspec`, v1.14.x). `openspec/specs/` holds capability
+specs describing CURRENT code-verified behavior (source of truth);
+`openspec/changes/` holds proposed changes (`proposal.md`, `design.md`,
+`tasks.md`, delta `specs/`) that merge into `specs/` on archive.
+
+- Run `openspec` commands from the repo root where `openspec/` lives.
+- The CLI is a global npm install under `/opt/homebrew/bin` — export it
+  onto PATH first: `export PATH="/opt/homebrew/bin:$PATH"`.
+- Always run `openspec validate --all --strict` after touching
+  `openspec/`; it must pass before committing.
+- `tasks.md` items MUST be prefixed `server:`, `client:`, or `both:` to
+  name the target workspace (`both:` for changes that must land
+  together, e.g. a new socket event and its client wiring).
+- Workflow skills live in `.devin/skills/openspec-*` (frontmatter
+  stripped to `name`/`description` for Devin discovery). The
+  `.agents/skills/openspec-*/` originals are upstream artifacts owned by
+  `openspec update` — keep them verbatim; re-copy + re-strip the
+  `.devin` copies after each update.
+- Workflow: `openspec-propose` → implement via `openspec-apply-change`
+  → `openspec-archive-change`. Archive in the implementing PR when
+  feasible; otherwise archive immediately after merge on `main`. Never
+  leave a merged change unarchived.
+- Any change that alters behavior covered by `openspec/specs/` MUST
+  update the affected spec in the same PR — whether via an archived
+  delta or a direct spec edit.
+- When to use it: features, contract changes, anything a reviewer would
+  ask "why?" about. Skip the ceremony for bug fixes restoring spec'd
+  behavior, typos, config/dep bumps, and tests.
+
 ## Feature Development, Planning, & Branch Management Workflow
 When instructed to implement a broader feature (anything requiring more than a
 few lines of code or necessitating multiple Git commits for proper tracking),
 strictly adhere to this multi-step workflow:
 
 **1. Planning Phase**
-Before writing any code, present a comprehensive implementation plan to the
-user for approval. Write the approved plan into a Markdown file (e.g.,
-`feature-plan.md`) at the project root. This file is the single source of
-truth and checklist for the implementation.
+Planning goes through OpenSpec — run the `openspec-propose` workflow to
+draft the change (`proposal.md`, `design.md`, `tasks.md`, spec deltas under
+`openspec/changes/<name>/`) and present it to the user for approval. Do NOT
+create plan/feature-plan Markdown files at the project root — the root
+`feature-plan.md` is a historical artifact, not a template. The approved
+`openspec/changes/<name>/` folder is the single source of truth and
+checklist for the implementation.
 
 **2. Branch Creation**
-Once the plan is finalized, create and switch to a new branch from `main`
-before making any code changes. Use a descriptive kebab-case name that
-reflects the feature (e.g., `feature/user-authentication`).
+Once the change is approved, create and switch to a new branch from the
+default branch (`main`) before making any code changes. Use a descriptive
+kebab-case name that reflects the work (e.g., `feature/user-authentication`,
+`chore/adopt-openspec`).
 
 **3. Incremental Implementation**
-Implement the feature step-by-step, strictly following the plan. Make
-frequent, atomic Git commits as each sub-task is completed. Each commit must
-represent a single cohesive change with a clear, descriptive message.
+Implement the change step-by-step via `openspec-apply-change`, checking off
+`tasks.md` items. Make frequent, atomic Git commits as each sub-task is
+completed. Each commit must represent a single cohesive change with a clear,
+lowercase conventional-commit message (`feat:`, `fix:`, `chore:`, …).
 
 **4. Review & Approval**
-Do not merge upon completing the code. Open a GitHub PR targeting the correct
-base branch, using the `feature-plan.md` file as the PR body:
+Do not merge upon completing the code. Open a GitHub PR targeting `main`,
+writing the body to a temp file and passing it via `--body-file` (summarize
+the change's proposal + tasks — do not commit a PR-body file to the repo):
 ```
-gh pr create --title "<title>" --body-file feature-plan.md --base <base> --head <branch>
+gh pr create --title "<title>" --body-file /tmp/pr-body.md --base main --head <branch>
 ```
 Present the PR URL to the user for final review and validation. Wait for
 explicit approval before proceeding to step 5.
 
 **5. Integration & Cleanup**
 Once approved, perform all of the following in order:
-- Delete the temporary Markdown plan file from the project directory.
-- Squash-merge the development branch into `main` (one clean commit on `main`).
-- Delete the temporary development branch.
+- Archive the change (`openspec-archive-change`) so its spec deltas merge
+  into `openspec/specs/` — in the same PR when feasible, otherwise in a
+  small follow-up commit on `main` right after merge.
+- Squash-merge the working branch into `main` (one clean commit on `main`).
+- Delete the temporary working branch.
 
 ---
 
