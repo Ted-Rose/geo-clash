@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 
-function useCountdown(timeLimitMs, matchStartAt) {
+export function useCountdown(timeLimitMs, matchStartAt) {
   const [remaining, setRemaining] = useState(null);
 
   useEffect(() => {
@@ -21,7 +21,7 @@ function useCountdown(timeLimitMs, matchStartAt) {
   return remaining;
 }
 
-function formatTime(ms) {
+export function formatTime(ms) {
   const totalSec = Math.ceil(ms / 1000);
   const m = Math.floor(totalSec / 60);
   const s = totalSec % 60;
