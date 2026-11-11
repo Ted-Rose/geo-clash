@@ -196,14 +196,15 @@ test('respawn no-ops for unknown player or uninitialized grid', async (t) => {
   assert.equal(eventsNamed(io, 'respawn-denied').length, 0);
 });
 
-test('respawn while already alive still resets lives', async (t) => {
-  const { game } = makeGame(t);
+test('respawn while already alive is a silent no-op', async (t) => {
+  const { io, game } = makeGame(t);
   await game.initGrid(51.5, -0.12);
   await game.addPlayer('A', 'Alice'); // at base center, alive
   await patchPlayer(game, 'A', { lives: 1 });
 
   await game.respawn('A');
-  // documents that respawn does NOT gate on !alive — an alive player at
-  // base can reset lives to 3 at will (possible exploit, flagged in plan)
-  assert.equal((await game.playerStore.get('A')).lives, 3);
+  const p = await game.playerStore.get('A');
+  assert.equal(p.lives, 1, 'lives unchanged');
+  assert.equal(eventsNamed(io, 'player-respawn').length, 0);
+  assert.equal(eventsNamed(io, 'respawn-denied').length, 0);
 });
