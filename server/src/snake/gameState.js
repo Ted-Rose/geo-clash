@@ -19,6 +19,7 @@ import { resolveCollisions } from './collisions.js';
 import {
   FOOD_RESPAWN_INTERVAL_MS,
   FOOD_SPAWN_RADIUS_M,
+  ARENA_SIDE_M,
   TICK_MS,
   FOOD_COUNT_TARGET,
   FOOD_SCORE_PER_ITEM,
@@ -39,7 +40,7 @@ export class SnakeGameState {
     onEnd,
     centerLat,
     centerLng,
-    arenaSideMeters = 50,
+    arenaSideMeters = ARENA_SIDE_M,
     foodCountTarget = FOOD_COUNT_TARGET,
     foodRespawnIntervalMs = FOOD_RESPAWN_INTERVAL_MS,
     timeLimitMs = 0,
@@ -75,6 +76,22 @@ export class SnakeGameState {
     if (this._centerLat !== null && this._centerLng !== null) {
       this._initArena(this._centerLat, this._centerLng);
     }
+  }
+
+  get arenaSideMeters() {
+    return this._arenaSideMeters;
+  }
+
+  get foodCountTarget() {
+    return this._foodCountTarget;
+  }
+
+  get foodRespawnIntervalMs() {
+    return this._foodRespawnIntervalMs;
+  }
+
+  get timeLimitMs() {
+    return this._timeLimitMs;
   }
 
   _emit(event, payload) {
@@ -166,7 +183,7 @@ export class SnakeGameState {
 
   // ---- players -----------------------------------------------------------
 
-  async addPlayer(id, name) {
+  async addPlayer(id, name, sessionId) {
     const color = COLORS[this._colorIdx++ % COLORS.length];
     const spawn = this._spawnPoint();
     const player = {
@@ -182,9 +199,35 @@ export class SnakeGameState {
       tailPoints: [],
       spawnedAt: Date.now(),
       lastSeen: Date.now(),
+      connected: true,
+      sessionId: sessionId || null,
     };
     await this.playerStore.set(id, player);
     return player;
+  }
+
+  async getPlayerBySessionId(sessionId) {
+    if (!sessionId) return null;
+    for (const [socketId, p] of await this.playerStore.all()) {
+      if (p.sessionId === sessionId) return { player: p, socketId };
+    }
+    return null;
+  }
+
+  async swapSocketId(oldId, newId) {
+    const p = await this.playerStore.get(oldId);
+    if (!p) return;
+    p.id = newId;
+    p.connected = true;
+    await this.playerStore.set(newId, p);
+    await this.playerStore.del(oldId);
+    // Re-key pending clashes that referenced the old socket id so ACKs and
+    // cancelClashesFor keep working against the reconnected socket.
+    for (const entry of this._pendingClashes.values()) {
+      if (entry.victimId === oldId) entry.victimId = newId;
+      if (entry.killerId === oldId) entry.killerId = newId;
+      if (entry.acksNeeded.delete(oldId)) entry.acksNeeded.add(newId);
+    }
   }
 
   async removePlayer(id) {
