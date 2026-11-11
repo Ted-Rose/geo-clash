@@ -23,7 +23,7 @@ class FakeKvRedis {
   }
 }
 
-test('ValkeyStore get/set JSON round-trip; missing key → undefined', async () => {
+test('ValkeyStore get/set round-trip; missing key → undefined', async () => {
   const r = new FakeKvRedis();
   const store = new ValkeyStore('pfx', r);
 
@@ -34,7 +34,8 @@ test('ValkeyStore get/set JSON round-trip; missing key → undefined', async () 
 
   for (const v of [null, 0, false, 's', [1, 2]]) {
     await store.set('edge', v);
-    assert.deepEqual(await store.get('edge'), v, `round-trips ${JSON.stringify(v)}`);
+    const label = `round-trips ${JSON.stringify(v)}`;
+    assert.deepEqual(await store.get('edge'), v, label);
   }
 });
 
@@ -52,10 +53,11 @@ test('ValkeyStore del/has/keys with prefix stripping', async () => {
   assert.equal(await store.del('a'), false, 'second del reports not-found');
   assert.equal(await store.has('a'), false);
 
-  assert.deepEqual(await store.keys(), ['b'], 'only local keys, prefix stripped');
+  const keys = await store.keys();
+  assert.deepEqual(keys, ['b'], 'only local keys, prefix stripped');
 });
 
-test('ValkeyStore all() and clear() cover only prefixed keys; size() is 0', async () => {
+test('ValkeyStore all()/clear()/size() cover only prefixed keys', async () => {
   const r = new FakeKvRedis();
   const store = new ValkeyStore('pfx', r);
 
@@ -69,9 +71,10 @@ test('ValkeyStore all() and clear() cover only prefixed keys; size() is 0', asyn
   const all = await store.all();
   assert.deepEqual(new Map(all), new Map([['a', 1], ['b', { x: true }]]));
 
-  assert.equal(store.size(), 0, 'size() pinned as documented quirk (no KEYS scan)');
+  assert.equal(await store.size(), 2, 'size() reports the live count');
 
   await store.clear();
+  assert.equal(await store.size(), 0, 'size() is 0 after clear()');
   assert.deepEqual(await store.keys(), [], 'clear emptied the prefix');
   assert.equal(await r.get('other:c'), '3', 'foreign prefix untouched');
 });
