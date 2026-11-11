@@ -382,6 +382,7 @@ export class GameState {
   async respawn(id) {
     const p = await this.playerStore.get(id);
     if (!p) return;
+    if (p.alive) return;
     if (!this.grid) return;
     const cid = cellIdAt(this.grid, p.lat, p.lng);
     if (cid !== this.baseCellId) {
