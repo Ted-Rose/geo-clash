@@ -1,6 +1,8 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { getSocket, getSessionId } from './socket.js';
 import { useRooms } from './hooks/useRooms.js';
+import RoomCreateForm from './RoomCreateForm.jsx';
+import RoomList from './RoomList.jsx';
 
 // Single mobile-first lobby screen. Lets the player set their name + GPS
 // (or simulate) and either create a new room or join an existing one.
@@ -24,16 +26,6 @@ export default function LobbyScreen({
   const [name, setName] = useState(
     () => localStorage.getItem('playerName') || ''
   );
-  const [newRoomName, setNewRoomName] = useState('');
-  const [cellSize, setCellSize] = useState(5);
-  const [squaresPerSide, setSquaresPerSide] = useState(10);
-  const [ammoLimit, setAmmoLimit] = useState(0);
-  const [ammoRenewalSec, setAmmoRenewalSec] = useState(5);
-  const [createGameType, setCreateGameType] = useState('clash');
-  const [foodCount, setFoodCount] = useState(30);
-  const [foodRespawnSec, setFoodRespawnSec] = useState(1);
-  const [arenaSideMeters, setArenaSideMeters] = useState(50);
-  const [timeLimitSec, setTimeLimitSec] = useState(0);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState(null);
 
@@ -44,11 +36,6 @@ export default function LobbyScreen({
     }
   }, [simulate, simPos, setSimPos]);
   const ready = Boolean(position) && connected && !busy;
-
-  const sortedRooms = useMemo(
-    () => [...rooms].sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0)),
-    [rooms]
-  );
 
   function joinRoom(roomId) {
     if (!ready) return;
@@ -74,35 +61,26 @@ export default function LobbyScreen({
         });
         else {
           setError(ack?.reason || 'join failed');
-          if (ack?.reason === 'no-such-room' || ack?.reason === 'ended') refresh();
+          if (ack?.reason === 'no-such-room' || ack?.reason === 'ended') {
+            refresh();
+          }
         }
       }
     );
   }
 
-  function createRoom() {
+  // The form supplies the room options; the center always comes from the
+  // player's current position. Auto-joins the freshly-created room.
+  function createRoom(formValues) {
     if (!ready) return;
     setBusy(true);
     setError(null);
     socket.emit(
       'room-create',
       {
-        name: newRoomName.trim() || undefined,
         centerLat: position.lat,
         centerLng: position.lng,
-        cellSize,
-        squaresPerSide,
-        gameType: createGameType,
-        ...(createGameType === 'clash' && ammoLimit > 0 && {
-          maxAmmo: ammoLimit,
-          ammoRenewalMs: ammoRenewalSec * 1000,
-        }),
-        ...(createGameType === 'snake' && {
-          foodCountTarget: foodCount,
-          foodRespawnIntervalMs: foodRespawnSec * 1000,
-          arenaSideMeters,
-          timeLimitMs: timeLimitSec > 0 ? timeLimitSec * 1000 : 0,
-        }),
+        ...formValues,
       },
       (ack) => {
         if (!ack?.ok) {
@@ -145,8 +123,8 @@ export default function LobbyScreen({
               Parku Cīņas
             </h1>
             <p className="text-slate-400 text-sm mt-1">
-              Stand in 5×5 m squares for 5 seconds to claim them. Most squares
-              in 5 minutes wins.
+              Stand in 5×5 m squares for 5 seconds to claim them. Most
+              squares in 5 minutes wins.
             </p>
           </div>
 
@@ -160,11 +138,15 @@ export default function LobbyScreen({
                   localStorage.setItem('playerName', e.target.value);
                 }}
                 placeholder="Anonymous"
-                className="mt-1 w-full px-3 py-3 rounded-lg bg-slate-900 border border-slate-700 focus:outline-none focus:ring-2 focus:ring-cyan-500 text-base"
+                className="mt-1 w-full px-3 py-3 rounded-lg bg-slate-900
+                           border border-slate-700 focus:outline-none
+                           focus:ring-2 focus:ring-cyan-500 text-base"
               />
             </label>
 
-            <label className="flex items-center gap-2 text-sm text-slate-300">
+            <label
+              className="flex items-center gap-2 text-sm text-slate-300"
+            >
               <input
                 type="checkbox"
                 checked={simulate}
@@ -175,9 +157,14 @@ export default function LobbyScreen({
             </label>
 
             <label className="block border-t border-slate-700 pt-3">
-              <div className="flex justify-between text-sm text-slate-300 mb-1">
+              <div
+                className="flex justify-between text-sm text-slate-300
+                           mb-1"
+              >
                 <span>Max Imagery Age</span>
-                <span className="font-mono text-cyan-400">{maxImageryAge} years</span>
+                <span className="font-mono text-cyan-400">
+                  {maxImageryAge} years
+                </span>
               </div>
               <input
                 type="range"
@@ -188,15 +175,22 @@ export default function LobbyScreen({
                 onChange={(e) => setMaxImageryAge(Number(e.target.value))}
                 className="w-full accent-cyan-500"
               />
-              <div className="text-[10px] text-slate-500 mt-1 leading-tight">
+              <div
+                className="text-[10px] text-slate-500 mt-1 leading-tight"
+              >
                 Blocks high-res imagery older than {maxImageryAge} years.
               </div>
             </label>
 
             <label className="block border-t border-slate-700 pt-3">
-              <div className="flex justify-between text-sm text-slate-300 mb-1">
+              <div
+                className="flex justify-between text-sm text-slate-300
+                           mb-1"
+              >
                 <span>Max Map Detail</span>
-                <span className="font-mono text-cyan-400">Zoom {maxNativeZoom}</span>
+                <span className="font-mono text-cyan-400">
+                  Zoom {maxNativeZoom}
+                </span>
               </div>
               <input
                 type="range"
@@ -207,7 +201,9 @@ export default function LobbyScreen({
                 onChange={(e) => setMaxNativeZoom(Number(e.target.value))}
                 className="w-full accent-cyan-500"
               />
-              <div className="text-[10px] text-slate-500 mt-1 leading-tight">
+              <div
+                className="text-[10px] text-slate-500 mt-1 leading-tight"
+              >
                 Lower this if high-res imagery is outdated.
                 The map will "overzoom" newer, lower-res tiles instead.
               </div>
@@ -215,7 +211,8 @@ export default function LobbyScreen({
 
             {!position && !simulate && (
               <div className="text-xs text-amber-300">
-                Waiting for GPS… on desktop, enable Simulate Movement above.
+                Waiting for GPS… on desktop, enable Simulate Movement
+                above.
               </div>
             )}
 
@@ -227,261 +224,21 @@ export default function LobbyScreen({
             )}
           </div>
 
-          <div className="bg-slate-800 rounded-2xl p-4 space-y-3 shadow-lg">
-            <div className="flex items-center justify-between">
-              <h2 className="text-lg font-bold">Rooms</h2>
-              <button
-                onClick={refresh}
-                className="text-xs text-cyan-400 hover:text-cyan-300 active:scale-95 transition"
-              >
-                ↻ refresh
-              </button>
-            </div>
+          <RoomList
+            rooms={rooms}
+            loading={loading}
+            ready={ready}
+            onJoin={joinRoom}
+            onRefresh={refresh}
+          />
 
-            {loading && rooms.length === 0 && (
-              <div className="text-sm text-slate-400">Loading…</div>
-            )}
-            {!loading && sortedRooms.length === 0 && (
-              <div className="text-sm text-slate-400">
-                No rooms yet. Create one below.
-              </div>
-            )}
-
-            <ul className="space-y-2">
-              {sortedRooms.map((r) => {
-                const full = r.playerCount >= r.maxPlayers;
-                return (
-                  <li key={r.id}>
-                    <button
-                      disabled={!ready || full || r.status === 'ended'}
-                      onClick={() => joinRoom(r.id)}
-                      className="w-full flex items-center justify-between gap-3 px-3 py-3 rounded-lg bg-slate-900 hover:bg-slate-700 disabled:opacity-50 disabled:cursor-not-allowed text-left"
-                    >
-                      <span className="flex flex-col gap-0.5">
-                        <span className="font-semibold">{r.name}</span>
-                        <span className="text-xs text-slate-400">
-                          {r.playerCount}/{r.maxPlayers} · {r.status}
-                          {r.gameType === 'snake' && r.foodCountTarget != null && (
-                            <> · {r.arenaSideMeters ?? 50}m · {r.foodCountTarget} food · {r.foodRespawnIntervalMs / 1000}s{r.timeLimitMs > 0 ? ` · ${r.timeLimitMs / 60000}m limit` : ''}</>
-                          )}
-                        </span>
-                      </span>
-                      <span className={`text-xs font-bold px-1.5 py-0.5 rounded ${
-                        r.gameType === 'snake'
-                          ? 'bg-emerald-800 text-emerald-200'
-                          : 'bg-blue-900 text-blue-200'
-                      }`}>
-                        {r.gameType || 'clash'}
-                      </span>
-                      <span className="text-cyan-400 font-bold">→</span>
-                    </button>
-                  </li>
-                );
-              })}
-            </ul>
-          </div>
-
-          <div className="bg-slate-800 rounded-2xl p-4 space-y-3 shadow-lg">
-            <h2 className="text-lg font-bold">Create new room</h2>
-            <div className="flex gap-2">
-              {['clash', 'snake'].map((gt) => (
-                <button
-                  key={gt}
-                  onClick={() => setCreateGameType(gt)}
-                  className={`flex-1 py-2 rounded-lg text-sm font-semibold capitalize transition ${
-                    createGameType === gt
-                      ? 'bg-cyan-500 text-slate-900'
-                      : 'bg-slate-700 text-slate-300'
-                  }`}
-                >
-                  {gt === 'clash' ? 'Geo Clash' : 'Geo Snake'}
-                </button>
-              ))}
-            </div>
-            <input
-              value={newRoomName}
-              onChange={(e) => setNewRoomName(e.target.value)}
-              placeholder="Room name (optional)"
-              className="w-full px-3 py-3 rounded-lg bg-slate-900 border border-slate-700 focus:outline-none focus:ring-2 focus:ring-cyan-500 text-base"
-            />
-            {createGameType === 'clash' && (
-              <>
-                <label className="block">
-                  <div className="flex justify-between text-sm text-slate-300 mb-1">
-                    <span>Square size</span>
-                    <span className="font-mono text-cyan-400">{cellSize}×{cellSize} m</span>
-                  </div>
-                  <input
-                    type="range"
-                    min={5}
-                    max={30}
-                    step={5}
-                    value={cellSize}
-                    onChange={(e) => setCellSize(Number(e.target.value))}
-                    className="w-full accent-cyan-500"
-                  />
-                  <div className="flex justify-between text-xs text-slate-500 mt-0.5">
-                    <span>5 m</span>
-                    <span>30 m</span>
-                  </div>
-                </label>
-                <label className="block">
-                  <div className="flex justify-between text-sm text-slate-300 mb-1">
-                    <span>Square count</span>
-                    <span className="font-mono text-cyan-400">
-                      {squaresPerSide}×{squaresPerSide} ={' '}
-                      {squaresPerSide * squaresPerSide} squares
-                    </span>
-                  </div>
-                  <input
-                    type="range"
-                    min={5}
-                    max={20}
-                    step={1}
-                    value={squaresPerSide}
-                    onChange={(e) => setSquaresPerSide(Number(e.target.value))}
-                    className="w-full accent-cyan-500"
-                  />
-                  <div className="flex justify-between text-xs text-slate-500 mt-0.5">
-                    <span>5×5</span>
-                    <span>20×20</span>
-                  </div>
-                </label>
-                <label className="block border-t border-slate-700 pt-3">
-                  <div className="text-sm text-slate-300 mb-2">Rocket ammo limit</div>
-                  <div className="flex gap-2">
-                    {[0, 3, 5].map((v) => (
-                      <button
-                        key={v}
-                        type="button"
-                        onClick={() => setAmmoLimit(v)}
-                        className={`flex-1 py-2 rounded-lg text-sm font-semibold transition ${
-                          ammoLimit === v
-                            ? 'bg-cyan-500 text-slate-900'
-                            : 'bg-slate-700 text-slate-300'
-                        }`}
-                      >
-                        {v === 0 ? '∞ Unlimited' : `${v} rockets`}
-                      </button>
-                    ))}
-                  </div>
-                  {ammoLimit > 0 && (
-                    <label className="block mt-3">
-                      <div className="flex justify-between text-sm text-slate-300 mb-1">
-                        <span>Renewal time</span>
-                        <span className="font-mono text-cyan-400">{ammoRenewalSec} s</span>
-                      </div>
-                      <input
-                        type="range"
-                        min={1}
-                        max={30}
-                        step={1}
-                        value={ammoRenewalSec}
-                        onChange={(e) => setAmmoRenewalSec(Number(e.target.value))}
-                        className="w-full accent-cyan-500"
-                      />
-                      <div className="flex justify-between text-xs text-slate-500 mt-0.5">
-                        <span>1 s</span>
-                        <span>30 s</span>
-                      </div>
-                    </label>
-                  )}
-                </label>
-              </>
-            )}
-            {createGameType === 'snake' && (
-              <>
-                <label className="block">
-                  <div className="flex justify-between text-sm text-slate-300 mb-1">
-                    <span>Arena size</span>
-                    <span className="font-mono text-cyan-400">{arenaSideMeters} × {arenaSideMeters} m</span>
-                  </div>
-                  <input
-                    type="range"
-                    min={50}
-                    max={1000}
-                    step={50}
-                    value={arenaSideMeters}
-                    onChange={(e) => setArenaSideMeters(Number(e.target.value))}
-                    className="w-full accent-cyan-500"
-                  />
-                  <div className="flex justify-between text-xs text-slate-500 mt-0.5">
-                    <span>50 m</span>
-                    <span>1000 m</span>
-                  </div>
-                </label>
-                <label className="block">
-                  <div className="flex justify-between text-sm text-slate-300 mb-1">
-                    <span>Food pellets</span>
-                    <span className="font-mono text-cyan-400">{foodCount}</span>
-                  </div>
-                  <input
-                    type="range"
-                    min={3}
-                    max={100}
-                    step={1}
-                    value={foodCount}
-                    onChange={(e) => setFoodCount(Number(e.target.value))}
-                    className="w-full accent-cyan-500"
-                  />
-                  <div className="flex justify-between text-xs text-slate-500 mt-0.5">
-                    <span>3</span>
-                    <span>30</span>
-                  </div>
-                </label>
-                <label className="block border-t border-slate-700 pt-3">
-                  <div className="flex justify-between text-sm text-slate-300 mb-1">
-                    <span>Time limit</span>
-                    <span className="font-mono text-cyan-400">
-                      {timeLimitSec === 0 ? '∞ No limit' : `${timeLimitSec / 60} min`}
-                    </span>
-                  </div>
-                  <input
-                    type="range"
-                    min={0}
-                    max={30}
-                    step={1}
-                    value={timeLimitSec / 60}
-                    onChange={(e) => setTimeLimitSec(Number(e.target.value) * 60)}
-                    className="w-full accent-cyan-500"
-                  />
-                  <div className="flex justify-between text-xs text-slate-500 mt-0.5">
-                    <span>∞</span>
-                    <span>30 min</span>
-                  </div>
-                </label>
-                <label className="block">
-                  <div className="flex justify-between text-sm text-slate-300 mb-1">
-                    <span>Respawn every</span>
-                    <span className="font-mono text-cyan-400">{foodRespawnSec} s</span>
-                  </div>
-                  <input
-                    type="range"
-                    min={1}
-                    max={20}
-                    step={1}
-                    value={foodRespawnSec}
-                    onChange={(e) => setFoodRespawnSec(Number(e.target.value))}
-                    className="w-full accent-cyan-500"
-                  />
-                  <div className="flex justify-between text-xs text-slate-500 mt-0.5">
-                    <span>1 s</span>
-                    <span>20 s</span>
-                  </div>
-                </label>
-              </>
-            )}
-            <button
-              onClick={createRoom}
-              disabled={!ready}
-              className="w-full py-3 rounded-xl bg-cyan-500 disabled:bg-slate-600 disabled:cursor-not-allowed text-slate-900 font-bold text-lg shadow active:scale-95 transition"
-            >
-              Create + join
-            </button>
-          </div>
+          <RoomCreateForm ready={ready} onCreate={createRoom} />
 
           {error && (
-            <div className="text-sm text-rose-300 bg-rose-950/50 border border-rose-800 rounded-lg p-3">
+            <div
+              className="text-sm text-rose-300 bg-rose-950/50 border
+                         border-rose-800 rounded-lg p-3"
+            >
               {error}
             </div>
           )}
