@@ -78,7 +78,7 @@ export default function GameScreen({
   );
   const menuPlayers = players.map((p) => ({
     ...p,
-    alive: (p.lives ?? 1) > 0,
+    alive: p.alive !== false,
     score: squaresById.get(p.id) ?? 0,
   }));
 

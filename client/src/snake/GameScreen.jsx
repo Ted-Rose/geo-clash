@@ -316,14 +316,15 @@ export default function SnakeGameScreen({
     score: mergedScores[p.id]?.score ?? p.score ?? 0,
   }));
   // Score rows without a live player entry are shown dimmed — they
-  // are stale rows from players no longer in the roster.
+  // are stale rows from players no longer in the roster (except our
+  // own: a score can arrive before the first position fix).
   for (const [id, s] of Object.entries(mergedScores)) {
     if (!menuPlayers.some((p) => p.id === id)) {
       menuPlayers.push({
         id,
         name: s.name,
         color: s.color,
-        alive: false,
+        alive: id === myId,
         score: s.score ?? 0,
       });
     }
