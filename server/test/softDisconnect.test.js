@@ -49,7 +49,8 @@ const flush = async () => {
   await new Promise((r) => setImmediate(r));
 };
 
-test('softDisconnect marks connected=false and broadcasts player-disconnected', async (t) => {
+test('softDisconnect marks connected=false and broadcasts '
+  + 'player-disconnected', async (t) => {
   const io = makeIoStub();
   const reg = new RoomRegistry(io);
   const meta = await reg.create({ name: 'SD1', maxPlayers: 4 });
@@ -77,7 +78,8 @@ test('softDisconnect marks connected=false and broadcasts player-disconnected', 
   assert.equal(freshMeta.playerCount, 1, 'player still counted during grace');
 });
 
-test('disconnect grace expiry removes player and destroys empty room', async (t) => {
+test('disconnect grace expiry removes player and destroys empty room',
+  async (t) => {
   const io = makeIoStub();
   const reg = new RoomRegistry(io);
   const meta = await reg.create({ name: 'SD2', maxPlayers: 4 });
@@ -104,7 +106,8 @@ test('disconnect grace expiry removes player and destroys empty room', async (t)
   assert.equal((await reg.list()).find((r) => r.id === meta.id), undefined);
 });
 
-test('grace period extends to remainingSeconds + 30s while match active', async (t) => {
+test('grace period extends to remainingSeconds + 30s while match '
+  + 'active', async (t) => {
   const io = makeIoStub();
   const reg = new RoomRegistry(io);
   const meta = await reg.create({ name: 'SD3', maxPlayers: 4 });
@@ -121,14 +124,17 @@ test('grace period extends to remainingSeconds + 30s while match active', async 
 
   t.mock.timers.tick(30_001);
   await flush();
-  assert.ok(await game.playerStore.get('s1'), 'still present before 40s grace');
+  assert.ok(await game.playerStore.get('s1'),
+    'still present before 40s grace');
 
   t.mock.timers.tick(10_000);
   await flush();
-  assert.equal(await game.playerStore.get('s1'), undefined, 'removed after 40s');
+  assert.equal(await game.playerStore.get('s1'), undefined,
+    'removed after 40s');
 });
 
-test('snake room always uses the flat 30s grace (no remainingSeconds)', async (t) => {
+test('snake room always uses the flat 30s grace (no remainingSeconds)',
+  async (t) => {
   const io = makeIoStub();
   const reg = new RoomRegistry(io);
   const meta = await reg.create({ name: 'SD3s', gameType: 'snake' });
@@ -174,7 +180,76 @@ test('softDisconnect falls back to hard leave when player record '
   assert.equal(reg.get(meta.id), null, 'room destroyed once empty');
 });
 
-test('pending disconnect timer after destroy() fires harmlessly', async (t) => {
+test('stale disconnect after session reconnect is ignored', async (t) => {
+  const io = makeIoStub();
+  const reg = new RoomRegistry(io);
+  const meta = await reg.create({ name: 'SD-race', maxPlayers: 4 });
+  t.after(() => reg.destroy(meta.id));
+
+  const s1 = fakeSocket('s1', io);
+  await reg.join(meta.id, s1, 'A', 'sess-1');
+  assert.equal(s1.data.sessionId, 'sess-1', 'sessionId stored on join');
+
+  // Player rejoins on a new socket before s1's disconnect fires —
+  // the player record is re-keyed to s2.
+  const s2 = fakeSocket('s2', io);
+  const rejoin = await reg.join(meta.id, s2, 'A', 'sess-1');
+  assert.equal(rejoin.reconnected, true);
+  assert.equal(s2.data.sessionId, 'sess-1',
+    'sessionId stored on reconnect');
+
+  const game = reg.get(meta.id);
+  assert.equal(await game.playerStore.get('s1'), undefined,
+    'old socket key gone after re-key');
+  assert.ok(await game.playerStore.get('s2'),
+    'record lives under new socket id');
+  io._events.length = 0;
+  const countBefore = (await reg._metaStore.get(meta.id)).playerCount;
+
+  // The old socket's disconnect finally arrives — no record under s1.
+  await reg.softDisconnect(meta.id, s1);
+
+  assert.equal(
+    io._events.find((e) => e.event === 'player-left'),
+    undefined,
+    'no player-left for the stale disconnect'
+  );
+  assert.equal(
+    io._events.find((e) => e.event === 'player-disconnected'),
+    undefined,
+    'no player-disconnected for the stale disconnect'
+  );
+  const countAfter = (await reg._metaStore.get(meta.id)).playerCount;
+  assert.equal(countAfter, countBefore, 'playerCount unchanged');
+  assert.ok(await game.playerStore.get('s2'),
+    'reconnected player still in the room');
+});
+
+test('disconnect with sessionId but no re-keyed record hard-leaves',
+  async () => {
+  const io = makeIoStub();
+  const reg = new RoomRegistry(io);
+  const meta = await reg.create({ name: 'SD-miss', maxPlayers: 4 });
+  const game = reg.get(meta.id);
+
+  const s1 = fakeSocket('s1', io);
+  await reg.join(meta.id, s1, 'A', 'sess-1');
+  // Purge the record (e.g. post-match cleanup) — sessionId resolves
+  // to nothing, so the stale-disconnect check must not suppress the
+  // hard-leave fallback.
+  await game.playerStore.del('s1');
+  io._events.length = 0;
+
+  await reg.softDisconnect(meta.id, s1);
+
+  const left = io._events.find((e) => e.event === 'player-left');
+  assert.ok(left, 'hard-leave fallback still runs');
+  assert.deepEqual(left.payload, { id: 's1' });
+  assert.equal(reg.get(meta.id), null, 'room destroyed once empty');
+});
+
+test('pending disconnect timer after destroy() fires harmlessly',
+  async (t) => {
   const io = makeIoStub();
   const reg = new RoomRegistry(io);
   const meta = await reg.create({ name: 'SD5', maxPlayers: 4 });
@@ -198,10 +273,12 @@ test('pending disconnect timer after destroy() fires harmlessly', async (t) => {
     undefined,
     'leaked timer leave() early-returns on missing game'
   );
-  assert.equal(reg._disconnectTimers.size, 0, 'timer map drained by its own callback');
+  assert.equal(reg._disconnectTimers.size, 0,
+    'timer map drained by its own callback');
 });
 
-test('destroy() evicts room sockets and clears socket.data.roomId', async (t) => {
+test('destroy() evicts room sockets and clears socket.data.roomId',
+  async (t) => {
   const io = makeIoStub();
   const reg = new RoomRegistry(io);
   const meta = await reg.create({ name: 'SD6', maxPlayers: 4 });
