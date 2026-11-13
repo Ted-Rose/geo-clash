@@ -304,7 +304,10 @@ export class RoomRegistry {
           : EMPTY_ROOM_TTL_MS;
 
       const fakeSocket = {
-        id: socket.id, data: {}, leave: () => {}, join: () => {},
+        id: socket.id,
+        data: { sessionId: socket.data?.sessionId },
+        leave: () => {},
+        join: () => {},
       };
       const handle = setTimeout(async () => {
         this._disconnectTimers.delete(socket.id);
@@ -319,6 +322,21 @@ export class RoomRegistry {
     return this._lock.withLock(roomId, async () => {
       const game = this._rooms.get(roomId);
       if (!game) return;
+      const p = await game.playerStore.get(socket.id);
+      if (!p) {
+        // Stale leave: the session already re-keyed this player to a
+        // new socket, so the record lives under a different socket id.
+        // Ignore — removal side effects would punish the reconnected
+        // player. Mirrors the stale guard in softDisconnect.
+        const sessionId = socket.data?.sessionId;
+        if (sessionId
+          && typeof game.getPlayerBySessionId === 'function') {
+          const rekeyed = await game.getPlayerBySessionId(sessionId);
+          if (rekeyed && rekeyed.socketId !== socket.id) return;
+        }
+        // No re-keyed record — removePlayer itself is a no-op on miss;
+        // fall through to the existing hard-leave side effects.
+      }
       await game.removePlayer(socket.id);
       socket.leave(roomId);
       socket.data.roomId = null;
