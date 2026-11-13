@@ -1,0 +1,88 @@
+{
+  // Debug configs for geo-clash.
+  //
+  // "Full stack" is the FIRST entry = the default F5 target. It
+  // runs the root `npm run dev` script (server :3001 + Vite client
+  // :5173 via concurrently) inside a JavaScript Debug Terminal.
+  // Every node process spawned there auto-attaches to the
+  // debugger, so breakpoints in server/src work without a
+  // separate session. When Vite prints its Local URL, a
+  // debuggable Chrome window opens automatically.
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "Full stack",
+      "type": "node-terminal",
+      "request": "launch",
+      "command": "npm run dev",
+      "cwd": "${workspaceFolder}",
+      "serverReadyAction": {
+        "pattern": "Local:\\s+(https?://\\S+)",
+        "uriFormat": "%s",
+        "action": "debugWithChrome",
+        "webRoot": "${workspaceFolder}/client/src"
+      }
+    },
+    {
+      // Server as its own dedicated debug session (own Debug
+      // Console, explicit binary) instead of terminal auto-attach.
+      // VS Code's GUI env doesn't inherit your shell PATH, and
+      // Homebrew's node isn't on the default GUI PATH — hence the
+      // absolute runtimeExecutable. Intel Macs: /usr/local/bin/node.
+      "name": "Server: debug (watch)",
+      "type": "node",
+      "request": "launch",
+      "cwd": "${workspaceFolder}/server",
+      "program": "${workspaceFolder}/server/src/index.js",
+      "runtimeExecutable": "/opt/homebrew/bin/node",
+      "runtimeArgs": ["--watch"],
+      // --watch respawns the app on file change; this keeps
+      // breakpoints attached to the respawned child process.
+      "autoAttachChildProcesses": true,
+      "env": {
+        "PORT": "3001"
+        // Unset = same-origin only, which the Vite proxy needs.
+        // Set only when bypassing the proxy:
+        // "CORS_ORIGIN": "http://localhost:5173"
+      },
+      "console": "integratedTerminal",
+      "skipFiles": ["<node_internals>/**"]
+    },
+    {
+      // Client dev server on its own — also auto-opens a
+      // debuggable Chrome once Vite prints its Local URL.
+      "name": "Client: Vite dev server",
+      "type": "node-terminal",
+      "request": "launch",
+      "command": "npm run dev",
+      "cwd": "${workspaceFolder}/client",
+      "serverReadyAction": {
+        "pattern": "Local:\\s+(https?://\\S+)",
+        "uriFormat": "%s",
+        "action": "debugWithChrome",
+        "webRoot": "${workspaceFolder}/client/src"
+      }
+    },
+    {
+      // Re-open a debuggable browser after closing it, without
+      // restarting the dev servers.
+      "name": "Chrome: debug UI",
+      "type": "chrome",
+      "request": "launch",
+      "url": "http://localhost:5173",
+      "webRoot": "${workspaceFolder}/client/src"
+    }
+  ],
+  "compounds": [
+    {
+      // Alternative: dedicated server debug session + Vite in
+      // separate terminals instead of the all-in-one Full stack.
+      "name": "Full stack (split sessions)",
+      "configurations": [
+        "Server: debug (watch)",
+        "Client: Vite dev server"
+      ],
+      "stopAll": true
+    }
+  ]
+}
