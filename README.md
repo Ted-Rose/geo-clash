@@ -65,8 +65,9 @@ npm run dev
 # server → http://localhost:3001
 npm test    # run the server and client test suites
 ```
-No GPS on desktop? Tick **Simulate Movement** in the UI and walk around with
-WASD. Spawn bots from the same panel to fill the arena.
+No GPS on desktop? Open the lobby's **Settings** (gear, top right), tick
+**Simulate Movement**, and walk around with WASD. Spawn bots from the
+in-game menu to fill the arena.
 
 ## Production deployment (Vercel + Cloud Run)
 The client and server are deployed to **different origins**, so two env
