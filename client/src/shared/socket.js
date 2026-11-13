@@ -1,9 +1,9 @@
 import { io } from 'socket.io-client';
 
 // In dev, Vite proxies /socket.io to the local server, so '/' is correct.
-// In production (Vercel SPA + GCP Cloud Run server), VITE_SERVER_URL must be
-// set at build time to the Cloud Run HTTPS URL — otherwise socket.io connects
-// to the Vercel origin, hits the SPA rewrite, and silently never handshakes.
+// In production, Vercel-hosted builds set VITE_SERVER_URL at build time to
+// the Cloud Run HTTPS URL; the bundle baked into the server image leaves it
+// unset and talks to the Cloud Run origin that served it (same-origin).
 export const SERVER_URL = import.meta.env.VITE_SERVER_URL || '/';
 
 // API_BASE is used for fetch() and Leaflet tile URLs.
@@ -12,10 +12,13 @@ export const SERVER_URL = import.meta.env.VITE_SERVER_URL || '/';
 export const API_BASE = SERVER_URL === '/' ? '' : SERVER_URL;
 
 if (import.meta.env.PROD && SERVER_URL === '/') {
-  console.warn(
-    '[geo-clash] VITE_SERVER_URL is not set for the production build. ' +
-      'Socket.io will try to connect to the Vercel origin and fail silently. ' +
-      'Set VITE_SERVER_URL to your Cloud Run URL in the Vercel project env.'
+  // Same-origin production is legitimate: the backend serves this build
+  // (see server/src/app.js). On Vercel it means VITE_SERVER_URL was
+  // forgotten — the info log names both cases without crying wolf.
+  console.info(
+    '[geo-clash] VITE_SERVER_URL is unset — socket.io and /api will use ' +
+      'the serving origin. Expected when the backend serves this build; ' +
+      'on Vercel, set VITE_SERVER_URL to the Cloud Run URL.'
   );
 }
 
