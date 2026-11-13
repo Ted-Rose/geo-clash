@@ -64,9 +64,9 @@ afterEach(() => {
 });
 
 describe('App persisted preferences', () => {
-  it('defaults maxImageryAge/maxNativeZoom to 3/18 and persists changes', () => {
+  it('defaults to 2/18 and persists changes', () => {
     render(<App />);
-    expect(latestLobby().maxImageryAge).toBe(3);
+    expect(latestLobby().maxImageryAge).toBe(2);
     expect(latestLobby().maxNativeZoom).toBe(18);
 
     act(() => latestLobby().setMaxImageryAge(7));

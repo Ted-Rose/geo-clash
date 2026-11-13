@@ -1,5 +1,10 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen, act } from '@testing-library/react';
+import {
+  render,
+  screen,
+  act,
+  fireEvent,
+} from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { makeFakeSocket, socketState } from '../fakeSocket.js';
 import LobbyScreen from '../../shared/LobbyScreen.jsx';
@@ -29,7 +34,7 @@ function baseProps(overrides = {}) {
     setSimulate: vi.fn(),
     simPos: null,
     setSimPos: vi.fn(),
-    maxImageryAge: 3,
+    maxImageryAge: 2,
     setMaxImageryAge: vi.fn(),
     maxNativeZoom: 18,
     setMaxNativeZoom: vi.fn(),
@@ -63,7 +68,7 @@ beforeEach(() => {
 });
 
 describe('room-create payloads', () => {
-  it('emits clash payload with ammo fields only when ammoLimit > 0', async () => {
+  it('emits clash ammo fields only when ammoLimit > 0', async () => {
     const user = userEvent.setup();
     render(<LobbyScreen {...baseProps()} />);
     await user.click(screen.getByRole('button', { name: '3 rockets' }));
@@ -197,7 +202,7 @@ describe('create → join auto-flow', () => {
     });
   });
 
-  it('shows error and skips onJoined when the auto-join ack fails', async () => {
+  it('shows error and skips onJoined on failed auto-join', async () => {
     const onJoined = vi.fn();
     const user = userEvent.setup();
     render(<LobbyScreen {...baseProps({ onJoined })} />);
@@ -244,7 +249,9 @@ describe('simulate seeding', () => {
   it('seeds the default simPos once when simulate is toggled on', () => {
     const setSimPos = vi.fn();
     render(
-      <LobbyScreen {...baseProps({ simulate: true, simPos: null, setSimPos })} />
+      <LobbyScreen
+        {...baseProps({ simulate: true, simPos: null, setSimPos })}
+      />
     );
     expect(setSimPos).toHaveBeenCalledTimes(1);
     expect(setSimPos).toHaveBeenCalledWith({
@@ -261,5 +268,53 @@ describe('simulate seeding', () => {
       <LobbyScreen {...baseProps({ simulate: true, simPos, setSimPos })} />
     );
     expect(setSimPos).not.toHaveBeenCalled();
+  });
+});
+
+describe('settings gear', () => {
+  it('keeps map/debug controls behind the gear toggle', async () => {
+    const user = userEvent.setup();
+    render(<LobbyScreen {...baseProps()} />);
+    const gear = screen.getByRole('button', { name: 'Settings' });
+
+    expect(
+      screen.queryByText('Max Imagery Age')
+    ).not.toBeInTheDocument();
+
+    await user.click(gear);
+    expect(screen.getByText('Max Imagery Age')).toBeInTheDocument();
+    expect(screen.getByText('Max Map Detail')).toBeInTheDocument();
+    expect(screen.getByText(/simulate movement/i)).toBeInTheDocument();
+
+    await user.click(gear);
+    expect(
+      screen.queryByText('Max Imagery Age')
+    ).not.toBeInTheDocument();
+  });
+
+  it('wires the sliders and simulate toggle to their setters', async () => {
+    const setMaxImageryAge = vi.fn();
+    const setMaxNativeZoom = vi.fn();
+    const setSimulate = vi.fn();
+    const user = userEvent.setup();
+    render(
+      <LobbyScreen
+        {...baseProps({ setMaxImageryAge, setMaxNativeZoom, setSimulate })}
+      />
+    );
+    await user.click(screen.getByRole('button', { name: 'Settings' }));
+
+    fireEvent.change(screen.getByLabelText(/max imagery age/i), {
+      target: { value: '7' },
+    });
+    expect(setMaxImageryAge).toHaveBeenCalledWith(7);
+
+    fireEvent.change(screen.getByLabelText(/max map detail/i), {
+      target: { value: '16' },
+    });
+    expect(setMaxNativeZoom).toHaveBeenCalledWith(16);
+
+    await user.click(screen.getByRole('checkbox'));
+    expect(setSimulate).toHaveBeenCalled();
   });
 });

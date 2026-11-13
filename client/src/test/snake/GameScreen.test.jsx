@@ -49,7 +49,7 @@ function baseProps(overrides = {}) {
     simulate: false,
     simPos: null,
     setSimPos: vi.fn(),
-    maxImageryAge: 3,
+    maxImageryAge: 2,
     maxNativeZoom: 18,
     initialSnapshot: null,
     onLeave: vi.fn(),
@@ -80,7 +80,7 @@ describe('snake GameScreen position effect', () => {
   // ~2.2 m steps east.
   const p = (i) => ({ lat: 0, lng: 0.00002 * i, heading: 0 });
 
-  it('eats food within 4 m once, emits eat_food + location-update with tail/score', () => {
+  it('eats food within 4 m once, emits eat_food + location-update', () => {
     const now = vi.spyOn(Date, 'now').mockReturnValue(0);
     const props = baseProps({ position: p(0), initialSnapshot: snap });
     const { rerender } = render(<SnakeGameScreen {...props} />);
@@ -90,7 +90,9 @@ describe('snake GameScreen position effect', () => {
 
     now.mockReturnValue(4000);
     rerender(<SnakeGameScreen {...props} position={p(1)} />);
-    expect(socket._emits('eat_food')).toEqual([['eat_food', { foodId: 'f1' }]]);
+    expect(socket._emits('eat_food')).toEqual([
+      ['eat_food', { foodId: 'f1' }],
+    ]);
     expect(sounds.playEat).toHaveBeenCalled();
     expect(lastLoc().score).toBe(1);
 
@@ -120,7 +122,8 @@ describe('snake GameScreen position effect', () => {
     const props = baseProps({ position: p(0), initialSnapshot: snap });
     const { rerender } = render(<SnakeGameScreen {...props} />);
     now.mockReturnValue(4000);
-    rerender(<SnakeGameScreen {...props} position={p(1)} />); // eats f1 → score 1
+    // eats f1 → score 1
+    rerender(<SnakeGameScreen {...props} position={p(1)} />);
     rerender(<SnakeGameScreen {...props} position={p(2)} />); // tail grows
     expect(lastLoc().score).toBe(1);
     expect(lastLoc().tailPoints.length).toBeGreaterThan(0);

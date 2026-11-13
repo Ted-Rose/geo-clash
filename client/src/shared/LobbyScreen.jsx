@@ -4,6 +4,24 @@ import { useRooms } from './hooks/useRooms.js';
 import RoomCreateForm from './RoomCreateForm.jsx';
 import RoomList from './RoomList.jsx';
 
+// Material "settings" gear glyph, split at path-command boundaries to
+// keep every source line short.
+const GEAR_ICON_PATH = [
+  'M19.14 12.94c.04-.3.06-.61.06-.94 0-.32-.02-.64-.07-.94',
+  'l2.03-1.58c.18-.14.23-.41.12-.61l-1.92-3.32c-.12-.22-.37-.29-.59-.22',
+  'l-2.39.96c-.5-.38-1.03-.7-1.62-.94l-.36-2.54c-.04-.24-.24-.41-.48-.41',
+  'h-3.84c-.24 0-.43.17-.47.41l-.36 2.54c-.59.24-1.13.57-1.62.94',
+  'l-2.39-.96c-.22-.08-.47 0-.59.22L2.74 8.87c-.12.21-.08.47.12.61',
+  'l2.03 1.58c-.05.3-.09.63-.09.94s.02.64.07.94',
+  'l-2.03 1.58c-.18.14-.23.41-.12.61l1.92 3.32c.12.22.37.29.59.22',
+  'l2.39-.96c.5.38 1.03.7 1.62.94l.36 2.54c.05.24.24.41.48.41h3.84',
+  'c.24 0 .44-.17.47-.41l.36-2.54c.59-.24 1.13-.56 1.62-.94',
+  'l2.39.96c.22.08.47 0 .59-.22l1.92-3.32c.12-.22.07-.47-.12-.61',
+  'l-2.01-1.58z',
+  'M12 15.6c-1.98 0-3.6-1.62-3.6-3.6s1.62-3.6 3.6-3.6 3.6 1.62 3.6 3.6',
+  '-1.62 3.6-3.6 3.6z',
+].join(' ');
+
 // Single mobile-first lobby screen. Lets the player set their name + GPS
 // (or simulate) and either create a new room or join an existing one.
 // onJoined({ roomId }) is called once the server acks a successful join.
@@ -28,6 +46,7 @@ export default function LobbyScreen({
   );
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState(null);
+  const [settingsOpen, setSettingsOpen] = useState(false);
 
   // Seed sim position once when the user enables simulate.
   useEffect(() => {
@@ -116,33 +135,41 @@ export default function LobbyScreen({
 
   return (
     <div className="absolute inset-0 z-[1000] bg-slate-900 overflow-y-auto">
-      <div className="min-h-full flex items-start justify-center p-4">
-        <div className="w-full max-w-md space-y-4 py-6">
-          <div>
-            <h1 className="text-3xl font-extrabold tracking-tight">
-              Parku Cīņas
-            </h1>
-            <p className="text-slate-400 text-sm mt-1">
-              Stand in 5×5 m squares for 5 seconds to claim them. Most
-              squares in 5 minutes wins.
-            </p>
-          </div>
+      {settingsOpen && (
+        <div
+          className="fixed inset-0 z-[9]"
+          onClick={() => setSettingsOpen(false)}
+        />
+      )}
 
-          <div className="bg-slate-800 rounded-2xl p-4 space-y-3 shadow-lg">
-            <label className="block">
-              <span className="text-sm text-slate-300">Your name</span>
-              <input
-                value={name}
-                onChange={(e) => {
-                  setName(e.target.value);
-                  localStorage.setItem('playerName', e.target.value);
-                }}
-                placeholder="Anonymous"
-                className="mt-1 w-full px-3 py-3 rounded-lg bg-slate-900
-                           border border-slate-700 focus:outline-none
-                           focus:ring-2 focus:ring-cyan-500 text-base"
-              />
-            </label>
+      {/* Settings gear — top-right corner, opens map/debug options. */}
+      <div className="fixed top-3 right-3 z-10">
+        <button
+          onClick={() => setSettingsOpen((o) => !o)}
+          className="w-11 h-11 flex items-center justify-center
+                     bg-slate-800/90 backdrop-blur rounded-xl shadow-lg
+                     text-slate-200 active:scale-95 transition"
+          aria-label="Settings"
+          aria-expanded={settingsOpen}
+        >
+          <svg
+            viewBox="0 0 24 24"
+            fill="currentColor"
+            className="w-6 h-6"
+            aria-hidden="true"
+          >
+            <path d={GEAR_ICON_PATH} />
+          </svg>
+        </button>
+
+        {settingsOpen && (
+          <div
+            className="absolute right-0 mt-2 w-72 bg-slate-800 rounded-2xl
+                       p-4 space-y-3 shadow-xl border border-slate-700"
+          >
+            <div className="text-sm font-semibold text-slate-200">
+              Settings
+            </div>
 
             <label
               className="flex items-center gap-2 text-sm text-slate-300"
@@ -208,11 +235,42 @@ export default function LobbyScreen({
                 The map will "overzoom" newer, lower-res tiles instead.
               </div>
             </label>
+          </div>
+        )}
+      </div>
+
+      <div className="min-h-full flex items-start justify-center p-4">
+        <div className="w-full max-w-md space-y-4 py-6">
+          <div>
+            <h1 className="text-3xl font-extrabold tracking-tight">
+              Parku Cīņas
+            </h1>
+            <p className="text-slate-400 text-sm mt-1">
+              Stand in 5×5 m squares for 5 seconds to claim them. Most
+              squares in 5 minutes wins.
+            </p>
+          </div>
+
+          <div className="bg-slate-800 rounded-2xl p-4 space-y-3 shadow-lg">
+            <label className="block">
+              <span className="text-sm text-slate-300">Your name</span>
+              <input
+                value={name}
+                onChange={(e) => {
+                  setName(e.target.value);
+                  localStorage.setItem('playerName', e.target.value);
+                }}
+                placeholder="Anonymous"
+                className="mt-1 w-full px-3 py-3 rounded-lg bg-slate-900
+                           border border-slate-700 focus:outline-none
+                           focus:ring-2 focus:ring-cyan-500 text-base"
+              />
+            </label>
 
             {!position && !simulate && (
               <div className="text-xs text-amber-300">
-                Waiting for GPS… on desktop, enable Simulate Movement
-                above.
+                Waiting for GPS… on desktop, enable Simulate Movement in
+                Settings (gear, top right).
               </div>
             )}
 

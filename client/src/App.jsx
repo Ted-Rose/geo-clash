@@ -29,7 +29,7 @@ export default function App() {
 
   const [maxImageryAge, _setMaxImageryAge] = useState(() => {
     const saved = localStorage.getItem('maxImageryAge');
-    return saved ? parseInt(saved, 10) : 3;
+    return saved ? parseInt(saved, 10) : 2;
   });
 
   const setMaxImageryAge = (val) => {
