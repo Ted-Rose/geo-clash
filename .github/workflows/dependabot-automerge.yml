@@ -45,7 +45,7 @@ jobs:
 
       # The main ruleset has no required checks, so --auto alone
       # would merge before test.yml finishes. Poll the head SHA's
-      # check runs and commit statuses first instead.
+      # check runs and non-Vercel commit statuses first instead.
       - name: Wait for checks to pass
         run: |
           # Poll check runs directly: this job's own "automerge"
@@ -76,10 +76,17 @@ jobs:
                     else "passed" end')
             # Statuses arrive newest-first; use only the latest
             # event per context, else a superseded "pending"
-            # blocks the loop forever.
+            # blocks the loop forever. The "Vercel" context is
+            # excluded: the account-level build quota makes it
+            # flap to "failure" ("Deployment rate limited") or
+            # stick at "pending" for hours, it is not a required
+            # check in the main ruleset, and the owner merges
+            # Dependabot PRs through it anyway. Real CI gates on
+            # the check-runs poll above.
             st=$(gh api --paginate \
               "repos/$REPO/commits/$sha/statuses" |
-              jq -sr '([.[][]] | group_by(.context) |
+              jq -sr '([.[][] | select(.context != "Vercel")] |
+                    group_by(.context) |
                     map(.[0])) as $s |
                     if ($s | length) == 0 then "none"
                     elif ([$s[] | select(.state == "error" or
