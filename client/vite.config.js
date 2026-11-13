@@ -81,6 +81,33 @@ export default defineConfig(({ mode }) => {
           navigateFallbackDenylist: [/^\/socket\.io/, /^\/api\//],
           clientsClaim: true,
           skipWaiting: true,
+          runtimeCaching: [
+            {
+              // Serialized verbatim into sw.js — must not close over
+              // config-scope names. `sameOrigin` guards cross-origin
+              // tile responses out of this cache; RegExp urlPatterns
+              // can't anchor a bare path (they test url.href), hence
+              // a match callback.
+              urlPattern: ({ url, sameOrigin }) =>
+                sameOrigin && url.pathname.startsWith('/api/map/tiles/'),
+              // Satellite imagery is effectively immutable and the edge
+              // already serves cached copies — cache first. Offline
+              // coverage = whatever areas were viewed while online.
+              handler: 'CacheFirst',
+              options: {
+                cacheName: 'map-tiles',
+                expiration: {
+                  // ~256px JPEGs (~30-60 KB each): 2000 entries covers
+                  // several arenas at all zooms (~100 MB worst case).
+                  maxEntries: 2000,
+                  maxAgeSeconds: 30 * 24 * 60 * 60,
+                },
+                cacheableResponse: {
+                  statuses: [0, 200],
+                },
+              },
+            },
+          ],
         },
         devOptions: {
           enabled: false,

@@ -57,7 +57,11 @@ folders unless introducing a genuinely new deployable.
   them via the Vite `/api` proxy, production via a `vercel.json` external
   rewrite to Cloud Run (Vercel edge cache, `s-maxage` on the upstream
   response). Socket.io still connects cross-origin via `VITE_SERVER_URL`;
-  never route `/socket.io` through Vercel.
+  never route `/socket.io` through Vercel. The generated service worker
+  caches tile GETs in a bounded `map-tiles` runtime cache (`CacheFirst`,
+  2000 entries / 30 days) — offline coverage is whatever areas the device
+  has already viewed; the matcher is a `sameOrigin` callback and never
+  caches cross-origin tile responses.
 
 ## Frontend conventions
 - **Vite + React** function components, hooks only. No class components.
