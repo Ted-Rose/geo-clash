@@ -245,7 +245,8 @@ Universal rules — follow exactly:
   origin/main` and do all work (commits, push, PR) inside it.
   The main checkout may hold the user's uncommitted work or
   another agent's session; never switch branches there.
-  Finishing a task means a green, reviewed PR — never ask the
+  Finishing a task means a green, agent-reviewed PR — never
+  ask the
   user whether to open one. After pushing: open the PR ready
   for review (NEVER a draft) per `.devin/skills/create-pr/`,
   then run a review loop — spawn a FRESH reviewer subagent on

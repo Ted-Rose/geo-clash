@@ -52,8 +52,10 @@ description: >
 7. `gh pr checks --watch` until green where CI exists; fix
    failures on the branch, push again.
 8. The PR is created ready for review — never a draft unless
-   the user explicitly asks. Report the PR URL, then run the
-   review loop (AGENTS.md): fresh reviewer subagent on the
-   diff → fix useful findings → repeat until a round finds
-   nothing meaningful. Wait for the user's approval — PRs are
-   squash-merged into `main` and the working branch deleted.
+   the user explicitly asks. Then run the review loop
+   (AGENTS.md): fresh reviewer subagent on the diff → fix
+   useful findings, push, and re-run `gh pr checks --watch` →
+   repeat until a round finds nothing meaningful and checks
+   are green. Report the PR URL and wait for the user's
+   approval — PRs are squash-merged into `main` and the
+   working branch deleted.
