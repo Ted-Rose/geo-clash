@@ -226,27 +226,27 @@ test('stale disconnect after session reconnect is ignored', async (t) => {
 });
 
 test('disconnect with sessionId but no re-keyed record hard-leaves',
-  async () => {
-    const io = makeIoStub();
-    const reg = new RoomRegistry(io);
-    const meta = await reg.create({ name: 'SD-miss', maxPlayers: 4 });
-    const game = reg.get(meta.id);
+  async (t) => {
+  const io = makeIoStub();
+  const reg = new RoomRegistry(io);
+  const meta = await reg.create({ name: 'SD-miss', maxPlayers: 4 });
+  const game = reg.get(meta.id);
 
-    const s1 = fakeSocket('s1', io);
-    await reg.join(meta.id, s1, 'A', 'sess-1');
-    // Purge the record (e.g. post-match cleanup) — sessionId resolves
-    // to nothing, so the stale-disconnect check must not suppress the
-    // hard-leave fallback.
-    await game.playerStore.del('s1');
-    io._events.length = 0;
+  const s1 = fakeSocket('s1', io);
+  await reg.join(meta.id, s1, 'A', 'sess-1');
+  // Purge the record (e.g. post-match cleanup) — sessionId resolves
+  // to nothing, so the stale-disconnect check must not suppress the
+  // hard-leave fallback.
+  await game.playerStore.del('s1');
+  io._events.length = 0;
 
-    await reg.softDisconnect(meta.id, s1);
+  await reg.softDisconnect(meta.id, s1);
 
-    const left = io._events.find((e) => e.event === 'player-left');
-    assert.ok(left, 'hard-leave fallback still runs');
-    assert.deepEqual(left.payload, { id: 's1' });
-    assert.equal(reg.get(meta.id), null, 'room destroyed once empty');
-  });
+  const left = io._events.find((e) => e.event === 'player-left');
+  assert.ok(left, 'hard-leave fallback still runs');
+  assert.deepEqual(left.payload, { id: 's1' });
+  assert.equal(reg.get(meta.id), null, 'room destroyed once empty');
+});
 
 test('pending disconnect timer after destroy() fires harmlessly',
   async (t) => {
