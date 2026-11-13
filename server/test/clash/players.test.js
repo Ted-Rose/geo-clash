@@ -5,6 +5,7 @@ import {
   eventsNamed,
   cellCenter,
   patchPlayer,
+  placeInCell,
 } from './helpers.js';
 import { bboxAround } from '../../src/shared/gridUtils.js';
 
@@ -22,7 +23,9 @@ test('addPlayer spawns at base center with default state', async (t) => {
   assert.equal(p.color, '#ef4444', 'first COLORS slot');
 });
 
-test('addPlayer before grid init spawns at {0,0} and defaults the name', async (t) => {
+test(
+  'addPlayer before grid init spawns at {0,0} and defaults the name',
+  async (t) => {
   const { game } = makeGame(t);
   const p1 = await game.addPlayer('abcdef-socket');
   assert.equal(p1.lat, 0);
@@ -30,9 +33,12 @@ test('addPlayer before grid init spawns at {0,0} and defaults the name', async (
   assert.equal(p1.name, 'P-abcd');
   const p2 = await game.addPlayer('B');
   assert.equal(p2.color, '#3b82f6', 'second COLORS slot');
-});
+  },
+);
 
-test('updateLocation updates position/heading and ignores dead players', async (t) => {
+test(
+  'updateLocation updates position/heading, also for dead players',
+  async (t) => {
   const { game } = makeGame(t);
   await game.addPlayer('A', 'Alice');
 
@@ -48,12 +54,16 @@ test('updateLocation updates position/heading and ignores dead players', async (
   p = await game.playerStore.get('A');
   assert.equal(p.heading, 90, 'non-number heading leaves prior value');
 
+  // Dead players keep reporting position — they need it to walk back
+  // to the base cell and respawn.
   await patchPlayer(game, 'A', { alive: false });
   await game.updateLocation('A', 52.0, 0.0, 180);
   p = await game.playerStore.get('A');
-  assert.equal(p.lat, 51.6, 'dead player position unchanged');
-  assert.equal(p.lng, -0.11);
-});
+  assert.equal(p.lat, 52.0, 'dead player position still updates');
+  assert.equal(p.lng, 0.0);
+  assert.equal(p.heading, 180);
+  },
+);
 
 test('updateLocation seeds the grid centered on the first fix', async (t) => {
   const { game } = makeGame(t);
@@ -90,7 +100,9 @@ test('getPlayerBySessionId finds the player and its socketId', async (t) => {
   assert.equal(await game.getPlayerBySessionId(undefined), null);
 });
 
-test('swapSocketId re-keys the player and remaps grid ownerId + progress', async (t) => {
+test(
+  'swapSocketId re-keys the player and remaps grid ownerId + progress',
+  async (t) => {
   const { game } = makeGame(t);
   await game.initGrid(51.5, -0.12);
   const a = await game.addPlayer('A', 'Alice', 'sess-1');
@@ -114,7 +126,8 @@ test('swapSocketId re-keys the player and remaps grid ownerId + progress', async
   assert.equal(await game.playerStore.get('A'), undefined, 'old key gone');
   assert.equal((await game.gridStore.get('0_0')).ownerId, 'A2');
   assert.equal((await game.gridStore.get('0_1')).progress.playerId, 'A2');
-});
+  },
+);
 
 test('swapSocketId on unknown old id is a no-op', async (t) => {
   const { game } = makeGame(t);
@@ -126,7 +139,10 @@ test('swapSocketId on unknown old id is a no-op', async (t) => {
   assert.equal(players[0][0], 'A');
 });
 
-test('removePlayer deletes the player and clears their in-progress claim but keeps owned cells', async (t) => {
+test(
+  'removePlayer deletes the player and clears their in-progress ' +
+    'claim but keeps owned cells',
+  async (t) => {
   const { game } = makeGame(t);
   await game.initGrid(51.5, -0.12);
   const a = await game.addPlayer('A', 'Alice');
@@ -146,9 +162,13 @@ test('removePlayer deletes the player and clears their in-progress claim but kee
   assert.equal((await game.gridStore.get('0_1')).progress, null);
   // documents current behavior: owned cells stay owned by the departed id
   assert.equal((await game.gridStore.get('0_0')).ownerId, 'A');
-});
+  },
+);
 
-test('respawn at the base cell resets lives/alive/shield and emits player-respawn', async (t) => {
+test(
+  'respawn at the base cell resets lives/alive/shield and emits ' +
+    'player-respawn',
+  async (t) => {
   const { io, game } = makeGame(t);
   await game.initGrid(51.5, -0.12);
   await game.addPlayer('A', 'Alice'); // already at base center
@@ -167,6 +187,25 @@ test('respawn at the base cell resets lives/alive/shield and emits player-respaw
   const ev = eventsNamed(io, 'player-respawn');
   assert.equal(ev.length, 1);
   assert.deepEqual(ev[0].payload, { id: 'A', lives: 3 });
+  },
+);
+
+test('dead player walks back to base and respawns successfully', async (t) => {
+  const { io, game } = makeGame(t);
+  await game.initGrid(51.5, -0.12);
+  await game.addPlayer('A', 'Alice');
+  await placeInCell(game, 'A', '0_0'); // away from base
+  await patchPlayer(game, 'A', { lives: 0, alive: false });
+
+  const base = cellCenter(game.grid, game.baseCellId);
+  await game.updateLocation('A', base.lat, base.lng);
+
+  await game.respawn('A');
+  const p = await game.playerStore.get('A');
+  assert.equal(p.alive, true);
+  assert.equal(p.lives, 3);
+  assert.equal(eventsNamed(io, 'player-respawn').length, 1);
+  assert.equal(eventsNamed(io, 'respawn-denied').length, 0);
 });
 
 test('respawn outside the base cell emits respawn-denied', async (t) => {

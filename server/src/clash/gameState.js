@@ -213,8 +213,11 @@ export class GameState {
   }
 
   async updateLocation(id, lat, lng, heading) {
+    // Dead players still report position so they can walk back to the
+    // base cell and respawn — capture/attack/shield gate on `alive`
+    // separately, so a corpse moving changes nothing else.
     const p = await this.playerStore.get(id);
-    if (!p || !p.alive) return;
+    if (!p) return;
     p.lat = lat;
     p.lng = lng;
     if (typeof heading === 'number') p.heading = heading;
