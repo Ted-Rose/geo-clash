@@ -14,8 +14,9 @@ export const API_BASE = SERVER_URL === '/' ? '' : SERVER_URL;
 if (import.meta.env.PROD && SERVER_URL === '/') {
   // Same-origin production is legitimate: the backend serves this build
   // (see server/src/app.js). On Vercel it means VITE_SERVER_URL was
-  // forgotten — the info log names both cases without crying wolf.
-  console.info(
+  // forgotten — the message names both cases without crying wolf.
+  // (console.info is banned by eslint no-console — warn it is.)
+  console.warn(
     '[geo-clash] VITE_SERVER_URL is unset — socket.io and /api will use ' +
       'the serving origin. Expected when the backend serves this build; ' +
       'on Vercel, set VITE_SERVER_URL to the Cloud Run URL.'
