@@ -45,6 +45,7 @@ export default function GameScreen({
     matchEnded,
     finalLeaderboard,
     globalTop,
+    respawnDenied,
   } = useClashGame({ roomId, position, initialSnapshot, reconnectSnap });
 
   // Local input/UI state — not server-driven.
@@ -228,6 +229,7 @@ export default function GameScreen({
         onRespawn={respawn}
         ammo={ammo}
         maxAmmo={maxAmmo}
+        respawnDenied={respawnDenied}
       />
 
       {simulate && (

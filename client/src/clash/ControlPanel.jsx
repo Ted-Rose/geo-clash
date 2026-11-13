@@ -13,6 +13,7 @@ export default function ControlPanel({
   onRespawn,
   ammo,
   maxAmmo,
+  respawnDenied,
 }) {
   const [shieldLeft, setShieldLeft] = useState(0);
   useEffect(() => {
@@ -59,10 +60,31 @@ export default function ControlPanel({
   const outOfAmmo = maxAmmo != null && ammo != null && ammo <= 0;
 
   return (
-    <div className="pointer-events-none absolute bottom-0 left-0 right-0 z-[500] p-3 flex flex-col gap-3">
+    <div
+      className={
+        'pointer-events-none absolute bottom-0 left-0 right-0 ' +
+        'z-[500] p-3 flex flex-col gap-3'
+      }
+    >
       {shieldLeft > 0 && (
-        <div className="self-center bg-yellow-300 text-slate-900 font-bold px-3 py-1 rounded-full shadow">
+        <div
+          className={
+            'self-center bg-yellow-300 text-slate-900 font-bold ' +
+            'px-3 py-1 rounded-full shadow'
+          }
+        >
           🛡 Shield {shieldLeft.toFixed(1)}s
+        </div>
+      )}
+
+      {dead && respawnDenied && (
+        <div
+          className={
+            'self-center bg-rose-400 text-slate-900 font-bold ' +
+            'px-3 py-1 rounded-full shadow'
+          }
+        >
+          📡 Not at base yet — keep walking
         </div>
       )}
 
@@ -70,7 +92,11 @@ export default function ControlPanel({
         <button
           onClick={onShield}
           disabled={dead || shieldLeft > 0}
-          className="flex-1 max-w-[160px] h-20 rounded-2xl bg-yellow-400 disabled:bg-slate-600 text-slate-900 font-bold text-lg shadow-lg active:scale-95 transition"
+          className={
+            'flex-1 max-w-[160px] h-20 rounded-2xl bg-yellow-400 ' +
+            'disabled:bg-slate-600 text-slate-900 font-bold ' +
+            'text-lg shadow-lg active:scale-95 transition'
+          }
         >
           🛡 SHIELD
         </button>
@@ -79,11 +105,13 @@ export default function ControlPanel({
           <button
             onClick={onRespawn}
             disabled={!atBase}
-            className={`flex-1 max-w-[200px] h-20 rounded-2xl font-bold text-lg shadow-lg active:scale-95 transition ${
-              atBase
+            className={
+              'flex-1 max-w-[200px] h-20 rounded-2xl font-bold ' +
+              'text-lg shadow-lg active:scale-95 transition ' +
+              (atBase
                 ? 'bg-emerald-400 text-slate-900'
-                : 'bg-slate-700 text-slate-400'
-            }`}
+                : 'bg-slate-700 text-slate-400')
+            }
           >
             {atBase ? '📡 RESPAWN' : 'GO TO BASE'}
           </button>
@@ -94,7 +122,11 @@ export default function ControlPanel({
               onAttack();
             }}
             disabled={dead || outOfAmmo}
-            className="flex-1 max-w-[200px] h-20 rounded-2xl bg-rose-500 disabled:bg-slate-600 text-white font-bold text-lg shadow-lg active:scale-95 transition"
+            className={
+              'flex-1 max-w-[200px] h-20 rounded-2xl bg-rose-500 ' +
+              'disabled:bg-slate-600 text-white font-bold text-lg ' +
+              'shadow-lg active:scale-95 transition'
+            }
           >
             🚀 FIRE ROCKET
             {maxAmmo != null && (

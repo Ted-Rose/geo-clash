@@ -57,7 +57,17 @@ dead), `blocked` (active shield), or `expired`.
 (`alive === false`) whose current cell is the grid's `baseCellId`.
 A respawn request from a live player SHALL be ignored — no state
 change, no emit. A dead player outside `baseCellId` SHALL receive
-`respawn-denied` with reason `not-at-base`.
+`respawn-denied` with reason `not-at-base`. Dead players SHALL keep
+their `location-update`s applied — capture, attack, and shield are
+gated on `alive` elsewhere, but movement must continue so the
+player can reach the base cell.
+
+#### Scenario: Dead player walks back to base
+
+- **WHEN** a dead player emits `location-update` reaching the
+  `baseCellId` cell
+- **THEN** the server applies the position and a subsequent
+  `player-respawn` restores the player
 
 #### Scenario: Respawn away from base rejected
 
