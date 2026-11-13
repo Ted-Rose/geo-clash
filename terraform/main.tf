@@ -17,7 +17,7 @@ provider "google" {
   region  = var.region
 }
 
-# ── Enable required APIs ─────────────────────────────────────────────────────
+# ── Enable required APIs ────────────────
 
 resource "google_project_service" "apis" {
   for_each = toset([
@@ -30,16 +30,18 @@ resource "google_project_service" "apis" {
   disable_on_destroy = false
 }
 
-# ── Artifact Registry ────────────────────────────────────────────────────────
+# ── Artifact Registry ─────────────────
 
 # NOTE: updating this repository (e.g. the cleanup policies below)
-# requires artifactregistry.repositories.update, which the deploy SA's
-# artifactregistry.writer role lacks. Grant once per project, by hand:
+# requires artifactregistry.repositories.update, which is in
+# roles/artifactregistry.admin but NOT in writer or repoAdmin
+# (repoAdmin only manages artifacts, not the repository resource).
+# Grant once per project, by hand:
 #   SA=geo-clash-ci@geo-clash-gc798.iam.gserviceaccount.com
 #   gcloud artifacts repositories add-iam-policy-binding geo-clash \
 #     --location=europe-north2 --project=geo-clash-gc798 \
 #     --member="serviceAccount:$SA" \
-#     --role="roles/artifactregistry.repoAdmin"
+#     --role="roles/artifactregistry.admin"
 resource "google_artifact_registry_repository" "server" {
   depends_on    = [google_project_service.apis]
   repository_id = "geo-clash"
@@ -76,14 +78,14 @@ locals {
   )
 }
 
-# ── Service account for Cloud Run ────────────────────────────────────────────
+# ── Service account for Cloud Run ─────────────
 
 resource "google_service_account" "cloud_run" {
   account_id   = "geo-clash-server"
   display_name = "Geo Clash Cloud Run SA"
 }
 
-# ── Secret Manager ───────────────────────────────────────────────────────────
+# ── Secret Manager ──────────────────
 
 resource "google_secret_manager_secret" "valkey_url" {
   depends_on = [google_project_service.apis]
@@ -105,7 +107,7 @@ resource "google_secret_manager_secret_iam_member" "cloud_run_read" {
   member    = "serviceAccount:${google_service_account.cloud_run.email}"
 }
 
-# ── Cloud Run service ────────────────────────────────────────────────────────
+# ── Cloud Run service ─────────────────
 
 resource "google_cloud_run_v2_service" "server" {
   depends_on = [google_project_service.apis]
