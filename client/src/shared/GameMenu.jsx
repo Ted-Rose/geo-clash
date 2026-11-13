@@ -19,6 +19,7 @@ export default function GameMenu({ onLeave, players = [], myId, children }) {
         <div
           className="fixed inset-0 z-[600]"
           onClick={() => setOpen(false)}
+          data-testid="menu-overlay"
         />
       )}
 
@@ -29,6 +30,7 @@ export default function GameMenu({ onLeave, players = [], myId, children }) {
                      bg-slate-900/85 backdrop-blur rounded-xl shadow-lg
                      text-slate-200 text-xl active:scale-95 transition"
           aria-label="Menu"
+          aria-expanded={open}
         >
           ☰
         </button>

@@ -39,8 +39,7 @@ describe('GameMenu', () => {
     render(<GameMenu onLeave={vi.fn()} players={players} />);
     openMenu();
     expect(screen.getByText('Players')).toBeInTheDocument();
-    // The overlay is the fixed full-screen div behind the menu.
-    fireEvent.click(document.querySelector('.fixed.inset-0'));
+    fireEvent.click(screen.getByTestId('menu-overlay'));
     expect(screen.queryByText('Players')).toBeNull();
   });
 
