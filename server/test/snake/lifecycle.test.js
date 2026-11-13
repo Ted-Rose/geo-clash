@@ -203,8 +203,8 @@ test('_tick: emits snake-update with players and scores', async (t) => {
   assert.deepEqual(
     Object.keys(pl).sort(),
     [
-      'alive', 'color', 'heading', 'id', 'kills', 'lat', 'lng',
-      'name', 'score', 'spawnedAt', 'tailPoints',
+      'alive', 'color', 'connected', 'heading', 'id', 'kills',
+      'lat', 'lng', 'name', 'score', 'spawnedAt', 'tailPoints',
     ],
     'public player shape only — no private fields like lastSeen',
   );

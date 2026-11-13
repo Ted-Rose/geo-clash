@@ -427,5 +427,6 @@ function publicPlayer(p) {
     kills: p.kills,
     tailPoints: p.tailPoints || [],
     spawnedAt: p.spawnedAt,
+    connected: p.connected !== false,
   };
 }

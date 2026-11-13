@@ -3,6 +3,7 @@ import {
   sampleEvenPoints,
   lightenHex,
   distM,
+  makeSnakeHeadIcon,
 } from '../../snake/SnakeLayer.jsx';
 
 describe('sampleEvenPoints', () => {
@@ -51,5 +52,22 @@ describe('distM', () => {
     const d = distM([0, 0], [0.001, 0]);
     expect(d).toBeGreaterThan(110);
     expect(d).toBeLessThan(112.5);
+  });
+});
+
+describe('makeSnakeHeadIcon', () => {
+  it('dims and badges a disconnected snake', () => {
+    const off = makeSnakeHeadIcon('#ff0000', 0, false, false);
+    expect(off.options.html).toContain('reconnecting');
+    expect(off.options.html).toContain('grayscale');
+    expect(off.options.html).toContain('opacity:0.4');
+  });
+
+  it('renders connected/undefined snakes normally', () => {
+    for (const connected of [true, undefined]) {
+      const on = makeSnakeHeadIcon('#ff0000', 0, false, connected);
+      expect(on.options.html).not.toContain('reconnecting');
+      expect(on.options.html).not.toContain('grayscale');
+    }
   });
 });
