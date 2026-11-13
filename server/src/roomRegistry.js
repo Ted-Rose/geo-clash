@@ -189,6 +189,7 @@ export class RoomRegistry {
           if (oldId === socket.id) {
             await socket.join(roomId);
             socket.data.roomId = roomId;
+            socket.data.sessionId = sessionId;
             socket.data.gameType = meta.gameType || 'clash';
             const registerGameHandlers =
               GAME_HANDLERS[socket.data.gameType];
@@ -220,6 +221,7 @@ export class RoomRegistry {
           await game.swapSocketId(oldId, socket.id);
           await socket.join(roomId);
           socket.data.roomId = roomId;
+          socket.data.sessionId = sessionId;
           socket.data.gameType = meta.gameType || 'clash';
           const registerGameHandlers =
             GAME_HANDLERS[socket.data.gameType];
@@ -249,6 +251,7 @@ export class RoomRegistry {
       await game.addPlayer(socket.id, name, sessionId);
       socket.join(roomId);
       socket.data.roomId = roomId;
+      socket.data.sessionId = sessionId || null;
       meta.playerCount += 1;
       await this._metaStore.set(roomId, meta);
       if (!game.matchActive && game.status === 'lobby') game.startMatch();
@@ -263,6 +266,16 @@ export class RoomRegistry {
       if (!game) return;
       const p = await game.playerStore.get(socket.id);
       if (!p) {
+        // Stale disconnect: the session already re-keyed this player to
+        // a new socket (rejoin beat the old socket's ping timeout), so
+        // the record lives under a different socket id. Ignore — the
+        // player is still in the room.
+        const sessionId = socket.data?.sessionId;
+        if (sessionId
+          && typeof game.getPlayerBySessionId === 'function') {
+          const rekeyed = await game.getPlayerBySessionId(sessionId);
+          if (rekeyed && rekeyed.socketId !== socket.id) return;
+        }
         // Player not found — fall back to a hard leave.
         await game.removePlayer(socket.id);
         socket.leave(roomId);
