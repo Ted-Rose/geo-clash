@@ -133,6 +133,71 @@ export default function LobbyScreen({
     );
   }
 
+  // Settings dropdown — anchored to the gear button in the header.
+  const settingsPanel = settingsOpen && (
+    <div
+      className="absolute right-0 mt-2 w-72 bg-slate-800 rounded-2xl
+                 p-4 space-y-3 shadow-xl border border-slate-700"
+    >
+      <div className="text-sm font-semibold text-slate-200">
+        Settings
+      </div>
+
+      <label className="flex items-center gap-2 text-sm text-slate-300">
+        <input
+          type="checkbox"
+          checked={simulate}
+          onChange={() => setSimulate((s) => !s)}
+          className="w-5 h-5"
+        />
+        Simulate movement (desktop / no GPS)
+      </label>
+
+      <label className="block border-t border-slate-700 pt-3">
+        <div className="flex justify-between text-sm text-slate-300 mb-1">
+          <span>Max Imagery Age</span>
+          <span className="font-mono text-cyan-400">
+            {maxImageryAge} years
+          </span>
+        </div>
+        <input
+          type="range"
+          min={1}
+          max={20}
+          step={1}
+          value={maxImageryAge}
+          onChange={(e) => setMaxImageryAge(Number(e.target.value))}
+          className="w-full accent-cyan-500"
+        />
+        <div className="text-[10px] text-slate-500 mt-1 leading-tight">
+          Blocks high-res imagery older than {maxImageryAge} years.
+        </div>
+      </label>
+
+      <label className="block border-t border-slate-700 pt-3">
+        <div className="flex justify-between text-sm text-slate-300 mb-1">
+          <span>Max Map Detail</span>
+          <span className="font-mono text-cyan-400">
+            Zoom {maxNativeZoom}
+          </span>
+        </div>
+        <input
+          type="range"
+          min={15}
+          max={19}
+          step={1}
+          value={maxNativeZoom}
+          onChange={(e) => setMaxNativeZoom(Number(e.target.value))}
+          className="w-full accent-cyan-500"
+        />
+        <div className="text-[10px] text-slate-500 mt-1 leading-tight">
+          Lower this if high-res imagery is outdated.
+          The map will "overzoom" newer, lower-res tiles instead.
+        </div>
+      </label>
+    </div>
+  );
+
   return (
     <div className="absolute inset-0 z-[1000] bg-slate-900 overflow-y-auto">
       {settingsOpen && (
@@ -142,109 +207,38 @@ export default function LobbyScreen({
         />
       )}
 
-      {/* Settings gear — top-right corner, opens map/debug options. */}
-      <div className="fixed top-3 right-3 z-10">
-        <button
-          onClick={() => setSettingsOpen((o) => !o)}
-          className="w-11 h-11 flex items-center justify-center
-                     bg-slate-800/90 backdrop-blur rounded-xl shadow-lg
-                     text-slate-200 active:scale-95 transition"
-          aria-label="Settings"
-          aria-expanded={settingsOpen}
-        >
-          <svg
-            viewBox="0 0 24 24"
-            fill="currentColor"
-            className="w-6 h-6"
-            aria-hidden="true"
-          >
-            <path d={GEAR_ICON_PATH} />
-          </svg>
-        </button>
-
-        {settingsOpen && (
-          <div
-            className="absolute right-0 mt-2 w-72 bg-slate-800 rounded-2xl
-                       p-4 space-y-3 shadow-xl border border-slate-700"
-          >
-            <div className="text-sm font-semibold text-slate-200">
-              Settings
-            </div>
-
-            <label
-              className="flex items-center gap-2 text-sm text-slate-300"
-            >
-              <input
-                type="checkbox"
-                checked={simulate}
-                onChange={() => setSimulate((s) => !s)}
-                className="w-5 h-5"
-              />
-              Simulate movement (desktop / no GPS)
-            </label>
-
-            <label className="block border-t border-slate-700 pt-3">
-              <div
-                className="flex justify-between text-sm text-slate-300
-                           mb-1"
-              >
-                <span>Max Imagery Age</span>
-                <span className="font-mono text-cyan-400">
-                  {maxImageryAge} years
-                </span>
-              </div>
-              <input
-                type="range"
-                min={1}
-                max={20}
-                step={1}
-                value={maxImageryAge}
-                onChange={(e) => setMaxImageryAge(Number(e.target.value))}
-                className="w-full accent-cyan-500"
-              />
-              <div
-                className="text-[10px] text-slate-500 mt-1 leading-tight"
-              >
-                Blocks high-res imagery older than {maxImageryAge} years.
-              </div>
-            </label>
-
-            <label className="block border-t border-slate-700 pt-3">
-              <div
-                className="flex justify-between text-sm text-slate-300
-                           mb-1"
-              >
-                <span>Max Map Detail</span>
-                <span className="font-mono text-cyan-400">
-                  Zoom {maxNativeZoom}
-                </span>
-              </div>
-              <input
-                type="range"
-                min={15}
-                max={19}
-                step={1}
-                value={maxNativeZoom}
-                onChange={(e) => setMaxNativeZoom(Number(e.target.value))}
-                className="w-full accent-cyan-500"
-              />
-              <div
-                className="text-[10px] text-slate-500 mt-1 leading-tight"
-              >
-                Lower this if high-res imagery is outdated.
-                The map will "overzoom" newer, lower-res tiles instead.
-              </div>
-            </label>
-          </div>
-        )}
-      </div>
-
       <div className="min-h-full flex items-start justify-center p-4">
         <div className="w-full max-w-md space-y-4 py-6">
           <div>
-            <h1 className="text-3xl font-extrabold tracking-tight">
-              Parku Cīņas
-            </h1>
+            <div className="flex items-center justify-between gap-3">
+              <h1 className="text-3xl font-extrabold tracking-tight">
+                Parku Cīņas
+              </h1>
+              {/* Settings gear — opens map/debug options. The
+                  relative wrapper anchors the dropdown; z-10 keeps
+                  the button above the click-outside overlay. */}
+              <div className="relative z-10">
+                <button
+                  onClick={() => setSettingsOpen((o) => !o)}
+                  className="w-10 h-10 flex items-center justify-center
+                             bg-slate-800/90 backdrop-blur rounded-xl
+                             shadow-lg text-slate-200 active:scale-95
+                             transition"
+                  aria-label="Settings"
+                  aria-expanded={settingsOpen}
+                >
+                  <svg
+                    viewBox="0 0 24 24"
+                    fill="currentColor"
+                    className="w-5 h-5"
+                    aria-hidden="true"
+                  >
+                    <path d={GEAR_ICON_PATH} />
+                  </svg>
+                </button>
+                {settingsPanel}
+              </div>
+            </div>
             <p className="text-slate-400 text-sm mt-1">
               Stand in 5×5 m squares for 5 seconds to claim them. Most
               squares in 5 minutes wins.
