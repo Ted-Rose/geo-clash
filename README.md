@@ -74,6 +74,13 @@ The client and server are deployed to **different origins**, so two env
 vars are mandatory — without them, the realtime socket silently fails to
 handshake and the *Enter the arena* button does nothing.
 
+The Cloud Run URL (`https://<service>.run.app`) also serves the built
+SPA as a **fallback entry point**: the server image builds the client
+without `VITE_SERVER_URL` (same-origin socket + `/api`, no CORS needed)
+and Express serves it with an `index.html` fallback for client-side
+routes. If Vercel is unavailable, open the Cloud Run URL directly and
+play as usual.
+
 - **Vercel (client)** — set a Project env var:
   - `VITE_SERVER_URL = https://<your-cloud-run-service>.run.app`
   - It must be set for the *Production* (and *Preview*) build environment, then
