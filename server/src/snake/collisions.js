@@ -27,18 +27,12 @@ export function collidesWithTail(head, tailPoints, skipGapM = NECK_GAP_M) {
 // head-on-tail collisions. Returns an array of { killerId, victimId }.
 export function resolveCollisions(players) {
   const kills = [];
-  const entries = Object.values(players).filter(
-    (p) => p.alive && !p.inGrace
-  );
+  const entries = Object.values(players).filter((p) => p.alive);
 
   for (const p of entries) {
     const head = { lat: p.lat, lng: p.lng };
     const spawnedAt = p.spawnedAt || 0;
-    if (Date.now() - spawnedAt < SPAWN_GRACE_MS) {
-      p.inGrace = true;
-      continue;
-    }
-    p.inGrace = false;
+    if (Date.now() - spawnedAt < SPAWN_GRACE_MS) continue;
 
     for (const other of entries) {
       if (other.id === p.id) continue;
