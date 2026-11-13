@@ -226,7 +226,7 @@ test('stale disconnect after session reconnect is ignored', async (t) => {
 });
 
 test('disconnect with sessionId but no re-keyed record hard-leaves',
-  async (t) => {
+  async () => {
   const io = makeIoStub();
   const reg = new RoomRegistry(io);
   const meta = await reg.create({ name: 'SD-miss', maxPlayers: 4 });
