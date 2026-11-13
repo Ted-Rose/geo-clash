@@ -106,6 +106,12 @@ external rewrite responses"** in the project dashboard once after merging.
 The rewrite `destination` hardcodes our Cloud Run hostname — edit
 `vercel.json` for other/self-hosted deployments.
 
+The service worker (vite-plugin-pwa/Workbox) additionally keeps a bounded
+`map-tiles` runtime cache (`CacheFirst`, 2000 entries / 30 days) of every
+tile the device has loaded — a previously viewed area keeps rendering
+while offline, but nothing is pre-seeded, so offline coverage is exactly
+"what you've already seen".
+
 ## Why it might be fun to build
 - Real-world gameplay without writing a single line of native code.
 - Tight, satisfying core loop — capture, shoot, shield, respawn.
