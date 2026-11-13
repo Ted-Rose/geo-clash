@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { useSound } from '../shared/hooks/useSound.js';
-import { MapContainer, TileLayer } from 'react-leaflet';
+import { MapContainer, TileLayer, useMap } from 'react-leaflet';
 import { getSocket } from '../shared/socket.js';
 import SnakeHUD from './HUD.jsx';
 import GameMenu from '../shared/GameMenu.jsx';
@@ -22,6 +22,36 @@ const TILE_ATTRIBUTION =
 
 // Game constant (must match server/src/snake/constants.js)
 const SPAWN_GRACE_MS = 3000;
+
+// Fits the map to the arena bounding box and locks/unlocks
+// interactions — mirrors the MapController in shared/MapView.jsx
+// that clash uses (snake renders its own MapContainer).
+function MapLockController({ bbox, mapLocked }) {
+  const map = useMap();
+  useEffect(() => {
+    if (mapLocked && bbox) {
+      map.fitBounds(
+        [
+          [bbox.south, bbox.west],
+          [bbox.north, bbox.east],
+        ],
+        { padding: [16, 16], animate: true },
+      );
+      map.dragging.disable();
+      map.scrollWheelZoom.disable();
+      map.doubleClickZoom.disable();
+      map.touchZoom.disable();
+      map.boxZoom.disable();
+    } else {
+      map.dragging.enable();
+      map.scrollWheelZoom.enable();
+      map.doubleClickZoom.enable();
+      map.touchZoom.enable();
+      map.boxZoom.enable();
+    }
+  }, [mapLocked, bbox, map]);
+  return null;
+}
 
 export default function SnakeGameScreen({
   roomId,
@@ -59,6 +89,7 @@ export default function SnakeGameScreen({
   const [timeLimitMs, setTimeLimitMs] = useState(0);
   const [matchStartAt, setMatchStartAt] = useState(null);
   const [bbox, setBbox] = useState(null);
+  const [mapLocked, setMapLocked] = useState(true);
   const mapRef = useRef(null);
   const simStepRef = useRef(0.00005);
 
@@ -240,9 +271,11 @@ export default function SnakeGameScreen({
       score: myScoreRef.current,
     });
 
-    // 4. Keep map centred
-    if (mapRef.current) mapRef.current.panTo([position.lat, position.lng]);
-  }, [position, roomId]);
+    // 4. Keep map centred on the player while the view is unlocked
+    if (mapRef.current && !mapLocked) {
+      mapRef.current.panTo([position.lat, position.lng]);
+    }
+  }, [position, roomId, mapLocked]);
 
   // Keyboard WASD movement in sim mode
   useEffect(() => {
@@ -423,6 +456,7 @@ export default function SnakeGameScreen({
         />
         <FoodLayer foods={foods} />
         <SnakeLayer players={allPlayers} myId={myId} />
+        <MapLockController bbox={bbox} mapLocked={mapLocked} />
       </MapContainer>
 
       <SnakeHUD
@@ -437,7 +471,21 @@ export default function SnakeGameScreen({
         onLeave={handleLeave}
         players={menuPlayers}
         myId={myId}
-      />
+      >
+        <label
+          className="flex items-center gap-2 px-3 py-2 rounded-lg
+                     hover:bg-slate-700 cursor-pointer text-base
+                     text-slate-200 select-none"
+        >
+          <input
+            type="checkbox"
+            checked={mapLocked}
+            onChange={(e) => setMapLocked(e.target.checked)}
+            className="w-4 h-4 accent-cyan-400"
+          />
+          Lock map view
+        </label>
+      </GameMenu>
 
       {simulate && simPos && (
         <div

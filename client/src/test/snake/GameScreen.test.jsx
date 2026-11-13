@@ -34,7 +34,15 @@ vi.mock('react-leaflet', async () => {
     Polyline: () => null,
     Polygon: () => null,
     Tooltip: (props) => props.children ?? null,
-    useMap: () => ({ panTo: vi.fn() }),
+    useMap: () => ({
+      panTo: vi.fn(),
+      fitBounds: vi.fn(),
+      dragging: { enable: vi.fn(), disable: vi.fn() },
+      scrollWheelZoom: { enable: vi.fn(), disable: vi.fn() },
+      doubleClickZoom: { enable: vi.fn(), disable: vi.fn() },
+      touchZoom: { enable: vi.fn(), disable: vi.fn() },
+      boxZoom: { enable: vi.fn(), disable: vi.fn() },
+    }),
   };
 });
 
