@@ -32,6 +32,14 @@ resource "google_project_service" "apis" {
 
 # ── Artifact Registry ────────────────────────────────────────────────────────
 
+# NOTE: updating this repository (e.g. the cleanup policies below)
+# requires artifactregistry.repositories.update, which the deploy SA's
+# artifactregistry.writer role lacks. Grant once per project, by hand:
+#   SA=geo-clash-ci@geo-clash-gc798.iam.gserviceaccount.com
+#   gcloud artifacts repositories add-iam-policy-binding geo-clash \
+#     --location=europe-north2 --project=geo-clash-gc798 \
+#     --member="serviceAccount:$SA" \
+#     --role="roles/artifactregistry.repoAdmin"
 resource "google_artifact_registry_repository" "server" {
   depends_on    = [google_project_service.apis]
   repository_id = "geo-clash"

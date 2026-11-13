@@ -53,12 +53,18 @@ jobs:
         working-directory: terraform
 
       - name: Terraform apply
-        run: >
-          terraform apply -auto-approve
-          -var="image_tag=${{ env.IMAGE_TAG }}"
+        # A missing/empty CORS_ORIGIN secret must not override the
+        # terraform/variables.tf allowlist default — export the
+        # TF_VAR only when the secret carries a value.
+        run: |
+          if [ -n "$CORS_ORIGIN_SECRET" ]; then
+            export TF_VAR_cors_origin="$CORS_ORIGIN_SECRET"
+          fi
+          terraform apply -auto-approve \
+            -var="image_tag=${{ env.IMAGE_TAG }}"
         working-directory: terraform
         env:
           TF_VAR_project: ${{ env.PROJECT }}
           TF_VAR_region: ${{ env.REGION }}
           TF_VAR_valkey_url: ${{ secrets.VALKEY_URL }}
-          TF_VAR_cors_origin: ${{ secrets.CORS_ORIGIN }}
+          CORS_ORIGIN_SECRET: ${{ secrets.CORS_ORIGIN }}

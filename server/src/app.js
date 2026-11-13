@@ -14,7 +14,11 @@ import { leaderboardStore } from './shared/memoryStore.js';
 import tileProxy from './tileProxy.js';
 
 // CORS_ORIGIN parsing:
-//   - unset / empty / "*"         → allow any origin (reflect)
+//   - unset / empty               → false: no cross-origin headers at
+//     all (fail closed — a missing prod var must never reopen
+//     reflect-all; dev is unaffected since the Vite proxy keeps
+//     traffic same-origin)
+//   - "*"                         → allow any origin (reflect), dev only
 //   - "a,b,c"                     → allow exactly those origins
 //   - entry containing '*'        → RegExp where '*' matches one
 //     hostname run ([a-z0-9-]+), e.g. Vercel preview deploys:
@@ -33,13 +37,16 @@ function corsEntryToOrigin(entry) {
 }
 
 export function parseCorsOrigin(raw) {
-  if (!raw || raw.trim() === '' || raw.trim() === '*') return true;
-  const list = raw
+  const value = (raw || '').trim();
+  if (value === '') return false;
+  if (value === '*') return true;
+  const list = value
     .split(',')
     .map((s) => s.trim())
     .filter(Boolean);
+  // A sole '*' already returned above — a '*' here is necessarily
+  // mixed into a real origin list, so warn and drop it.
   if (list.includes('*')) {
-    if (list.length === 1) return true;
     console.warn(
       '[cors] ignoring "*" mixed with explicit origins; ' +
       'reflect-all requires "*" as the only entry'

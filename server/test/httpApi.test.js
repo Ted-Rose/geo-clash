@@ -111,9 +111,21 @@ test('GET /api/leaderboard clamps limit and passes gameType', async (t) => {
 });
 
 test('CORS origin handling: reflect-all, single, list, blocked', async (t) => {
-  // Reflect-all (parseCorsOrigin equivalent of unset/"*").
+  // Fail-closed default (unset CORS_ORIGIN): no CORS headers at all,
+  // so cross-origin browser requests are denied.
+  const closed = await startServer(t, { corsOrigin: false });
+  let res = await fetch(`${closed.base}/health`, {
+    headers: { Origin: 'https://anything.example' },
+  });
+  assert.equal(
+    res.headers.get('access-control-allow-origin'),
+    null,
+    'unset CORS_ORIGIN emits no cross-origin headers'
+  );
+
+  // Reflect-all (explicit "*" config).
   const open = await startServer(t, { corsOrigin: true });
-  let res = await fetch(`${open.base}/health`, {
+  res = await fetch(`${open.base}/health`, {
     headers: { Origin: 'https://anything.example' },
   });
   assert.equal(
@@ -181,9 +193,10 @@ test('CORS origin handling: reflect-all, single, list, blocked', async (t) => {
 test('parseCorsOrigin unit cases', (t) => {
   // The mixed-'*' cases log a warning; silence it for these assertions.
   t.mock.method(console, 'warn', () => {});
-  assert.equal(parseCorsOrigin(undefined), true);
-  assert.equal(parseCorsOrigin(''), true);
-  assert.equal(parseCorsOrigin('  '), true);
+  // Unset/empty fails closed — same-origin only, never reflect-all.
+  assert.equal(parseCorsOrigin(undefined), false);
+  assert.equal(parseCorsOrigin(''), false);
+  assert.equal(parseCorsOrigin('  '), false);
   assert.equal(parseCorsOrigin('*'), true);
   assert.equal(parseCorsOrigin('https://a.com'), 'https://a.com');
   assert.deepEqual(

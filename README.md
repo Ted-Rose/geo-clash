@@ -89,11 +89,15 @@ handshake and the *Enter the arena* button does nothing.
     this project's Vercel preview deployments keep working; drop the
     second entry if previews don't need socket access. A bare `*` as
     the *only* entry reflects every origin — fine for dev, never for
-    prod; mixed into a list it is ignored with a warning.
+    prod; mixed into a list it is ignored with a warning. Unset or
+    empty fails closed: no cross-origin headers at all (dev is
+    unaffected — the Vite proxy keeps traffic same-origin).
   - In CI it comes from the `CORS_ORIGIN` GitHub Actions secret →
-    `TF_VAR_cors_origin`; `terraform/variables.tf` carries the matching
-    default. Keep the secret value in the same format (comma-separated,
-    optional `*` wildcards).
+    `TF_VAR_cors_origin`, exported only when the secret is non-empty
+    so a missing secret can't blank the allowlist;
+    `terraform/variables.tf` carries the matching default. Keep the
+    secret value in the same format (comma-separated, optional `*`
+    wildcards).
 
 ### Map tiles
 Tile requests are **same-origin** in every environment: in dev the Vite `/api`
