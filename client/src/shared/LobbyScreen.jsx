@@ -264,7 +264,7 @@ export default function LobbyScreen({
             {!position && !simulate && (
               <div className="text-xs text-amber-300">
                 Waiting for GPS… on desktop, enable Simulate Movement in
-                Settings (gear, top right).
+                Settings (gear next to the title).
               </div>
             )}
 

@@ -18,8 +18,8 @@ export default function HUD({
   return (
     <div
       className="pointer-events-none absolute top-0 left-0 right-0
-                 z-[500] pt-3 pr-3 pb-3 pl-[72px] flex justify-between
-                 gap-3"
+                 z-[500] pt-3 pr-3 pb-3 pl-[72px] flex flex-wrap
+                 justify-between gap-3"
     >
       <div className={chipClass}>
         <div

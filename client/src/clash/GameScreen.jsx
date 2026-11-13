@@ -241,12 +241,15 @@ export default function GameScreen({
         />
       )}
 
+      {/* top-20 clears the HUD chip row (pt-3 + ~64px chips ≈ 76px);
+          min-h-[44px] keeps the touch target tappable on mobile. */}
       {target && (
         <button
           onClick={() => setTarget(null)}
-          className="absolute top-3 right-3 z-[600] bg-yellow-400/90
-                     text-slate-900 rounded-full px-3 py-1 text-xs
-                     font-semibold shadow-lg active:scale-95 transition"
+          className="absolute top-20 right-3 z-[600] bg-yellow-400/90
+                     text-slate-900 rounded-full px-4 min-h-[44px]
+                     flex items-center text-xs font-semibold shadow-lg
+                     active:scale-95 transition"
         >
           ✕ clear target
         </button>
