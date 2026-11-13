@@ -3,6 +3,7 @@ import { CircleMarker, Tooltip } from "react-leaflet";
 import { getSocket } from "../shared/socket.js";
 import { useClashGame } from "./useClashGame.js";
 import MapView from "../shared/MapView.jsx";
+import GameMenu from "../shared/GameMenu.jsx";
 import ProjectileLayer from "./ProjectileLayer.jsx";
 import HUD from "./HUD.jsx";
 import ControlPanel from "./ControlPanel.jsx";
@@ -56,7 +57,6 @@ export default function GameScreen({
   const unmountedRef = useRef(false);
   const [botCount, setBotCount] = useState(0);
   const [mapLocked, setMapLocked] = useState(true);
-  const [menuOpen, setMenuOpen] = useState(false);
 
   // Stream our position to the server (rate-limited).
   const lastSentRef = useRef(0);
@@ -71,6 +71,16 @@ export default function GameScreen({
       heading: position.heading ?? 0,
     });
   }, [position]);
+
+  // Menu rows: every player tagged with their captured-squares score.
+  const squaresById = new Map(
+    leaderboard.map((r) => [r.id, r.squares]),
+  );
+  const menuPlayers = players.map((p) => ({
+    ...p,
+    alive: p.alive !== false,
+    score: squaresById.get(p.id) ?? 0,
+  }));
 
   const attack = () => {
     socket.emit("player-attack", {
@@ -189,89 +199,25 @@ export default function GameScreen({
         maxAmmo={maxAmmo}
       />
 
-      {/* Click-outside overlay */}
-      {menuOpen && (
-        <div
-          className="fixed inset-0 z-[600]"
-          onClick={() => setMenuOpen(false)}
-        />
-      )}
-
-      {/* Burger menu */}
-      <div className="absolute top-3 left-3 z-[601]">
-        <button
-          onClick={() => setMenuOpen((o) => !o)}
-          className="w-11 h-11 flex items-center justify-center
-                     bg-slate-900/85 backdrop-blur rounded-xl shadow-lg
-                     text-slate-200 text-xl active:scale-95 transition"
-          aria-label="Menu"
+      <GameMenu
+        onLeave={onLeave}
+        players={menuPlayers}
+        myId={myId}
+      >
+        <label
+          className="flex items-center gap-2 px-3 py-2 rounded-lg
+                     hover:bg-slate-700 cursor-pointer text-sm
+                     text-slate-200 select-none"
         >
-          ☰
-        </button>
-        {menuOpen && (
-          <div
-            className="mt-2 bg-slate-900/95 backdrop-blur rounded-xl
-                       shadow-xl p-2 flex flex-col gap-1 min-w-[180px]"
-          >
-            <button
-              onClick={() => {
-                setMenuOpen(false);
-                onLeave();
-              }}
-              className="w-full text-left px-3 py-2 rounded-lg
-                         text-slate-200 hover:bg-slate-700 active:scale-95
-                         transition text-sm"
-            >
-              ⤺ Leave
-            </button>
-            <label
-              className="flex items-center gap-2 px-3 py-2 rounded-lg
-                         hover:bg-slate-700 cursor-pointer text-sm
-                         text-slate-200 select-none"
-            >
-              <input
-                type="checkbox"
-                checked={mapLocked}
-                onChange={(e) => setMapLocked(e.target.checked)}
-                className="w-4 h-4 accent-cyan-400"
-              />
-              Lock map view
-            </label>
-            {players.length > 0 && (
-              <>
-                <div className="border-t border-slate-700 my-1" />
-                <div
-                  className="px-3 py-1 text-xs uppercase tracking-wider
-                             text-slate-500"
-                >
-                  Players
-                </div>
-                {players.map((p) => (
-                  <div
-                    key={p.id}
-                    className="flex items-center gap-2 px-3 py-1.5
-                               text-sm text-slate-200"
-                  >
-                    <span
-                      className="inline-block w-3 h-3 rounded-full
-                                 flex-shrink-0"
-                      style={{ background: p.color || "#94a3b8" }}
-                    />
-                    <span className={p.id === myId ? "font-semibold" : ""}>
-                      {p.name}
-                    </span>
-                    {p.id === myId && (
-                      <span className="ml-auto text-xs text-slate-400">
-                        (you)
-                      </span>
-                    )}
-                  </div>
-                ))}
-              </>
-            )}
-          </div>
-        )}
-      </div>
+          <input
+            type="checkbox"
+            checked={mapLocked}
+            onChange={(e) => setMapLocked(e.target.checked)}
+            className="w-4 h-4 accent-cyan-400"
+          />
+          Lock map view
+        </label>
+      </GameMenu>
 
       <ControlPanel
         me={me}
