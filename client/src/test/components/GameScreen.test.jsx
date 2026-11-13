@@ -79,7 +79,7 @@ function baseProps(overrides = {}) {
     simulate: false,
     simPos: null,
     setSimPos: vi.fn(),
-    maxImageryAge: 3,
+    maxImageryAge: 2,
     maxNativeZoom: 18,
     initialSnapshot: null,
     reconnectSnap: null,

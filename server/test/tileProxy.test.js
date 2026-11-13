@@ -84,7 +84,7 @@ test('old imagery returns 404 and skips tile fetch', async (t) => {
   assert.equal(counts.tile, 0, 'tile fetch skipped for stale imagery');
 });
 
-test('maxAge param adjusts cutoff; invalid uses default 3', async (t) => {
+test('maxAge param adjusts cutoff; invalid uses default 2', async (t) => {
   installFetchStub(t, { onMetadata: oldMetadata, onTile: pngTile });
   const base = await startTileApp(t);
 
@@ -92,7 +92,7 @@ test('maxAge param adjusts cutoff; invalid uses default 3', async (t) => {
   const allowed = await realFetch(`${base}/t/13/1004/1005?maxAge=10`);
   assert.equal(allowed.status, 200);
 
-  // maxAge=abc → parseInt NaN → default 3 → still too old.
+  // maxAge=abc → parseInt NaN → default 2 → still too old.
   const invalid = await realFetch(`${base}/t/13/1006/1007?maxAge=abc`);
   assert.equal(invalid.status, 404);
 

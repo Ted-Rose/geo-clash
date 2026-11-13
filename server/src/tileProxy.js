@@ -25,7 +25,7 @@ const ESRI_BASE =
     'https://services.arcgisonline.com/arcgis/rest/services/World_Imagery';
 const METADATA_URL = `${ESRI_BASE}/MapServer/0/query`;
 const TILE_SOURCE_URL = `${ESRI_BASE}/MapServer/tile`;
-const DEFAULT_MAX_AGE_YEARS = 3;
+const DEFAULT_MAX_AGE_YEARS = 2;
 
 const metadataCache = new Map();
 const CACHE_TTL = 1000 * 60 * 60; // 1 hour
