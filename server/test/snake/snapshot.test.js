@@ -6,14 +6,22 @@ function makeIo() {
   const events = [];
   return {
     _events: events,
-    to: (id) => ({ emit: (e, p) => events.push({ target: id, event: e, payload: p }) }),
+    to: (id) => ({
+      emit: (e, p) => events.push({ target: id, event: e, payload: p }),
+    }),
     emit: (e, p) => events.push({ event: e, payload: p }),
   };
 }
 
 function freezeTimers(game) {
-  if (game._tickHandle) { clearInterval(game._tickHandle); game._tickHandle = null; }
-  if (game._foodInterval) { clearInterval(game._foodInterval); game._foodInterval = null; }
+  if (game._tickHandle) {
+    clearInterval(game._tickHandle);
+    game._tickHandle = null;
+  }
+  if (game._foodInterval) {
+    clearInterval(game._foodInterval);
+    game._foodInterval = null;
+  }
 }
 
 test('snapshot(): returns the full late-joiner shape', async (t) => {
@@ -46,6 +54,7 @@ test('snapshot(): returns the full late-joiner shape', async (t) => {
   assert.equal(snap.players.length, 1);
   assert.equal(snap.players[0].id, 'p1');
   assert.equal(snap.players[0].name, 'Alice');
+  assert.equal(snap.players[0].connected, true);
   assert.deepEqual(snap.scores.p1, {
     name: 'Alice',
     color: snap.players[0].color,
@@ -58,7 +67,7 @@ test('snapshot(): returns the full late-joiner shape', async (t) => {
   );
 });
 
-test('publicPlayer: tailPoints defaults to [] when falsy in the store', async (t) => {
+test('publicPlayer: tailPoints defaults to [] when falsy', async (t) => {
   const io = makeIo();
   const game = new SnakeGameState({
     io,

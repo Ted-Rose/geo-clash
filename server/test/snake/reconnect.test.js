@@ -46,7 +46,8 @@ function fakeSocket(id) {
   };
 }
 
-test('snake session interface: addPlayer stores sessionId, getPlayerBySessionId finds it', async (t) => {
+test('snake session interface: addPlayer stores sessionId, ' +
+  'getPlayerBySessionId finds it', async (t) => {
   const io = makeGameIo();
   const game = new SnakeGameState({ io, roomId: 'snake-session-test' });
   t.after(() => game.endMatch());
@@ -60,7 +61,7 @@ test('snake session interface: addPlayer stores sessionId, getPlayerBySessionId 
   assert.equal(await game.getPlayerBySessionId(null), null);
 });
 
-test('snake swapSocketId re-keys record and migrates pending clashes', async (t) => {
+test('snake swapSocketId re-keys record and migrates clashes', async (t) => {
   const io = makeGameIo();
   const game = new SnakeGameState({ io, roomId: 'snake-swap-test' });
   t.after(() => game.endMatch());
@@ -76,7 +77,11 @@ test('snake swapSocketId re-keys record and migrates pending clashes', async (t)
 
   await game.swapSocketId('old', 'new');
 
-  assert.equal(await game.playerStore.get('old'), undefined, 'old key removed');
+  assert.equal(
+    await game.playerStore.get('old'),
+    undefined,
+    'old key removed',
+  );
   const p = await game.playerStore.get('new');
   assert.ok(p, 'record re-keyed to new socket id');
   assert.equal(p.id, 'new');
@@ -92,7 +97,8 @@ test('snake swapSocketId re-keys record and migrates pending clashes', async (t)
   assert.ok(!entry.acksNeeded.has('old'));
 });
 
-test('registry: snake rejoin with sessionId preserves player and dodges room-full', async (t) => {
+test('registry: snake rejoin with sessionId preserves player, ' +
+  'dodges room-full', async (t) => {
   const io = makeIoStub();
   const reg = new RoomRegistry(io);
   const room = await reg.create({
@@ -129,7 +135,11 @@ test('registry: snake rejoin with sessionId preserves player and dodges room-ful
   assert.equal(rejoin.reconnected, true);
 
   // Player record re-keyed, state preserved.
-  assert.equal(await game.playerStore.get('sA'), undefined, 'stale record gone');
+  assert.equal(
+    await game.playerStore.get('sA'),
+    undefined,
+    'stale record gone',
+  );
   const p = await game.playerStore.get('sA2');
   assert.ok(p, 'record re-keyed to new socket');
   assert.equal(p.connected, true);
@@ -164,3 +174,58 @@ test('registry: snake rejoin with sessionId preserves player and dodges room-ful
   assert.equal(joinC.ok, false);
   assert.equal(joinC.reason, 'room-full');
 });
+
+test('snake payload relays connected across softDisconnect/rejoin',
+  async (t) => {
+    const io = makeIoStub();
+    const reg = new RoomRegistry(io);
+    const room = await reg.create({
+      name: 'snake-conn-room',
+      gameType: 'snake',
+      maxPlayers: 4,
+    });
+    t.after(() => reg.destroy(room.id));
+
+    const sA = fakeSocket('sA');
+    const sB = fakeSocket('sB');
+    await reg.join(room.id, sA, 'Alice', 'sess-A');
+    await reg.join(room.id, sB, 'Bob', 'sess-B');
+    const game = reg.get(room.id);
+
+    const playerIn = (snap, id) =>
+      snap.players.find((p) => p.id === id);
+
+    // Everyone reports connected on join.
+    let snap = await game.snapshot();
+    assert.equal(playerIn(snap, 'sA').connected, true);
+    assert.equal(playerIn(snap, 'sB').connected, true);
+
+    // Soft disconnect → flag flips false in snapshot and snake-update.
+    await reg.softDisconnect(room.id, sA);
+    snap = await game.snapshot();
+    assert.equal(
+      playerIn(snap, 'sA').connected,
+      false,
+      'snapshot reports the drop',
+    );
+    io._events.length = 0;
+    await game._tick();
+    const upd = io._events.find((e) => e.event === 'snake-update');
+    assert.ok(upd, 'snake-update emitted on tick');
+    assert.equal(
+      upd.payload.players.find((p) => p.id === 'sA').connected,
+      false,
+      'snake-update reports the drop',
+    );
+
+    // Session rejoin (swapSocketId) → flag back to true.
+    const sA2 = fakeSocket('sA2');
+    const rejoin = await reg.join(room.id, sA2, 'Alice', 'sess-A');
+    assert.equal(rejoin.ok, true);
+    snap = await game.snapshot();
+    assert.equal(
+      playerIn(snap, 'sA2').connected,
+      true,
+      'rejoined player reports connected',
+    );
+  });

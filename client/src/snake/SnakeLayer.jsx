@@ -52,17 +52,23 @@ export function sampleEvenPoints(path, count) {
 
 const BALLS_PER_SCORE = 5;
 
-function makeSnakeHeadIcon(color, heading, isMe) {
+export function makeSnakeHeadIcon(color, heading, isMe, connected) {
   const scale = isMe ? 1.3 : 1;
   const w = Math.round(28 * scale);
   const h = Math.round(40 * scale);
+  const offline = connected === false;
+  const dim = offline ? 'opacity:0.4;filter:grayscale(0.8);' : '';
   const svg =
     `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 44" ` +
     `width="${w}" height="${h}">` +
-    `<line x1="16" y1="10" x2="16" y2="5" stroke="#ef4444" stroke-width="2" stroke-linecap="round"/>` +
-    `<line x1="16" y1="5" x2="12" y2="1" stroke="#ef4444" stroke-width="2" stroke-linecap="round"/>` +
-    `<line x1="16" y1="5" x2="20" y2="1" stroke="#ef4444" stroke-width="2" stroke-linecap="round"/>` +
-    `<path d="M16,6 C9,6 4,12 4,22 C4,33 8,42 16,42 C24,42 28,33 28,22 C28,12 23,6 16,6 Z" ` +
+    `<line x1="16" y1="10" x2="16" y2="5" stroke="#ef4444" ` +
+    `stroke-width="2" stroke-linecap="round"/>` +
+    `<line x1="16" y1="5" x2="12" y2="1" stroke="#ef4444" ` +
+    `stroke-width="2" stroke-linecap="round"/>` +
+    `<line x1="16" y1="5" x2="20" y2="1" stroke="#ef4444" ` +
+    `stroke-width="2" stroke-linecap="round"/>` +
+    `<path d="M16,6 C9,6 4,12 4,22 C4,33 8,42 16,42 ` +
+    `C24,42 28,33 28,22 C28,12 23,6 16,6 Z" ` +
     `fill="${color}" stroke="white" stroke-width="2"/>` +
     `<circle cx="9" cy="20" r="4" fill="white"/>` +
     `<circle cx="9.5" cy="20.5" r="2" fill="#111"/>` +
@@ -71,10 +77,18 @@ function makeSnakeHeadIcon(color, heading, isMe) {
     `<circle cx="13" cy="11" r="1.5" fill="rgba(0,0,0,0.3)"/>` +
     `<circle cx="19" cy="11" r="1.5" fill="rgba(0,0,0,0.3)"/>` +
     `</svg>`;
+  const badge = offline
+    ? `<div style="position:absolute;top:-14px;left:50%;` +
+      `transform:translateX(-50%);background:rgba(15,23,42,0.9);` +
+      `color:#fbbf24;font-size:9px;line-height:1;padding:2px 5px;` +
+      `border-radius:6px;white-space:nowrap;">reconnecting…</div>`
+    : '';
   return L.divIcon({
     html:
-      `<div style="transform:rotate(${heading}deg);transform-origin:50% 50%;` +
-      `width:${w}px;height:${h}px;line-height:0;">${svg}</div>`,
+      `<div style="position:relative;width:${w}px;height:${h}px;">` +
+      `<div style="transform:rotate(${heading}deg);` +
+      `transform-origin:50% 50%;width:${w}px;height:${h}px;` +
+      `line-height:0;${dim}">${svg}</div>${badge}</div>`,
     className: '',
     iconSize: [w, h],
     iconAnchor: [w / 2, h / 2],
@@ -97,7 +111,10 @@ export default function SnakeLayer({ players = [], myId }) {
         const score = p.score || 0;
         const ballCount = score * BALLS_PER_SCORE;
         const heading = p.heading ?? 0;
-        const icon = makeSnakeHeadIcon(p.color, heading, isMe);
+        const offline = p.connected === false;
+        const icon = makeSnakeHeadIcon(
+          p.color, heading, isMe, p.connected
+        );
         const bellyColor = lightenHex(p.color);
 
         // Full path: tail tip → head, sample ballCount+1 points then
@@ -126,8 +143,8 @@ export default function SnakeLayer({ players = [], myId }) {
                     color: 'white',
                     weight: 1.5,
                     fillColor: p.color,
-                    fillOpacity: 0.92,
-                    opacity: 0.85,
+                    fillOpacity: offline ? 0.3 : 0.92,
+                    opacity: offline ? 0.3 : 0.85,
                   }}
                 />
                 <CircleMarker
@@ -137,7 +154,7 @@ export default function SnakeLayer({ players = [], myId }) {
                     color: 'transparent',
                     weight: 0,
                     fillColor: bellyColor,
-                    fillOpacity: 0.55,
+                    fillOpacity: offline ? 0.2 : 0.55,
                   }}
                 />
               </Fragment>
