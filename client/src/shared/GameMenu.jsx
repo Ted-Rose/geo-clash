@@ -26,18 +26,28 @@ export default function GameMenu({ onLeave, players = [], myId, children }) {
       <div className="absolute top-3 left-3 z-[601]">
         <button
           onClick={() => setOpen((o) => !o)}
-          className="w-11 h-11 flex items-center justify-center
+          className="w-12 h-12 flex items-center justify-center
                      bg-slate-900/85 backdrop-blur rounded-xl shadow-lg
-                     text-slate-200 text-xl active:scale-95 transition"
+                     text-slate-200 active:scale-95 transition"
           aria-label="Menu"
           aria-expanded={open}
         >
-          ☰
+          <svg
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth={2}
+            strokeLinecap="round"
+            className="w-6 h-6"
+            aria-hidden="true"
+          >
+            <path d="M4 7h16M4 12h16M4 17h16" />
+          </svg>
         </button>
         {open && (
           <div
             className="mt-2 bg-slate-900/95 backdrop-blur rounded-xl
-                       shadow-xl p-2 flex flex-col gap-1 min-w-[180px]
+                       shadow-xl p-2 flex flex-col gap-1 min-w-[200px]
                        max-h-[70vh] overflow-y-auto"
           >
             <button
@@ -47,7 +57,7 @@ export default function GameMenu({ onLeave, players = [], myId, children }) {
               }}
               className="w-full text-left px-3 py-2 rounded-lg
                          text-slate-200 hover:bg-slate-700
-                         active:scale-95 transition text-sm"
+                         active:scale-95 transition text-base"
             >
               ⤺ Leave
             </button>
@@ -65,7 +75,7 @@ export default function GameMenu({ onLeave, players = [], myId, children }) {
                   <div
                     key={p.id}
                     className={`flex items-center gap-2 px-3 py-1.5
-                               text-sm text-slate-200
+                               text-base text-slate-200
                                ${p.alive === false ? "opacity-50" : ""}`}
                   >
                     <span
