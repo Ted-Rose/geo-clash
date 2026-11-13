@@ -43,10 +43,13 @@ export default function SnakeHUD({
 
   const me = scores[myId];
 
+  // Left inset clears the GameMenu burger: left-3 + 48px + gap-3.
+  // justify-between spreads the chips edge-to-edge; flex-wrap keeps
+  // narrow screens from overflowing.
   return (
     <div
-      className="pointer-events-none absolute top-3 left-14 right-3
-                 z-[500] flex gap-2 flex-wrap"
+      className="pointer-events-none absolute top-3 left-[72px] right-3
+                 z-[500] flex gap-2 flex-wrap justify-between"
     >
       <div
         className="bg-slate-900/90 border border-slate-700 rounded-xl
