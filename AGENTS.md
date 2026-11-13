@@ -124,11 +124,13 @@ this model in mind for every gameplay change:
   credential — consolidate into one shared env-file-style secret (KEY=VALUE
   lines) and append keys there; each extra secret adds cost.
 - **`CORS_ORIGIN` is Terraform/secret-managed.** The GitHub Actions
-  `CORS_ORIGIN` secret feeds `TF_VAR_cors_origin` at deploy; the
-  `terraform/variables.tf` default is the production allowlist
-  (comma-separated origins; a `*` inside an entry matches one hostname
+  `CORS_ORIGIN` secret feeds `TF_VAR_cors_origin` at deploy — exported
+  only when non-empty, so a missing secret can't blank the
+  `terraform/variables.tf` default (the production allowlist:
+  comma-separated origins; a `*` inside an entry matches one hostname
   run `[a-z0-9-]+` for Vercel previews). Keep the secret value in the
-  same format — the server parses it via `parseCorsOrigin`.
+  same format — the server parses it via `parseCorsOrigin`; unset or
+  empty fails closed (same-origin only, never reflect-all).
 - **HTTP hardening lives in `server/src/app.js`.** `helmet()` headers
   (`crossOriginResourcePolicy: cross-origin` so self-hosted tile loads
   via `<img>` keep working), a per-IP `/api` rate limit (tiles exempt —
