@@ -297,6 +297,82 @@ test('destroy() evicts room sockets and clears socket.data.roomId',
   assert.equal(s2.data.roomId, null);
 });
 
+test('stale room-leave on old socket after session re-key is ignored',
+  async (t) => {
+    const io = makeIoStub();
+    const reg = new RoomRegistry(io);
+    const meta = await reg.create({ name: 'SD-stale-leave', maxPlayers: 4 });
+    t.after(() => reg.destroy(meta.id));
+
+    const s1 = fakeSocket('s1', io);
+    await reg.join(meta.id, s1, 'A', 'sess-1');
+
+    // Player rejoins on a new socket — record re-keyed to s2 while the
+    // still-connected s1 (duplicate tab / lingering socket) remains.
+    const s2 = fakeSocket('s2', io);
+    const rejoin = await reg.join(meta.id, s2, 'A', 'sess-1');
+    assert.equal(rejoin.reconnected, true);
+
+    const game = reg.get(meta.id);
+    assert.equal(await game.playerStore.get('s1'), undefined);
+    assert.ok(await game.playerStore.get('s2'));
+    io._events.length = 0;
+    const countBefore = (await reg._metaStore.get(meta.id)).playerCount;
+
+    // The stale socket emits room-leave.
+    await reg.leave(meta.id, s1);
+
+    assert.equal(
+      io._events.find((e) => e.event === 'player-left'),
+      undefined,
+      'no player-left for the stale leave'
+    );
+    const countAfter = (await reg._metaStore.get(meta.id)).playerCount;
+    assert.equal(countAfter, countBefore, 'playerCount unchanged');
+    assert.ok(await game.playerStore.get('s2'),
+      'reconnected player still in the room');
+    assert.ok(reg.get(meta.id), 'room not destroyed');
+  });
+
+test('grace timer firing after session re-key is ignored', async (t) => {
+  const io = makeIoStub();
+  const reg = new RoomRegistry(io);
+  const meta = await reg.create({ name: 'SD-stale-timer', maxPlayers: 4 });
+  t.after(() => reg.destroy(meta.id));
+  t.mock.timers.enable({ apis: ['setTimeout'] });
+
+  const s1 = fakeSocket('s1', io);
+  await reg.join(meta.id, s1, 'A', 'sess-1');
+  const game = reg.get(meta.id);
+  game.matchActive = false; // flat 30s grace
+
+  await reg.softDisconnect(meta.id, s1);
+  assert.ok(reg._disconnectTimers.has('s1'), 'grace timer scheduled');
+
+  // Race: the player rejoins on a new socket at the grace boundary —
+  // the record is re-keyed to s2 while the old timer is still armed.
+  const s2 = fakeSocket('s2', io);
+  await game.swapSocketId('s1', 's2');
+  await s2.join(meta.id);
+  s2.data.sessionId = 'sess-1';
+  io._events.length = 0;
+  const countBefore = (await reg._metaStore.get(meta.id)).playerCount;
+
+  t.mock.timers.tick(31_000);
+  await flush();
+
+  assert.equal(
+    io._events.find((e) => e.event === 'player-left'),
+    undefined,
+    'no player-left when the grace timer fires after re-key'
+  );
+  const countAfter = (await reg._metaStore.get(meta.id)).playerCount;
+  assert.equal(countAfter, countBefore, 'playerCount unchanged');
+  assert.ok(await game.playerStore.get('s2'),
+    'reconnected player still in the room');
+  assert.ok(reg.get(meta.id), 'room not destroyed');
+});
+
 test('destroy() resolves even when fetchSockets rejects', async () => {
   const io = makeIoStub();
   io.in = () => ({
