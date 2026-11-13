@@ -6,7 +6,10 @@ import { buildServer, parseCorsOrigin } from './app.js';
 const PORT = process.env.PORT || 3001;
 
 const corsOrigin = parseCorsOrigin(process.env.CORS_ORIGIN);
-console.log('[geo-clash] CORS origin:', corsOrigin);
+console.log(
+  '[geo-clash] CORS origin:',
+  corsOrigin === false ? '(same-origin only)' : corsOrigin
+);
 
 const { server } = await buildServer({ corsOrigin });
 
