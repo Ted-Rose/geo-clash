@@ -27,7 +27,9 @@ afterEach(() => {
 });
 
 describe('shake detector', () => {
-  it('fires onAttack once for 3 shakes in 1200 ms, with 800 ms cooldown', () => {
+  it(
+    'fires onAttack once for 3 shakes in 1200 ms, with 800 ms cooldown',
+    () => {
     let now = 10_000;
     vi.spyOn(Date, 'now').mockImplementation(() => now);
     const onAttack = vi.fn();
@@ -75,7 +77,8 @@ describe('shake detector', () => {
     now = 20_200;
     motion(25);
     expect(onAttack).toHaveBeenCalledTimes(2);
-  });
+    },
+  );
 });
 
 describe('rendering', () => {
@@ -98,13 +101,30 @@ describe('rendering', () => {
     expect(onRespawn).toHaveBeenCalledTimes(1);
   });
 
-  it('shows the shield countdown and disables SHIELD while active', async () => {
+  it('shows the respawn-denied hint only while dead', () => {
+    const { rerender } = render(
+      <ControlPanel {...baseProps({ respawnDenied: true })} />
+    );
+    expect(screen.queryByText(/keep walking/i)).toBeNull();
+
+    rerender(
+      <ControlPanel
+        {...baseProps({ me: { lives: 0 }, respawnDenied: true })}
+      />
+    );
+    expect(screen.getByText(/keep walking/i)).toBeInTheDocument();
+  });
+
+  it(
+    'shows the shield countdown and disables SHIELD while active',
+    async () => {
     render(
       <ControlPanel {...baseProps({ shieldUntil: Date.now() + 2000 })} />
     );
     expect(await screen.findByText(/🛡 Shield/)).toBeInTheDocument();
     expect(screen.getByText('🛡 SHIELD').closest('button')).toBeDisabled();
-  });
+    },
+  );
 
   it('disables FIRE when out of ammo', () => {
     render(<ControlPanel {...baseProps({ ammo: 0, maxAmmo: 3 })} />);

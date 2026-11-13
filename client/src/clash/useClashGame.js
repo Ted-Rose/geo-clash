@@ -36,6 +36,7 @@ export function useClashGame({
   const [globalTop, setGlobalTop] = useState(null);
   const [ammo, setAmmo] = useState(null);
   const [maxAmmo, setMaxAmmo] = useState(null);
+  const [respawnDenied, setRespawnDenied] = useState(false);
 
   // Refs and their effects
   const myIdRef = useRef(myId);
@@ -50,6 +51,7 @@ export function useClashGame({
   useEffect(() => {
     playersRef.current = players;
   }, [players]);
+  const denyTimerRef = useRef(null);
 
   // Apply the snapshot that arrived in the room-join ack (before this
   // component mounted, so the socket events were already missed).
@@ -169,6 +171,15 @@ export function useClashGame({
       setAmmo(a);
       setMaxAmmo(m);
     }
+    function onRespawnDenied({ id }) {
+      if (id !== myIdRef.current) return;
+      clearTimeout(denyTimerRef.current);
+      setRespawnDenied(true);
+      denyTimerRef.current = setTimeout(
+        () => setRespawnDenied(false),
+        3000,
+      );
+    }
     socket.on("snapshot", onSnapshot);
     socket.on("joined", onJoined);
     socket.on("players-update", onPlayers);
@@ -181,6 +192,7 @@ export function useClashGame({
     socket.on("projectile-resolved", onProjectileResolved);
     socket.on("match-end", onMatchEnd);
     socket.on("ammo-update", onAmmoUpdate);
+    socket.on("respawn-denied", onRespawnDenied);
 
     return () => {
       socket.off("snapshot", onSnapshot);
@@ -195,6 +207,8 @@ export function useClashGame({
       socket.off("projectile-resolved", onProjectileResolved);
       socket.off("match-end", onMatchEnd);
       socket.off("ammo-update", onAmmoUpdate);
+      socket.off("respawn-denied", onRespawnDenied);
+      clearTimeout(denyTimerRef.current);
     };
   }, [roomId]);
 
@@ -269,6 +283,7 @@ export function useClashGame({
     matchEnded,
     finalLeaderboard,
     globalTop,
+    respawnDenied,
   };
 }
 
