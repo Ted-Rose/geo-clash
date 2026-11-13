@@ -54,6 +54,27 @@ describe('GameMenu', () => {
     expect(screen.getByText('game specific')).toBeInTheDocument();
   });
 
+  it('closes on a second burger click', () => {
+    render(<GameMenu onLeave={vi.fn()} players={players} />);
+    openMenu();
+    openMenu();
+    expect(screen.queryByText('Players')).toBeNull();
+  });
+
+  it('stays open when clicking inside the menu', () => {
+    render(<GameMenu onLeave={vi.fn()} players={players} />);
+    openMenu();
+    fireEvent.click(screen.getByText('Players'));
+    expect(screen.getByText('Players')).toBeInTheDocument();
+  });
+
+  it('omits the Players section when the list is empty', () => {
+    render(<GameMenu onLeave={vi.fn()} players={[]} />);
+    openMenu();
+    expect(screen.queryByText('Players')).toBeNull();
+    expect(screen.getByText('⤺ Leave')).toBeInTheDocument();
+  });
+
   it('dims dead players', () => {
     render(
       <GameMenu
