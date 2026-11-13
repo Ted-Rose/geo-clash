@@ -53,6 +53,13 @@ folders unless introducing a genuinely new deployable.
 - **Geo math.** Bounding-box → grid slicing uses a local equirectangular
   approximation, which is fine at <1 km scales. Don't reach for full geodesics
   unless arenas grow significantly.
+- **The Cloud Run image also serves the built client.** The multi-stage
+  `server/Dockerfile` (build context = repo **root**, `docker build -f
+  server/Dockerfile .`) builds `client/` without `VITE_SERVER_URL` and
+  copies `dist` to `server/public` in the image; `app.js` serves it
+  (SPA fallback, vercel.json cache headers) when the dir exists. The
+  `*.run.app` URL is the fallback entry point if Vercel is down; local
+  `server/` runs stay API-only since `server/public` doesn't exist.
 - **Map tiles are always same-origin** (`/api/map/tiles/...`) — dev resolves
   them via the Vite `/api` proxy, production via a `vercel.json` external
   rewrite to Cloud Run (Vercel edge cache, `s-maxage` on the upstream

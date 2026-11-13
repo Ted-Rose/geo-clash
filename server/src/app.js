@@ -2,7 +2,10 @@
 // so tests can bind the HTTP surface to an ephemeral port without the
 // entrypoint auto-listening.
 
+import fs from 'fs';
 import http from 'http';
+import path from 'path';
+import { fileURLToPath } from 'url';
 import express from 'express';
 import cors from 'cors';
 import helmet from 'helmet';
@@ -56,13 +59,26 @@ export function parseCorsOrigin(raw) {
   return origins.length === 1 ? origins[0] : origins;
 }
 
+// Where the Docker image drops the built SPA (../public relative to
+// src/); missing in dev → static serving is skipped entirely.
+const DEFAULT_CLIENT_DIST = fileURLToPath(
+  new URL('../public', import.meta.url)
+);
+
+// Cache-Control contract mirrored from vercel.json.
+const CACHE_IMMUTABLE = 'public, max-age=31536000, immutable';
+const CACHE_NO_STORE = 'no-cache, no-store, must-revalidate';
+const CACHE_MANIFEST = 'public, max-age=3600, must-revalidate';
+
 // Builds the express app, HTTP server, Socket.io server and room registry
 // WITHOUT listening. `registry` and `leaderboard` are injectable so tests
-// can stub failure paths and isolate leaderboard state.
+// can stub failure paths and isolate leaderboard state; `clientDist`
+// lets tests point the optional static-SPA mount at a temp dir.
 export async function buildServer({
   corsOrigin = parseCorsOrigin(process.env.CORS_ORIGIN),
   registry,
   leaderboard = leaderboardStore,
+  clientDist = DEFAULT_CLIENT_DIST,
 } = {}) {
   const app = express();
   // Cloud Run sits behind one proxy hop; required so express-rate-limit
@@ -134,6 +150,47 @@ export async function buildServer({
       res.status(500).json({ error: err.message });
     }
   });
+
+  // ---- Static client build (optional) -------------------------------------
+  // The server image bundles the SPA built without VITE_SERVER_URL, so
+  // the Cloud Run URL doubles as a fallback entry point (same-origin
+  // socket + /api, no CORS needed). No build dir → API-only server.
+  const distDir = clientDist && path.resolve(clientDist);
+  if (distDir && fs.existsSync(distDir)) {
+    const indexHtml = path.join(distDir, 'index.html');
+    app.use(express.static(distDir, {
+      setHeaders(res, filePath) {
+        const rel = path.relative(distDir, filePath)
+          .split(path.sep).join('/');
+        if (rel.startsWith('assets/')) {
+          // Vite output is content-hashed — safe to cache forever.
+          res.setHeader('Cache-Control', CACHE_IMMUTABLE);
+        } else if (
+          rel === 'index.html' || rel === 'sw.js' ||
+          /^workbox-.*\.js$/.test(rel)
+        ) {
+          // Entry point + service worker must revalidate every load.
+          res.setHeader('Cache-Control', CACHE_NO_STORE);
+        } else if (rel === 'manifest.webmanifest') {
+          res.setHeader('Cache-Control', CACHE_MANIFEST);
+        }
+      },
+    }));
+    // SPA fallback for client-side routes. Registered LAST and GET-only
+    // so /api/*, /health and /socket.io always win; unmatched /api
+    // paths get Express's 404, never index.html. (`/*splat` is the
+    // Express 5 named wildcard — `*` alone is invalid.)
+    app.get('/*splat', (req, res, next) => {
+      if (
+        req.path.startsWith('/api/') ||
+        req.path.startsWith('/socket.io/')
+      ) {
+        return next();
+      }
+      res.setHeader('Cache-Control', CACHE_NO_STORE);
+      res.sendFile(indexHtml);
+    });
+  }
 
   // ---- Socket: gameplay + lobby ------------------------------------------
 

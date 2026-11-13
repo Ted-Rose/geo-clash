@@ -1,0 +1,13 @@
+# Keep the repo-root docker context small and deterministic.
+# client/dist is rebuilt inside the image — a stale local build must
+# never leak in.
+**/node_modules
+client/dist
+.git
+.github
+openspec
+terraform
+docs
+**/.DS_Store
+**/*.log
+**/.env*

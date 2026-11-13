@@ -32,7 +32,9 @@ jobs:
       - name: Build & push Docker image
         run: |
           TAG=$(git rev-parse --short HEAD)
-          docker build -t ${{ env.IMAGE_BASE }}:${TAG} ./server
+          # Repo-root context: the Dockerfile also builds the client.
+          docker build -f server/Dockerfile \
+            -t ${{ env.IMAGE_BASE }}:${TAG} .
           docker push    ${{ env.IMAGE_BASE }}:${TAG}
           echo "IMAGE_TAG=${TAG}" >> $GITHUB_ENV
 
