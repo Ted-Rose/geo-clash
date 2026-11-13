@@ -3,6 +3,7 @@ import { useSound } from '../shared/hooks/useSound.js';
 import { MapContainer, TileLayer } from 'react-leaflet';
 import { getSocket } from '../shared/socket.js';
 import SnakeHUD from './HUD.jsx';
+import GameMenu from '../shared/GameMenu.jsx';
 import FoodLayer from './FoodLayer.jsx';
 import SnakeLayer from './SnakeLayer.jsx';
 import {
@@ -13,6 +14,11 @@ import {
 } from './geo.js';
 
 const DEFAULT_ZOOM = 19;
+
+const TILE_ATTRIBUTION =
+  'Tiles &copy; Esri &mdash; Source: Esri, Maxar, GeoEye, ' +
+  'Earthstar Geographics, CNES/Airbus DS, USDA, USGS, AeroGRID, ' +
+  'IGN, and the GIS User Community';
 
 // Game constant (must match server/src/snake/constants.js)
 const SPAWN_GRACE_MS = 3000;
@@ -42,7 +48,8 @@ export default function SnakeGameScreen({
   // Server-authoritative food list
   const [foods, setFoods] = useState([]);
   const foodsRef = useRef([]);
-  // Locally claimed food IDs (optimistic), cleared when server sends food-update
+  // Locally claimed food IDs (optimistic), cleared when the server
+  // sends food-update
   const eatenIdsRef = useRef(new Set());
 
   const [scores, setScores] = useState({});
@@ -75,8 +82,12 @@ export default function SnakeGameScreen({
     foodsRef.current = initialSnapshot.foods || [];
     setScores(initialSnapshot.scores || {});
     setMatchActive(initialSnapshot.matchActive ?? false);
-    if (initialSnapshot.timeLimitMs) setTimeLimitMs(initialSnapshot.timeLimitMs);
-    if (initialSnapshot.matchStartAt) setMatchStartAt(initialSnapshot.matchStartAt);
+    if (initialSnapshot.timeLimitMs) {
+      setTimeLimitMs(initialSnapshot.timeLimitMs);
+    }
+    if (initialSnapshot.matchStartAt) {
+      setMatchStartAt(initialSnapshot.matchStartAt);
+    }
     if (initialSnapshot.bbox) setBbox(initialSnapshot.bbox);
     const me = allPlayers.find((p) => p.id === myIdRef.current);
     if (me) myInfoRef.current = { color: me.color, name: me.name };
@@ -99,7 +110,9 @@ export default function SnakeGameScreen({
       setMatchActive(snap.matchActive ?? false);
       if (snap.bbox) setBbox(snap.bbox);
       const me = allPlayers.find((p) => p.id === myIdRef.current);
-      if (me && !myInfoRef.current) myInfoRef.current = { color: me.color, name: me.name };
+      if (me && !myInfoRef.current) {
+        myInfoRef.current = { color: me.color, name: me.name };
+      }
     }
     function onSnakeUpdate({ players: ps, scores: sc }) {
       if (ps) {
@@ -131,10 +144,19 @@ export default function SnakeGameScreen({
       lastPosRef.current = null;
       eatenIdsRef.current.clear();
     }
-    function onMatchStart({ bbox: b, foods: fs, timeLimitMs: tl, matchStartAt: ms }) {
+    function onMatchStart({
+      bbox: b,
+      foods: fs,
+      timeLimitMs: tl,
+      matchStartAt: ms,
+    }) {
       setMatchActive(true);
       if (b) setBbox(b);
-      if (fs) { setFoods(fs); foodsRef.current = fs; eatenIdsRef.current.clear(); }
+      if (fs) {
+        setFoods(fs);
+        foodsRef.current = fs;
+        eatenIdsRef.current.clear();
+      }
       if (typeof tl === 'number') setTimeLimitMs(tl);
       if (typeof ms === 'number') setMatchStartAt(ms);
     }
@@ -143,8 +165,9 @@ export default function SnakeGameScreen({
       setMatchActive(false);
       setFinalLeaderboard(leaderboard || []);
     }
-    // Server detected a collision and asks both participants to prove liveness.
-    // No geometry check — just ACK immediately to confirm this socket is alive.
+    // Server detected a collision and asks both participants to prove
+    // liveness. No geometry check — just ACK immediately to confirm
+    // this socket is alive.
     function onClashVerify({ clashId }) {
       if (typeof clashId !== 'string') return;
       socket.emit('clash_ack', { clashId });
@@ -244,7 +267,8 @@ export default function SnakeGameScreen({
     onLeave();
   }
 
-  // Merge enemy players (from server) with our local player state for rendering
+  // Merge enemy players (from server) with our local player state for
+  // rendering
   const myInfo = myInfoRef.current;
   const myLocalPlayer = myInfo && position
     ? {
@@ -266,7 +290,8 @@ export default function SnakeGameScreen({
     ? [...enemyPlayers, myLocalPlayer]
     : enemyPlayers;
 
-  // For the HUD leaderboard: use local score for myself, server score for others
+  // For HUD + menu rows: local score for myself, server score for
+  // others
   const mergedScores = {
     ...scores,
     ...(myInfo && myLocalPlayer
@@ -281,6 +306,27 @@ export default function SnakeGameScreen({
       : {}),
   };
 
+  // Menu rows: every player (union of live players and score rows)
+  // tagged with their score and alive flag.
+  const menuPlayers = allPlayers.map((p) => ({
+    id: p.id,
+    name: p.name,
+    color: p.color,
+    alive: p.alive !== false,
+    score: mergedScores[p.id]?.score ?? 0,
+  }));
+  for (const [id, s] of Object.entries(mergedScores)) {
+    if (!menuPlayers.some((p) => p.id === id)) {
+      menuPlayers.push({
+        id,
+        name: s.name,
+        color: s.color,
+        alive: true,
+        score: s.score ?? 0,
+      });
+    }
+  }
+
   const center = position
     ? [position.lat, position.lng]
     : bbox
@@ -289,10 +335,19 @@ export default function SnakeGameScreen({
 
   if (matchOver) {
     return (
-      <div className="absolute inset-0 z-[1100] flex items-start justify-center bg-slate-900/95 backdrop-blur p-4 overflow-y-auto">
+      <div
+        className="absolute inset-0 z-[1100] flex items-start
+                   justify-center bg-slate-900/95 backdrop-blur p-4
+                   overflow-y-auto"
+      >
         <div className="w-full max-w-md space-y-4 py-4">
           <div className="text-center space-y-1">
-            <div className="text-xs uppercase tracking-widest text-slate-400">Match over</div>
+            <div
+              className="text-xs uppercase tracking-widest
+                         text-slate-400"
+            >
+              Match over
+            </div>
             {finalLeaderboard?.[0] && (
               <div className="text-2xl font-extrabold">
                 🏆{' '}
@@ -304,15 +359,26 @@ export default function SnakeGameScreen({
             )}
           </div>
           <section className="bg-slate-800 rounded-2xl p-4 shadow-lg">
-            <h3 className="text-sm uppercase tracking-wider text-slate-400 mb-2">Final scores</h3>
+            <h3
+              className="text-sm uppercase tracking-wider
+                         text-slate-400 mb-2"
+            >
+              Final scores
+            </h3>
             <ul className="space-y-1">
               {(finalLeaderboard || []).map((row, i) => (
                 <li
                   key={row.id}
-                  className="flex justify-between items-center px-2 py-1 rounded-md odd:bg-slate-900/50"
+                  className="flex justify-between items-center px-2 py-1
+                             rounded-md odd:bg-slate-900/50"
                 >
                   <span className="flex items-center gap-2">
-                    <span className="text-slate-500 tabular-nums w-5 text-right">{i + 1}</span>
+                    <span
+                      className="text-slate-500 tabular-nums w-5
+                                 text-right"
+                    >
+                      {i + 1}
+                    </span>
                     <span
                       className="inline-block w-3 h-3 rounded-full"
                       style={{ background: row.color }}
@@ -326,7 +392,8 @@ export default function SnakeGameScreen({
           </section>
           <button
             onClick={handleLeave}
-            className="w-full py-3 rounded-xl bg-cyan-500 text-slate-900 font-bold shadow active:scale-95 transition"
+            className="w-full py-3 rounded-xl bg-cyan-500 text-slate-900
+                       font-bold shadow active:scale-95 transition"
           >
             Back to lobby
           </button>
@@ -346,7 +413,7 @@ export default function SnakeGameScreen({
       >
         <TileLayer
           url={`/api/map/tiles/{z}/{y}/{x}?maxAge=${maxImageryAge}`}
-          attribution='Tiles &copy; Esri &mdash; Source: Esri, Maxar, GeoEye, Earthstar Geographics, CNES/Airbus DS, USDA, USGS, AeroGRID, IGN, and the GIS User Community'
+          attribution={TILE_ATTRIBUTION}
           maxZoom={22}
           maxNativeZoom={maxNativeZoom}
           key={`${maxImageryAge}-${maxNativeZoom}`}
@@ -363,8 +430,18 @@ export default function SnakeGameScreen({
         matchStartAt={matchStartAt}
       />
 
+      <GameMenu
+        onLeave={handleLeave}
+        players={menuPlayers}
+        myId={myId}
+      />
+
       {simulate && simPos && (
-        <div className="pointer-events-auto absolute left-3 bottom-6 z-[600] bg-slate-900/90 border border-slate-700 rounded-xl p-3 text-xs space-y-1 max-w-[180px]">
+        <div
+          className="pointer-events-auto absolute left-3 bottom-6
+                     z-[600] bg-slate-900/90 border border-slate-700
+                     rounded-xl p-3 text-xs space-y-1 max-w-[180px]"
+        >
           <div className="font-bold text-slate-200">Simulate</div>
           <div className="text-slate-400">WASD / arrows to move</div>
           <div className="text-slate-500 tabular-nums">
@@ -373,12 +450,6 @@ export default function SnakeGameScreen({
         </div>
       )}
 
-      <button
-        onClick={handleLeave}
-        className="pointer-events-auto absolute top-3 left-1/2 -translate-x-1/2 z-[600] bg-slate-800/90 text-slate-300 text-xs px-3 py-1 rounded-full border border-slate-700 active:scale-95"
-      >
-        Leave
-      </button>
     </div>
   );
 }

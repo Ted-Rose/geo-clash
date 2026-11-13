@@ -295,7 +295,9 @@ Typical extension checklist:
   `src/shared/socket.js`.
 - Map rendering → client `src/shared/MapView.jsx`.
 - HUD / inputs → client `src/clash/` (`HUD`, `ControlPanel`, `SimPanel`)
-  and `src/snake/` components.
+  and `src/snake/` components. The shared in-game burger menu (Leave +
+  player list) is `src/shared/GameMenu.jsx` — per-game menu items go in
+  its `children` slot.
 
 ## OpenSpec
 
