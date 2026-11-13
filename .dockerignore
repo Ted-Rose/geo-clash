@@ -9,5 +9,5 @@ openspec
 terraform
 docs
 **/.DS_Store
-*.log
-.env
+**/*.log
+**/.env*

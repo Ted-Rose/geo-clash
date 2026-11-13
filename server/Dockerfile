@@ -13,7 +13,7 @@ RUN npm run pwa-assets && npm run build
 
 # Stage 2: server runtime + the bundled client at ./public,
 # which src/app.js serves when present.
-FROM node:25-alpine
+FROM node:20-alpine
 WORKDIR /app
 COPY server/package*.json ./
 RUN npm ci --omit=dev

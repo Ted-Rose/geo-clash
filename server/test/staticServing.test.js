@@ -106,11 +106,22 @@ test('API and health routes are never swallowed by the SPA', async (t) => {
   assert.doesNotMatch(await res.text(), /spa-shell/);
 });
 
+test('non-GET deep links never hit the SPA fallback', async (t) => {
+  const base = await startServer(t, { clientDist: makeDist(t) });
+
+  // The fallback is registered GET-only, so a POST must get the
+  // Express 404 — never index.html.
+  const res = await fetch(`${base}/room/abc/some/deep/link`, {
+    method: 'POST',
+  });
+  assert.equal(res.status, 404);
+  assert.doesNotMatch(await res.text(), /spa-shell/);
+});
+
 test('missing build dir leaves the API-only server unchanged', async (t) => {
-  const missing = path.join(
-    fs.mkdtempSync(path.join(os.tmpdir(), 'geo-clash-nodist-')),
-    'no-such-dir'
-  );
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'geo-clash-nodist-'));
+  t.after(() => fs.rmSync(dir, { recursive: true, force: true }));
+  const missing = path.join(dir, 'no-such-dir');
   const base = await startServer(t, { clientDist: missing });
 
   let res = await fetch(`${base}/health`);
