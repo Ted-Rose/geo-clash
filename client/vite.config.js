@@ -22,14 +22,41 @@ function serverPreconnect(serverUrl) {
   };
 }
 
+// Staging Vercel previews get no VITE_SERVER_URL — the
+// dashboard var is Production-scoped. When Vercel builds the
+// `staging` branch without an explicit URL, point the bundle
+// at the staging Cloud Run service (deployed by the
+// deploy-staging job; in-memory store, isolated from prod).
+// An explicit VITE_SERVER_URL still wins; locally
+// VERCEL_GIT_COMMIT_REF is unset so dev is unchanged.
+const STAGING_SERVER_URL =
+  'https://geo-clash-server-staging-j5z6jemnyq-ma.a.run.app';
+
 // During dev we proxy Socket.io traffic to the Node server so the phone
 // only needs to know one origin (e.g. http://192.168.x.x:5173).
 export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, process.cwd(), '');
+  const serverUrl =
+    env.VITE_SERVER_URL ||
+    (process.env.VERCEL_GIT_COMMIT_REF === 'staging'
+      ? STAGING_SERVER_URL
+      : undefined);
+  // Vite only substitutes import.meta.env.VITE_* for vars that
+  // exist at build time, so the staging fallback must be
+  // injected via `define` for client code (socket.js) to see
+  // it — serverPreconnect uses the resolved value directly.
+  const serverUrlDefine =
+    !env.VITE_SERVER_URL && serverUrl
+      ? {
+          'import.meta.env.VITE_SERVER_URL':
+            JSON.stringify(serverUrl),
+        }
+      : {};
   return {
+    define: serverUrlDefine,
     plugins: [
       react(),
-      serverPreconnect(env.VITE_SERVER_URL),
+      serverPreconnect(serverUrl),
       VitePWA({
         registerType: 'autoUpdate',
         injectRegister: 'auto',

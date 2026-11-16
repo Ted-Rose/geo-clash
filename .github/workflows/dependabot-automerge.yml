@@ -5,7 +5,7 @@ name: Dependabot auto-merge
 # get. Safe here because the PR code is never checked out.
 on:
   pull_request_target:
-    branches: [main]
+    branches: [staging]
 
 permissions:
   contents: write
@@ -43,9 +43,11 @@ jobs:
           echo "Deps: ${{ steps.metadata.outputs.dependency-names }}"
           echo "Type: ${{ steps.metadata.outputs.update-type }}"
 
-      # The main ruleset has no required checks, so --auto alone
-      # would merge before test.yml finishes. Poll the head SHA's
-      # check runs and non-Vercel commit statuses first instead.
+      # Staging's protection requires only the two test jobs —
+      # lint and terraform are not required, so --auto alone
+      # could merge while they are still red. Poll the head
+      # SHA's check runs and non-Vercel commit statuses first
+      # instead.
       - name: Wait for checks to pass
         run: |
           # Poll check runs directly: this job's own "automerge"
@@ -80,9 +82,9 @@ jobs:
             # excluded: the account-level build quota makes it
             # flap to "failure" ("Deployment rate limited") or
             # stick at "pending" for hours, it is not a required
-            # check in the main ruleset, and the owner merges
-            # Dependabot PRs through it anyway. Real CI gates on
-            # the check-runs poll above.
+            # check on staging, and the owner merges Dependabot
+            # PRs through it anyway. Real CI gates on the
+            # check-runs poll above.
             st=$(gh api --paginate \
               "repos/$REPO/commits/$sha/statuses" |
               jq -sr '([.[][] | select(.context != "Vercel")] |
@@ -109,10 +111,12 @@ jobs:
             echo "Timed out waiting for checks"; exit 1
           fi
 
-      # The main ruleset requires 1 approving review. With the
-      # AUTOMERGE_TOKEN PAT this runs as the repo admin and
-      # satisfies it; GITHUB_TOKEN approves as
-      # github-actions[bot], which also counts today.
+      # Staging requires no approving review, so this is
+      # belt-and-braces — it keeps the flow identical to the
+      # old trunk setup and satisfies any review requirement
+      # added later. With the AUTOMERGE_TOKEN PAT this runs as
+      # the repo admin; GITHUB_TOKEN approves as
+      # github-actions[bot].
       - name: Approve PR
         run: gh pr review "$PR_URL" --approve
 
@@ -140,7 +144,8 @@ jobs:
             # Dependabot disown the PR ("edited by someone
             # else"). Leave the branch alone: Dependabot rebases
             # conflicting PRs itself, which re-runs this job.
-            echo "Branch behind main; awaiting Dependabot rebase."
+            echo "Branch behind staging;" \
+              "awaiting Dependabot rebase."
             exit 0
           fi
           exit 1
