@@ -57,16 +57,27 @@ jobs:
 
       - name: Deploy staging Cloud Run service
         # env-vars-file dodges --set-env-vars comma-splitting:
-        # CORS_ORIGIN is a comma-separated allowlist.
+        # CORS_ORIGIN is a comma-separated allowlist. It lives
+        # in $RUNNER_TEMP — the workspace is never touched by
+        # credential material, and runner cleanup deletes it
+        # even when the deploy fails. Divergences from prod
+        # (terraform/main.tf): ad-hoc service runs as the
+        # default compute SA and VALKEY_URL lands as a plain
+        # env var instead of a Secret Manager ref — accepted
+        # for a scale-to-zero soak environment.
         env:
           CORS_ORIGIN: ${{ secrets.CORS_ORIGIN }}
           VALKEY_URL: ${{ secrets.VALKEY_URL }}
         run: |
-          {
-            echo "VALKEY_KEY_PREFIX: staging:"
-            echo "CORS_ORIGIN: \"$CORS_ORIGIN\""
-            echo "VALKEY_URL: \"$VALKEY_URL\""
-          } > env.yaml
+          ENVF="$RUNNER_TEMP/env.yaml"
+          echo "VALKEY_KEY_PREFIX: staging:" > "$ENVF"
+          # A missing/empty CORS_ORIGIN secret must not deny
+          # all cross-origin traffic — write it only when set
+          # so the server falls back to its own default.
+          if [ -n "$CORS_ORIGIN" ]; then
+            echo "CORS_ORIGIN: \"$CORS_ORIGIN\"" >> "$ENVF"
+          fi
+          echo "VALKEY_URL: \"$VALKEY_URL\"" >> "$ENVF"
           gcloud run deploy ${{ env.SERVICE_NAME }} \
             --image=${{ env.IMAGE_BASE }}:${{ env.IMAGE_TAG }} \
             --region=${{ env.REGION }} \
@@ -76,9 +87,8 @@ jobs:
             --min-instances=0 --max-instances=1 \
             --memory=512Mi --cpu=1 \
             --timeout=3600 \
-            --env-vars-file=env.yaml \
+            --env-vars-file="$ENVF" \
             --quiet
-          rm -f env.yaml
 
       - name: Get service URL
         run: |
@@ -98,9 +108,15 @@ jobs:
           } >> "$GITHUB_STEP_SUMMARY"
 
       - name: Smoke check
+        # min-instances=0 → cold starts; retry /health for up
+        # to ~90s before failing.
         run: |
-          sleep 10
-          CODE=$(curl -s -o /dev/null -w "%{http_code}" \
-            "${SERVICE_URL}/" || echo "000")
-          echo "GET / -> ${CODE}"
+          CODE=000
+          for _ in $(seq 1 18); do
+            CODE=$(curl -s -o /dev/null -w "%{http_code}" \
+              "${SERVICE_URL}/health" || echo "000")
+            [ "$CODE" = "200" ] && break
+            sleep 5
+          done
+          echo "GET /health -> ${CODE}"
           test "${CODE}" = "200"

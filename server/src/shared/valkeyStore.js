@@ -27,9 +27,16 @@ export class ValkeyStore {
   }
 
   async keys() {
-    const pattern = `${this._prefix}:*`;
+    // ioredis `keyPrefix` (VALKEY_KEY_PREFIX — e.g. `staging:`)
+    // is NOT applied to KEYS patterns or stripped from their
+    // results, unlike every command that takes a key
+    // argument. Prepend it manually or staging would scan the
+    // prod namespace and all() would return nothing.
+    const keyPrefix = this._client.options?.keyPrefix ?? '';
+    const pattern = `${keyPrefix}${this._prefix}:*`;
     const raw = await this._client.keys(pattern);
-    return raw.map(k => k.slice(this._prefix.length + 1));
+    const strip = keyPrefix.length + this._prefix.length + 1;
+    return raw.map(k => k.slice(strip));
   }
 
   async all() {
