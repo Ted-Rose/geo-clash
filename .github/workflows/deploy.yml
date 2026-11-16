@@ -119,7 +119,11 @@ jobs:
         run: |
           # CORS mirrors the terraform-managed prod allowlist
           # (terraform/variables.tf default): prod domain plus
-          # this project's Vercel preview hostnames.
+          # this project's Vercel preview hostnames. The `^;^`
+          # prefix switches gcloud's key=value pair delimiter to
+          # ';' so the comma INSIDE the value stays literal —
+          # without it gcloud rejects the flag ("Bad syntax for
+          # dict arg").
           cors="https://geoclashers.vercel.app"
           cors="$cors,https://geo-clash-*-industr-analysers-"
           cors="${cors}projects.vercel.app"
@@ -129,7 +133,7 @@ jobs:
             --project "${{ env.PROJECT }}" \
             --allow-unauthenticated \
             --min-instances=0 --max-instances=1 \
-            --set-env-vars "CORS_ORIGIN=$cors"
+            --set-env-vars "^;^CORS_ORIGIN=$cors"
           url=$(gcloud run services describe \
             geo-clash-server-staging \
             --region "${{ env.REGION }}" \
