@@ -1,5 +1,6 @@
 // Tiny KV facade. Default impl uses an in-process Map; swap with Redis/Valkey
-// later by re-implementing the same async-friendly surface (get/set/del/keys/all).
+// later by re-implementing the same async-friendly surface
+// (get/set/del/keys/all).
 // Calls are written as if they could be async so the consumer never changes.
 //
 // Per-room collections are minted via `makeRoomStores(roomId)` so every
@@ -66,7 +67,8 @@ export class MemoryLeaderboardStore {
     const resolvedScore = score ?? squaresCaptured ?? 0;
     const member = `${playerId}:${matchId}`;
     const meta = {
-      name, color, score: resolvedScore, metric, gameType, finishedAt, roomName,
+      name, color, score: resolvedScore, metric, gameType,
+      finishedAt, roomName,
     };
     const existing = this._index.get(member);
     if (existing != null) {
@@ -84,7 +86,9 @@ export class MemoryLeaderboardStore {
   }
   async top(limit = 25, { gameType } = {}) {
     let entries = this._entries;
-    if (gameType) entries = entries.filter((e) => e.meta.gameType === gameType);
+    if (gameType) {
+      entries = entries.filter((e) => e.meta.gameType === gameType);
+    }
     return entries.slice(0, limit).map((e) => ({
       member: e.member,
       score: e.score,
@@ -115,7 +119,8 @@ export class ValkeyLeaderboardStore {
     const resolvedScore = score ?? squaresCaptured ?? 0;
     const member = `${playerId}:${matchId}`;
     const meta = {
-      name, color, score: resolvedScore, metric, gameType, finishedAt, roomName,
+      name, color, score: resolvedScore, metric, gameType,
+      finishedAt, roomName,
     };
     const zset = new ValkeyZSetStore(this._zsetKey(gameType), this._client);
     const zsetAll = new ValkeyZSetStore(this._zsetKey('all'), this._client);
@@ -157,6 +162,12 @@ function makeRedisClient() {
   const client = new Redis(process.env.VALKEY_URL, {
     tls: {},
     lazyConnect: false,
+    // VALKEY_KEY_PREFIX namespaces every key (e.g. `staging:` on the
+    // staging Cloud Run service) so prod and staging share the one
+    // Aiven Valkey without touching each other's rooms/leaderboard.
+    // Aiven's `default` user cannot manage ACLs, so a dedicated
+    // staging user is not possible — the prefix is the isolation.
+    keyPrefix: process.env.VALKEY_KEY_PREFIX || '',
   });
   client.on('error', (err) => console.error('[valkey]', err.message));
   return client;
@@ -167,9 +178,12 @@ export const redisClient = makeRedisClient();
 export function makeRoomStores(roomId) {
   if (redisClient) {
     return {
-      playerStore:     new ValkeyStore(`room:${roomId}:players`, redisClient),
-      gridStore:       new ValkeyStore(`room:${roomId}:grid`, redisClient),
-      projectileStore: new ValkeyStore(`room:${roomId}:projectiles`, redisClient),
+      playerStore:     new ValkeyStore(`room:${roomId}:players`,
+                       redisClient),
+      gridStore:       new ValkeyStore(`room:${roomId}:grid`,
+                       redisClient),
+      projectileStore: new ValkeyStore(`room:${roomId}:projectiles`,
+                       redisClient),
     };
   }
   return {

@@ -168,6 +168,68 @@ Server default port: `3001`. Client dev server: `5173`. Both
 are configurable via env if the need arises — don't bake new
 ports into multiple files.
 
+## Git workflow — staging-first
+
+`main` is production (Vercel client + `geo-clash-server` Cloud
+Run); `staging` is the integration branch — every push
+auto-deploys the **`geo-clash-staging` Cloud Run service**
+via `.github/workflows/deploy-staging.yml`. That service
+serves the built client AND the Socket.io API same-origin
+(like prod's image), so the `*.run.app` URL is the complete
+staging environment. The invariant is **`main` ⊆ `staging`**:
+production only receives code that has already soaked on
+staging. The `staging-first` required check
+(`.github/workflows/require-staging.yml`) fails `main` PRs
+whose head SHA was never merged into `staging`.
+
+- **Staging "database"**: `geo-clash-staging` shares the
+  Aiven Valkey with prod but writes under the `staging:` key
+  prefix (`VALKEY_KEY_PREFIX`, applied via ioredis
+  `keyPrefix` in `server/src/shared/memoryStore.js`) — rooms
+  and leaderboard are isolated with zero extra infra. Aiven's
+  `default` user cannot manage ACLs, so a dedicated staging
+  user isn't possible without the Aiven console; the prefix
+  is the boundary.
+- **Features/fixes**: branch off `origin/main` — never
+  `staging`. Open the PR with `--base staging`, then
+  squash-merge once checks are green and the reviewer loop
+  is clean — agents merge into `staging` without asking.
+  GitHub auto-deletes the head branch on merge; expected.
+- **Staging fixes**: commit them on the ORIGINAL feature
+  branch (push it again if auto-deleted — same SHAs are
+  fine; restore with `git push origin
+  <sha>:refs/heads/<branch>` where `<sha>` is the merged
+  staging PR's `headRefOid`), then merge into `staging` via
+  the still-open staging PR or a new one.
+- **Promotion to `main`** — only when the user asks to
+  release or merge to main. The `Promote to main` workflow
+  (`.github/workflows/promote-to-main.yml`) automates it:
+  `gh workflow run "Promote to main"` (`-f dry_run=true`
+  lists pending promotions). It opens a `main` PR per staged
+  branch — oldest staging-merge first, original title +
+  body + a promotion footer — squash-merges each, then
+  resets `staging` to `main` (skipped entirely if any
+  promotion fails). Conflicting promotions are resolved from
+  the staging squash commit's tree — the validated
+  integration state, never guessed. Manual equivalent, per
+  branch: re-push it if auto-deleted, open a PR with
+  `--base main` (same title + body), then
+  `gh pr merge <N> --squash --admin`; then reset staging
+  (`git fetch origin && git push --force-with-lease origin
+  origin/main:refs/heads/staging` — the only sanctioned
+  force-push). NEVER open `staging`→`main` PRs. The workflow
+  needs the `AUTOMERGE_TOKEN` admin PAT (same secret the
+  dependabot automerge uses).
+- **"Merge straight to main" requests**: merge the branch
+  into `staging` first anyway, then the `main` PR — the
+  check blocks anything else, keeping `main` ⊆ `staging`
+  even for urgent merges.
+- **Dependabot** targets `staging` and auto-merges there;
+  its branches promote to `main` like any feature branch.
+- **Vercel previews** of feature branches still point at
+  prod (VITE_SERVER_URL) — the canonical staging env is the
+  `geo-clash-staging` service URL, not a Vercel preview.
+
 ## Conventions / rules
 
 Universal rules — follow exactly:
@@ -229,15 +291,20 @@ Universal rules — follow exactly:
 ### Repo-specific rules
 
 - **Dangerous commands — never run**: `terraform apply` or any
-  mutating `gcloud` command (infra is Terraform-managed);
-  `git push` to `main` (work lands via squash-merge PRs).
+  mutating `gcloud` command (infra is Terraform-managed — the
+  ad-hoc `geo-clash-staging` service is CI-deployed, not
+  Terraform); `git push` to `main` (work lands via
+  squash-merge PRs); `git push --force` except the
+  post-release `staging` reset in "Git workflow —
+  staging-first" (`--force-with-lease`, `staging` only).
   There is no DB migration tool — schema changes are code
   changes.
 - **GitHub targeting**: `origin` = `Ted-Rose/geo-clash` (the
   user's own repo) — all `gh` operations target it.
-- **`main` is the default + integration branch** — work lands
-  via squash-merge PRs; delete the working branch after
-  merge. `development` is a stale legacy branch (the repo
+- **`staging` is the integration branch** — PRs target
+  `staging` and squash-merge on green; `main` only receives
+  promotions (see "Git workflow — staging-first").
+  `development` is a stale legacy branch (the repo
   converged on `main`) — do not target it.
 - **Work in a git worktree, never the main checkout** —
   `git fetch origin`, then `git worktree add
