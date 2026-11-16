@@ -26,11 +26,16 @@ function serverPreconnect(serverUrl) {
 // dashboard var is Production-scoped. When Vercel builds the
 // `staging` branch without an explicit URL, point the bundle
 // at the staging Cloud Run service (deployed by the
-// deploy-staging job; in-memory store, isolated from prod).
-// An explicit VITE_SERVER_URL still wins; locally
-// VERCEL_GIT_COMMIT_REF is unset so dev is unchanged.
+// deploy-staging job; in-memory store — game state isolated
+// from prod, though /api/map/tiles still proxies prod per the
+// vercel.json rewrite). An explicit VITE_SERVER_URL still
+// wins; locally VERCEL_GIT_COMMIT_REF is unset so dev is
+// unchanged. The URL is Cloud Run's deterministic
+// <service>-<project-number>.<region>.run.app form — newly
+// created services no longer get the legacy *.a.run.app
+// alias the prod service uses.
 const STAGING_SERVER_URL =
-  'https://geo-clash-server-staging-j5z6jemnyq-ma.a.run.app';
+  'https://geo-clash-server-staging-972151345741.europe-north2.run.app';
 
 // During dev we proxy Socket.io traffic to the Node server so the phone
 // only needs to know one origin (e.g. http://192.168.x.x:5173).

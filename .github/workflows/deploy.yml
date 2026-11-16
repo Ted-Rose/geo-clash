@@ -81,7 +81,9 @@ jobs:
   #   - scales to zero (--min-instances=0) so idle staging costs
   #     nothing,
   #   - gets no VALKEY_URL → in-memory store, so staging game
-  #     state is fully isolated from prod,
+  #     state is isolated from prod (the vercel.json
+  #     /api/map/tiles rewrite still proxies the prod server —
+  #     read-only),
   #   - is public because the Vercel staging preview must reach
   #     it — it holds no prod data.
   deploy-staging:
