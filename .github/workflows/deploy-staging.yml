@@ -14,6 +14,8 @@ name: Deploy staging
 on:
   push:
     branches: [staging]
+  # Dispatch deploys the SELECTED ref's code to the shared
+  # staging service/keyspace — useful for hotfix rehearsal.
   workflow_dispatch:
 
 permissions:
@@ -70,7 +72,10 @@ jobs:
           VALKEY_URL: ${{ secrets.VALKEY_URL }}
         run: |
           ENVF="$RUNNER_TEMP/env.yaml"
-          echo "VALKEY_KEY_PREFIX: staging:" > "$ENVF"
+          # Quote it: a bare `staging:` parses as a nested key
+          # with a null value — the prefix is the entire
+          # staging/prod isolation boundary.
+          echo 'VALKEY_KEY_PREFIX: "staging:"' > "$ENVF"
           # A missing/empty CORS_ORIGIN secret must not deny
           # all cross-origin traffic — write it only when set
           # so the server falls back to its own default.

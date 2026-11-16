@@ -43,9 +43,10 @@ jobs:
           echo "Deps: ${{ steps.metadata.outputs.dependency-names }}"
           echo "Type: ${{ steps.metadata.outputs.update-type }}"
 
-      # The main ruleset has no required checks, so --auto alone
-      # would merge before test.yml finishes. Poll the head SHA's
-      # check runs and non-Vercel commit statuses first instead.
+      # The staging ruleset has no required checks, so --auto
+      # alone would merge before test.yml finishes. Poll the
+      # head SHA's check runs and non-Vercel commit statuses
+      # first instead.
       - name: Wait for checks to pass
         run: |
           # Poll check runs directly: this job's own "automerge"
@@ -80,7 +81,7 @@ jobs:
             # excluded: the account-level build quota makes it
             # flap to "failure" ("Deployment rate limited") or
             # stick at "pending" for hours, it is not a required
-            # check in the main ruleset, and the owner merges
+            # check in the staging ruleset, and the owner merges
             # Dependabot PRs through it anyway. Real CI gates on
             # the check-runs poll above.
             st=$(gh api --paginate \
@@ -109,8 +110,8 @@ jobs:
             echo "Timed out waiting for checks"; exit 1
           fi
 
-      # The main ruleset requires 1 approving review. With the
-      # AUTOMERGE_TOKEN PAT this runs as the repo admin and
+      # The staging ruleset requires 1 approving review. With
+      # the AUTOMERGE_TOKEN PAT this runs as the repo admin and
       # satisfies it; GITHUB_TOKEN approves as
       # github-actions[bot], which also counts today.
       - name: Approve PR
