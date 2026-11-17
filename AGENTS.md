@@ -235,6 +235,18 @@ this model in mind for every gameplay change:
   real GPS.
 - **Mock/debug surfaces are first-class.** Any feature that depends on hardware
   (GPS, accelerometer, NFC, compass) must have a UI-button fallback.
+- **Error reporting is DSN-gated.** `SENTRY_DSN` (server) /
+  `VITE_SENTRY_DSN` (client) unset → zero Sentry traffic and every
+  capture helper no-ops — a fresh laptop must stay Sentry-free.
+  Helpers live in `server/src/sentry.js` / `client/src/sentry.js`:
+  `captureInternalError` at `error` for real bugs (caught exceptions,
+  tick/handler failures), `captureExpectedError` at `warning` behind
+  an allowlist of `errorCode`s for routine upstream noise (Valkey,
+  Esri). Expected gameplay rejects never report. Events are tagged
+  `environment` from `NODE_ENV`/`import.meta.env.MODE`; the fix queue
+  is `is:unresolved level:error`. DSNs are public-by-design — wire
+  them via GitHub *variables* (`SENTRY_DSN`, `VITE_SENTRY_DSN`), never
+  Secret Manager or committed files.
 
 ## Common commands
 ```bash
