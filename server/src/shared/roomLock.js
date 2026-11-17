@@ -3,6 +3,7 @@
 // so the API contract is preserved without an external dependency.
 
 import { randomUUID } from 'crypto';
+import { captureExpectedError } from '../sentry.js';
 
 export class LockTimeoutError extends Error {
   constructor(key) {
@@ -50,6 +51,9 @@ export class RoomLock {
       await this._redis.eval(RELEASE_LUA, 1, lockKey, token);
     } catch (err) {
       console.error('[roomLock] release failed:', err.message);
+      // The lock expires on its TTL anyway — a release failure is
+      // upstream store noise, not a bug.
+      captureExpectedError(err, { errorCode: 'store_error' });
     }
   }
 

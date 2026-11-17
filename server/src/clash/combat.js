@@ -3,6 +3,7 @@
 // keeps store/timer ownership and emits; this module owns the rules.
 
 import { distanceMeters } from '../shared/gridUtils.js';
+import { captureInternalError } from '../sentry.js';
 import {
   spawnProjectile,
   targetFromHeading,
@@ -101,6 +102,7 @@ export function scheduleResolution(state, proj) {
     state._projectileTimers?.delete(proj.id);
     resolveProjectile(state, proj.id).catch((err) => {
       console.error('[clash/combat] resolve error:', err.message);
+      captureInternalError(err, { roomId: state.roomId });
     });
   }, delay);
   if (typeof handle.unref === 'function') handle.unref();

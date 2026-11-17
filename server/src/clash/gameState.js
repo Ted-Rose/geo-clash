@@ -3,6 +3,7 @@
 // and the internal tick(); emits patched updates via the provided io.
 
 import { makeRoomStores } from '../shared/memoryStore.js';
+import { captureInternalError } from '../sentry.js';
 import {
   buildGrid,
   cellIdAt,
@@ -112,6 +113,11 @@ export class GameState {
     if (!this._tickHandle) {
       this._tickHandle = setInterval(() => this.tick().catch((err) => {
         console.error('[clash/gameState] tick error:', err.message);
+        // A persistent failure fires every 200 ms — throttle so one
+        // stuck room can't flood the Sentry project quota.
+        captureInternalError(err, { roomId: this.roomId }, {
+          throttleKey: `tick:clash:${this.roomId}:${err.message}`,
+        });
       }), TICK_MS);
     }
     this._emit('match-start', { remainingSeconds: this.remainingSeconds });

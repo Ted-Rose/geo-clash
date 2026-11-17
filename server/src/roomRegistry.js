@@ -15,6 +15,10 @@ import { RoomLock } from './shared/roomLock.js';
 import { registerClashHandlers } from './clash/socketHandlers.js';
 import { registerSnakeHandlers } from './snake/socketHandlers.js';
 import { unbindGameHandlers } from './shared/gameHandlers.js';
+import {
+  captureExpectedError,
+  captureInternalError,
+} from './sentry.js';
 
 // Handler map — mirrors GAME_HANDLERS in socketHandlers.js for the
 // reconnect path.
@@ -369,6 +373,7 @@ export class RoomRegistry {
     if (game && game.status !== 'ended') {
       try { await game.endMatch(); } catch (err) {
         console.error('[roomRegistry] endMatch error:', err.message);
+        captureInternalError(err, { roomId, phase: 'endMatch' });
       }
     }
     this._rooms.delete(roomId);
@@ -382,6 +387,7 @@ export class RoomRegistry {
       }
     } catch (err) {
       console.error('[roomRegistry] socket evict error:', err.message);
+      captureInternalError(err, { roomId, phase: 'socket-evict' });
     }
     await this._metaStore.del(roomId);
     await this._index.remove(roomId);
@@ -394,6 +400,11 @@ export class RoomRegistry {
       this._io.emit('rooms-updated', { rooms });
     } catch (err) {
       console.error('[roomRegistry] broadcast list error:', err.message);
+      // list() only fails when the meta store does — routine Valkey
+      // noise, not a code bug.
+      captureExpectedError(err, {
+        errorCode: 'store_error', phase: 'broadcast-list',
+      });
     }
   }
 }

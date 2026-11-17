@@ -1,5 +1,6 @@
-// Tiny KV facade. Default impl uses an in-process Map; swap with Redis/Valkey
-// later by re-implementing the same async-friendly surface (get/set/del/keys/all).
+// Tiny KV facade. Default impl uses an in-process Map; swap with
+// Redis/Valkey later by re-implementing the same async-friendly
+// surface (get/set/del/keys/all).
 // Calls are written as if they could be async so the consumer never changes.
 //
 // Per-room collections are minted via `makeRoomStores(roomId)` so every
@@ -7,6 +8,7 @@
 // `clear()` (or `SCAN+DEL`) drains it.
 
 import { ValkeyStore, ValkeyZSetStore } from './valkeyStore.js';
+import { captureExpectedError } from '../sentry.js';
 import Redis from 'ioredis';
 
 export class MemoryStore {
@@ -66,7 +68,8 @@ export class MemoryLeaderboardStore {
     const resolvedScore = score ?? squaresCaptured ?? 0;
     const member = `${playerId}:${matchId}`;
     const meta = {
-      name, color, score: resolvedScore, metric, gameType, finishedAt, roomName,
+      name, color, score: resolvedScore, metric, gameType, finishedAt,
+      roomName,
     };
     const existing = this._index.get(member);
     if (existing != null) {
@@ -84,7 +87,9 @@ export class MemoryLeaderboardStore {
   }
   async top(limit = 25, { gameType } = {}) {
     let entries = this._entries;
-    if (gameType) entries = entries.filter((e) => e.meta.gameType === gameType);
+    if (gameType) {
+      entries = entries.filter((e) => e.meta.gameType === gameType);
+    }
     return entries.slice(0, limit).map((e) => ({
       member: e.member,
       score: e.score,
@@ -115,7 +120,8 @@ export class ValkeyLeaderboardStore {
     const resolvedScore = score ?? squaresCaptured ?? 0;
     const member = `${playerId}:${matchId}`;
     const meta = {
-      name, color, score: resolvedScore, metric, gameType, finishedAt, roomName,
+      name, color, score: resolvedScore, metric, gameType, finishedAt,
+      roomName,
     };
     const zset = new ValkeyZSetStore(this._zsetKey(gameType), this._client);
     const zsetAll = new ValkeyZSetStore(this._zsetKey('all'), this._client);
@@ -158,7 +164,14 @@ function makeRedisClient() {
     tls: {},
     lazyConnect: false,
   });
-  client.on('error', (err) => console.error('[valkey]', err.message));
+  // ioredis emits an 'error' per failed command/reconnect — throttle so
+  // an outage trends as warnings in Sentry without flooding it.
+  client.on('error', (err) => {
+    console.error('[valkey]', err.message);
+    captureExpectedError(err, { errorCode: 'store_error' }, {
+      throttleKey: `valkey:${err.message}`,
+    });
+  });
   return client;
 }
 
@@ -169,7 +182,9 @@ export function makeRoomStores(roomId) {
     return {
       playerStore:     new ValkeyStore(`room:${roomId}:players`, redisClient),
       gridStore:       new ValkeyStore(`room:${roomId}:grid`, redisClient),
-      projectileStore: new ValkeyStore(`room:${roomId}:projectiles`, redisClient),
+      projectileStore: new ValkeyStore(
+        `room:${roomId}:projectiles`, redisClient
+      ),
     };
   }
   return {

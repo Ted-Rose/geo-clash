@@ -10,8 +10,10 @@ import express from 'express';
 import cors from 'cors';
 import helmet from 'helmet';
 import rateLimit from 'express-rate-limit';
+import * as Sentry from '@sentry/node';
 import { Server as IOServer } from 'socket.io';
 import { RoomRegistry } from './roomRegistry.js';
+import { captureInternalError } from './sentry.js';
 import { registerSocketHandlers } from './socketHandlers.js';
 import { leaderboardStore } from './shared/memoryStore.js';
 import tileProxy from './tileProxy.js';
@@ -147,6 +149,12 @@ export async function buildServer({
       });
       res.status(201).json({ room });
     } catch (err) {
+      // Validation rejects (e.g. `unsupported-game-type:*`) are
+      // routine client errors and stay local; anything else is a
+      // bug/outage the 500 hides — report it.
+      if (!err.message?.startsWith('unsupported-game-type')) {
+        captureInternalError(err, { route: 'POST /api/rooms' });
+      }
       res.status(500).json({ error: err.message });
     }
   });
@@ -191,6 +199,11 @@ export async function buildServer({
       res.sendFile(indexHtml);
     });
   }
+
+  // Report Express errors to Sentry. Must register AFTER every route
+  // (Express 5 forwards async handler rejections to error middleware).
+  // No-ops when the SDK was never initialized (no SENTRY_DSN).
+  Sentry.setupExpressErrorHandler(app);
 
   // ---- Socket: gameplay + lobby ------------------------------------------
 

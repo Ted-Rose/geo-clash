@@ -5,6 +5,10 @@
 import { registerClashHandlers } from './clash/socketHandlers.js';
 import { registerSnakeHandlers } from './snake/socketHandlers.js';
 import { registerTimeSync } from './shared/timeSync.js';
+import {
+  captureInternalError,
+  guardSocketHandler,
+} from './sentry.js';
 
 const GAME_HANDLERS = {
   clash: registerClashHandlers,
@@ -19,7 +23,9 @@ const GAME_HANDLERS = {
 const MAX_ROOMS_PER_SOCKET = 5;
 
 export function registerSocketHandlers(io, registry) {
-  io.on('connection', async (socket) => {
+  // The connection callback is async — a throw would become an
+  // unhandled rejection, so the whole body runs inside the guard.
+  io.on('connection', (socket) => guardSocketHandler(async () => {
     socket.data.roomId = null;
     socket.data.roomsCreated = 0;
 
@@ -27,12 +33,12 @@ export function registerSocketHandlers(io, registry) {
     socket.emit('rooms-updated', { rooms: await registry.list() });
 
     // ---- lobby events ---------------------------------------------------
-    socket.on('rooms-list', async (ack) => {
+    socket.on('rooms-list', guardSocketHandler(async (ack) => {
       const rooms = await registry.list();
       if (typeof ack === 'function') ack({ rooms });
-    });
+    }, { event: 'rooms-list' }));
 
-    socket.on('room-create', async (payload, ack) => {
+    socket.on('room-create', guardSocketHandler(async (payload, ack) => {
       if (socket.data.roomsCreated >= MAX_ROOMS_PER_SOCKET) {
         if (typeof ack === 'function') {
           ack({ ok: false, reason: 'room-create-limit' });
@@ -59,11 +65,17 @@ export function registerSocketHandlers(io, registry) {
         socket.data.roomsCreated += 1;
         if (typeof ack === 'function') ack({ ok: true, room });
       } catch (err) {
+        // Validation rejects (e.g. `unsupported-game-type:*`) are
+        // routine client errors; anything else is a caught-but-hidden
+        // bug/outage worth reporting.
+        if (!err.message?.startsWith('unsupported-game-type')) {
+          captureInternalError(err, { event: 'room-create' });
+        }
         if (typeof ack === 'function') ack({ ok: false, reason: err.message });
       }
-    });
+    }, { event: 'room-create' }));
 
-    socket.on('room-join', async (payload, ack) => {
+    socket.on('room-join', guardSocketHandler(async (payload, ack) => {
       const { roomId, name, lat, lng, sessionId } = payload || {};
       if (!roomId) {
         if (typeof ack === 'function') {
@@ -90,19 +102,19 @@ export function registerSocketHandlers(io, registry) {
         io.to(roomId).emit('player-joined', { id: socket.id });
       }
       if (typeof ack === 'function') ack(result);
-    });
+    }, { event: 'room-join' }));
 
-    socket.on('room-leave', async () => {
+    socket.on('room-leave', guardSocketHandler(async () => {
       const roomId = socket.data.roomId;
       if (roomId) await registry.leave(roomId, socket);
-    });
+    }, { event: 'room-leave' }));
 
     // Clock skew measurement.
     registerTimeSync(socket);
 
-    socket.on('disconnect', async () => {
+    socket.on('disconnect', guardSocketHandler(async () => {
       const roomId = socket.data.roomId;
       if (roomId) await registry.softDisconnect(roomId, socket);
-    });
-  });
+    }, { event: 'disconnect' }));
+  }, { event: 'connection' })());
 }

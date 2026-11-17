@@ -18,6 +18,7 @@
 
 import { makeRoomStores, leaderboardStore } from '../shared/memoryStore.js';
 import { bboxAround } from '../shared/gridUtils.js';
+import { captureInternalError } from '../sentry.js';
 import { replenishFood } from './food.js';
 import { resolveCollisions } from './collisions.js';
 import {
@@ -133,6 +134,9 @@ export class SnakeGameState {
       this._tickHandle = setInterval(
         () => this._tick().catch((err) => {
           console.error('[snake/gameState] tick error:', err.message);
+          captureInternalError(err, { roomId: this.roomId }, {
+            throttleKey: `tick:snake:${this.roomId}:${err.message}`,
+          });
         }), TICK_MS,
       );
     }
@@ -194,12 +198,14 @@ export class SnakeGameState {
       archived.sort((a, b) => b.score - a.score);
     } catch (err) {
       console.error('[snake/gameState] archive error:', err.message);
+      captureInternalError(err, { roomId: this.roomId, phase: 'archive' });
     }
 
     try {
       await this.playerStore.clear?.();
     } catch (err) {
       console.error('[snake/gameState] purge error:', err.message);
+      captureInternalError(err, { roomId: this.roomId, phase: 'purge' });
     }
 
     // Final scores come from the pre-purge player list — after clear()
