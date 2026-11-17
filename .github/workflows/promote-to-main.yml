@@ -274,11 +274,14 @@ jobs:
               continue
             fi
 
-            # mergeable settles async; staging-first re-runs
-            # on `opened` and passes by construction on a
-            # staged SHA — but it takes seconds to spin up,
-            # so don't race merge_pr against a pending
-            # required check.
+            # mergeable settles async; the required checks
+            # re-run on `opened` — staging-first passes by
+            # construction on a staged SHA and the rest just
+            # have to conclude before the merge: a plain-token
+            # REST merge 405s on pending required checks, and
+            # an admin PAT would silently bypass a genuinely
+            # red one. Wait for the whole rollup, not just
+            # the gate.
             mergeable=""
             for _ in $(seq 1 24); do
               mergeable=$(gh pr view "$mpr" --json mergeable \
@@ -288,24 +291,49 @@ jobs:
               sleep 5
             done
             echo "  mergeable=$mergeable"
-            gate=""
-            for _ in $(seq 1 24); do
-              gate=$(gh pr view "$mpr" \
+            gate=""; pending=""; red=""; checks=""
+            for i in $(seq 1 24); do
+              checks=$(gh pr view "$mpr" \
                 --json statusCheckRollup </dev/null \
-                2>/dev/null | jq -r '([.statusCheckRollup[]
-                  | select(.name == "staging-first")] | .[0])
+                2>/dev/null || echo "__api_error__")
+              [ "$checks" = "__api_error__" ] && \
+                { gate="__api_error__"; break; }
+              # CheckRun: .name/.conclusion (null while
+              # pending); legacy status context:
+              # .context/.state — normalize both shapes.
+              gate=$(jq -r 'def res(e):
+                    (e.conclusion // e.state // "")
+                    | if . == "" then "PENDING" else . end;
+                  ([.[] | select((.name // .context)
+                    == "staging-first")] | .[0])
                   | if . == null then "__absent__"
-                    else (.conclusion // "PENDING") end' \
-                || echo "__api_error__")
-              [ "$gate" != "PENDING" ] && break
+                    else res(.) end' \
+                <<<"$checks" || echo "__api_error__")
+              pending=$(jq -r '[.[]
+                  | select((.name // .context)
+                    != "staging-first")
+                  | select((.conclusion // .state // "")
+                    == "" or . == "PENDING"
+                    or . == "QUEUED" or . == "IN_PROGRESS"
+                    or . == "WAITING")] | length' \
+                <<<"$checks" || echo "__api_error__")
+              # An absent gate is only a pass after ~30s —
+              # on a fresh PR the check run may not have
+              # registered yet.
+              [ "$gate" != "PENDING" ] && \
+                { [ "$pending" = "0" ] || \
+                  [ "$pending" = "__api_error__" ]; } && \
+                { [ "$gate" != "__absent__" ] || \
+                  [ "$i" -ge 6 ]; } && break
               sleep 5
             done
-            echo "  staging-first=$gate"
+            echo "  staging-first=$gate pending=$pending"
             # __absent__ = the gate is not on main yet
             # (pre-rollout) — a pass; SUCCESS obviously; any
             # other outcome is fail-closed: re-run the job
             # instead of merging past a red required check.
             if [ "$mergeable" = "MERGEABLE" ] && \
+               [ "$pending" = "0" ] && \
                { [ "$gate" = "__absent__" ] || \
                   [ "$gate" = "SUCCESS" ]; } && \
                merge_pr "$mpr" "$sha"; then
