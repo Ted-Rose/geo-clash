@@ -9,8 +9,9 @@
 // Sentry-free.
 //
 // The SDK itself is lazy-loaded: a static `import '@sentry/react'`
-// would pull ~75KB into the main chunk and evaluate it on every
-// load (sentry.js is statically imported by App.jsx and friends).
+// would pull a few hundred KB into the main chunk and evaluate it
+// on every load (sentry.js is statically imported by App.jsx and
+// friends).
 // Instead initSentry dynamic-imports the SDK and stashes the
 // namespace on `_Sentry`; helpers consult that ref and no-op until
 // it arrives. The dynamic import still emits a separate chunk the
