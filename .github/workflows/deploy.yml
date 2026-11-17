@@ -39,6 +39,8 @@ jobs:
           # Repo-root context: the Dockerfile also builds the client.
           # VITE_SENTRY_DSN bakes Sentry into the bundled SPA — it's a
           # public-by-design client key, so a repo variable suffices.
+          # VITE_SENTRY_ENVIRONMENT is deliberately unset here — the
+          # SPA falls back to MODE=production, which is correct.
           docker build -f server/Dockerfile \
             --build-arg VITE_SENTRY_DSN="${{ vars.VITE_SENTRY_DSN }}" \
             -t ${{ env.IMAGE_BASE }}:${TAG} .
@@ -115,9 +117,13 @@ jobs:
         run: |
           TAG=staging-$(git rev-parse --short HEAD)
           # Repo-root context: the Dockerfile also builds the
-          # client.
+          # client. VITE_SENTRY_ENVIRONMENT=staging tags the bundled
+          # SPA's Sentry events (its MODE is always production, so
+          # the var must come from here) to match NODE_ENV=staging
+          # on the server side.
           docker build -f server/Dockerfile \
             --build-arg VITE_SENTRY_DSN="${{ vars.VITE_SENTRY_DSN }}" \
+            --build-arg VITE_SENTRY_ENVIRONMENT=staging \
             -t ${{ env.IMAGE_BASE }}:${TAG} .
           docker push    ${{ env.IMAGE_BASE }}:${TAG}
           echo "IMAGE_TAG=${TAG}" >> $GITHUB_ENV

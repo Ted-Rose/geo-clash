@@ -135,7 +135,8 @@ export class SnakeGameState {
         () => this._tick().catch((err) => {
           console.error('[snake/gameState] tick error:', err.message);
           captureInternalError(err, { roomId: this.roomId }, {
-            throttleKey: `tick:snake:${this.roomId}:${err.message}`,
+            // err.name, not err.message — see clash/gameState.js.
+            throttleKey: `tick:snake:${this.roomId}:${err.name}`,
           });
         }), TICK_MS,
       );

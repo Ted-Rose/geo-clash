@@ -1,20 +1,26 @@
 import React from 'react';
 import ReactDOM from 'react-dom/client';
-import * as Sentry from '@sentry/react';
 import App from './App.jsx';
 import ErrorFallback from './shared/ErrorFallback.jsx';
-import { initSentry } from './sentry.js';
+import { initSentry, ErrorBoundary } from './sentry.js';
 import 'leaflet/dist/leaflet.css';
 import './index.css';
 
-// No VITE_SENTRY_DSN → initSentry no-ops and the ErrorBoundary below
-// still renders the fallback (capture calls drop without a client).
-initSentry();
+// initSentry must resolve before render so the ErrorBoundary is
+// Sentry-backed from the first paint. The SDK lazy-loads inside
+// initSentry only when VITE_SENTRY_DSN is set (~75KB never ships to
+// DSN-free builds); without a DSN it resolves immediately and the
+// boundary is a passthrough. An async bootstrap is used instead of
+// top-level await so the default Vite build target stays valid.
+async function bootstrap() {
+  await initSentry();
+  ReactDOM.createRoot(document.getElementById('root')).render(
+    <React.StrictMode>
+      <ErrorBoundary fallback={<ErrorFallback />}>
+        <App />
+      </ErrorBoundary>
+    </React.StrictMode>
+  );
+}
 
-ReactDOM.createRoot(document.getElementById('root')).render(
-  <React.StrictMode>
-    <Sentry.ErrorBoundary fallback={<ErrorFallback />}>
-      <App />
-    </Sentry.ErrorBoundary>
-  </React.StrictMode>
-);
+bootstrap();

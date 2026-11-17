@@ -1,8 +1,8 @@
 // Tests for the Sentry helpers in src/sentry.js: the DSN gate, the
-// internal/expected capture split, breadcrumbs, and the ErrorBoundary
-// fallback. Events are recorded via an injected beforeSend that
-// returns null, plus a no-op transport — nothing leaves the test
-// process.
+// internal/expected capture split, breadcrumbs, environment
+// resolution, and the ErrorBoundary fallback. Events are recorded
+// via an injected beforeSend that returns null, plus a no-op
+// transport — nothing leaves the test process.
 
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { render, screen } from '@testing-library/react';
@@ -12,6 +12,8 @@ import {
   captureInternalError,
   captureExpectedError,
   sentryBreadcrumb,
+  ErrorBoundary,
+  _resetForTests,
 } from '../sentry.js';
 import ErrorFallback from '../shared/ErrorFallback.jsx';
 
@@ -23,7 +25,7 @@ function noopTransport() {
   return { send: async () => ({}), flush: async () => true };
 }
 
-function initWithRecorder(recorded) {
+async function initWithRecorder(recorded) {
   return initSentry({
     dsn: FAKE_DSN,
     environment: 'test',
@@ -47,6 +49,7 @@ async function settle(recorded, n = 1, timeoutMs = 2000) {
 }
 
 afterEach(async () => {
+  _resetForTests();
   await Sentry.close();
 });
 
@@ -55,23 +58,42 @@ beforeEach(() => {
 });
 
 describe('initSentry', () => {
-  it('returns false when VITE_SENTRY_DSN is unset', () => {
+  it('returns false when VITE_SENTRY_DSN is unset', async () => {
     vi.stubEnv('VITE_SENTRY_DSN', '');
-    expect(initSentry()).toBe(false);
+    expect(await initSentry()).toBe(false);
     expect(captureInternalError(new Error('x'))).toBe(false);
     expect(sentryBreadcrumb('m')).toBe(false);
   });
 
-  it('returns true when the DSN env var is set', () => {
+  it('returns true when the DSN env var is set', async () => {
     vi.stubEnv('VITE_SENTRY_DSN', FAKE_DSN);
-    expect(initSentry({ transport: noopTransport })).toBe(true);
+    expect(await initSentry({ transport: noopTransport })).toBe(true);
   });
+
+  it('prefers VITE_SENTRY_ENVIRONMENT over MODE', async () => {
+    vi.stubEnv('VITE_SENTRY_DSN', FAKE_DSN);
+    vi.stubEnv('VITE_SENTRY_ENVIRONMENT', 'staging');
+    await initSentry({ transport: noopTransport });
+    expect(Sentry.getClient().getOptions().environment)
+      .toBe('staging');
+  });
+
+  it('falls back to MODE when VITE_SENTRY_ENVIRONMENT is unset',
+    async () => {
+      vi.stubEnv('VITE_SENTRY_DSN', FAKE_DSN);
+      await initSentry({ transport: noopTransport });
+      // Vitest runs with MODE=test — the point is only that the
+      // fallback is import.meta.env.MODE, not a hardcoded value.
+      expect(Sentry.getClient().getOptions().environment)
+        .toBe('test');
+    }
+  );
 });
 
 describe('capture helpers', () => {
   it('captureInternalError sends error-level tagged events', async () => {
     const recorded = [];
-    initWithRecorder(recorded);
+    await initWithRecorder(recorded);
     expect(captureInternalError(new Error('boom'), { area: 'lobby' }))
       .toBe(true);
     await settle(recorded);
@@ -84,7 +106,7 @@ describe('capture helpers', () => {
   it('captureExpectedError sends only allowlisted codes, at warning',
     async () => {
       const recorded = [];
-      initWithRecorder(recorded);
+      await initWithRecorder(recorded);
       expect(
         captureExpectedError(new Error('unreachable'),
           { errorCode: 'connect_error' })
@@ -105,7 +127,7 @@ describe('capture helpers', () => {
 
   it('sentryBreadcrumb attaches to the next captured event', async () => {
     const recorded = [];
-    initWithRecorder(recorded);
+    await initWithRecorder(recorded);
     expect(sentryBreadcrumb('socket connect_error', {
       message: 'xhr poll error',
     })).toBe(true);
@@ -117,17 +139,17 @@ describe('capture helpers', () => {
   });
 });
 
-describe('Sentry.ErrorBoundary', () => {
+describe('ErrorBoundary', () => {
   it('renders ErrorFallback and captures a render crash', async () => {
     const recorded = [];
-    initWithRecorder(recorded);
+    await initWithRecorder(recorded);
     // React logs the boundary hit noisily; silence for the test.
     vi.spyOn(console, 'error').mockImplementation(() => {});
     const Boom = () => { throw new Error('render exploded'); };
     render(
-      <Sentry.ErrorBoundary fallback={<ErrorFallback />}>
+      <ErrorBoundary fallback={<ErrorFallback />}>
         <Boom />
-      </Sentry.ErrorBoundary>
+      </ErrorBoundary>
     );
     expect(screen.getByRole('alert')).toHaveTextContent(
       'Something went wrong'
@@ -138,5 +160,16 @@ describe('Sentry.ErrorBoundary', () => {
     expect(recorded.length).toBeGreaterThanOrEqual(1);
     expect(recorded[0].level).toBe('error');
     console.error.mockRestore();
+  });
+
+  it('passes children through when the SDK was never loaded', () => {
+    // _Sentry is null (afterEach reset) — no DSN build, no boundary.
+    render(
+      <ErrorBoundary fallback={<ErrorFallback />}>
+        <div>the app</div>
+      </ErrorBoundary>
+    );
+    expect(screen.getByText('the app')).toBeInTheDocument();
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument();
   });
 });

@@ -169,7 +169,9 @@ function makeRedisClient() {
   client.on('error', (err) => {
     console.error('[valkey]', err.message);
     captureExpectedError(err, { errorCode: 'store_error' }, {
-      throttleKey: `valkey:${err.message}`,
+      // err.name, not err.message — ioredis messages embed varying
+      // detail (addresses, commands) that would mint a key per error.
+      throttleKey: `valkey:${err.name}`,
     });
   });
   return client;

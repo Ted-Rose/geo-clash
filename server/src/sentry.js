@@ -28,6 +28,11 @@ const _EXPECTED_CODES = new Set([
 // Keeps a persistently failing 200 ms tick loop from flooding the
 // project quota — Sentry still groups the first occurrence.
 const _THROTTLE_MS = 60_000;
+// Hard cap on distinct keys held at once. Callers must key on stable
+// context + err.name (never err.message — variable message text would
+// mint a new key per error and silently bypass the throttle); this
+// bound is the backstop for a caller that still mints unbounded keys.
+export const _MAX_THROTTLE_KEYS = 1_000;
 const _lastSent = new Map();
 
 // Initialize the SDK. No SENTRY_DSN → returns false and the process
@@ -73,6 +78,17 @@ function _throttled(key) {
   const now = Date.now();
   const last = _lastSent.get(key);
   if (last !== undefined && now - last < _THROTTLE_MS) return true;
+  // Drop expired keys — always the oldest prefix, since timestamps
+  // are non-decreasing and re-sends re-insert at the tail.
+  for (const [k, ts] of _lastSent) {
+    if (now - ts < _THROTTLE_MS) break;
+    _lastSent.delete(k);
+  }
+  // Then the hard cap — evict the oldest key until there's room.
+  while (_lastSent.size >= _MAX_THROTTLE_KEYS) {
+    _lastSent.delete(_lastSent.keys().next().value);
+  }
+  _lastSent.delete(key); // re-insert at the tail so order == ts order
   _lastSent.set(key, now);
   return false;
 }
@@ -121,8 +137,11 @@ export function guardSocketHandler(handler, { event } = {}) {
       return await handler(...args);
     } catch (err) {
       console.error(`[socket] ${event} handler error:`, err.message);
+      // Key on err.name, not err.message: message text varies per
+      // error and would mint a new key each time, defeating the
+      // throttle and growing _lastSent unboundedly.
       captureInternalError(err, { event }, {
-        throttleKey: `socket:${event}:${err.message}`,
+        throttleKey: `socket:${event}:${err.name}`,
       });
       return undefined;
     }
@@ -132,4 +151,9 @@ export function guardSocketHandler(handler, { event } = {}) {
 // Reset module state — tests only.
 export function _resetForTests() {
   _lastSent.clear();
+}
+
+// Throttle-map size — tests only.
+export function _throttleKeyCount() {
+  return _lastSent.size;
 }

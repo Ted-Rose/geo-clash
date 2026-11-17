@@ -116,7 +116,9 @@ export class GameState {
         // A persistent failure fires every 200 ms — throttle so one
         // stuck room can't flood the Sentry project quota.
         captureInternalError(err, { roomId: this.roomId }, {
-          throttleKey: `tick:clash:${this.roomId}:${err.message}`,
+          // err.name, not err.message — message text varies per
+          // failure and would mint a fresh key each time.
+          throttleKey: `tick:clash:${this.roomId}:${err.name}`,
         });
       }), TICK_MS);
     }

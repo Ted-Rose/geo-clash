@@ -122,9 +122,18 @@ and in production:
   time. Render crashes report via `Sentry.ErrorBoundary` (with a
   reload fallback); socket `connect_error` and failed leaderboard
   fetches stay breadcrumbs.
-- Events carry `environment` from `NODE_ENV`/`import.meta.env.MODE`
-  (`production`, `staging`, `development`). DSNs are public-by-design
-  client keys — they ride GitHub **variables**, not secrets:
+- Events carry `environment` from `NODE_ENV` (server) and from
+  `VITE_SENTRY_ENVIRONMENT` || `import.meta.env.MODE` (client) —
+  `production`, `staging`, `development`. The client var exists
+  because every Vite build emits `MODE=production`: set
+  `VITE_SENTRY_ENVIRONMENT` as a Vercel project env var
+  (`production` on Production, `staging` on Preview) and as a Docker
+  `--build-arg` for the bundled SPA (the staging deploy passes
+  `staging`; prod leaves it unset → `production`). The DSN-gated SDK
+  also lazy-loads: no `VITE_SENTRY_DSN` means the ~75KB
+  `@sentry/react` chunk is never fetched.
+- DSNs are public-by-design client keys — they ride GitHub
+  **variables**, not secrets:
   `vars.SENTRY_DSN` → `TF_VAR_sentry_dsn` (terraform env on the prod
   service + the staging `gcloud run deploy`), `vars.VITE_SENTRY_DSN`
   → a Docker `--build-arg` for the bundled SPA + a Vercel project

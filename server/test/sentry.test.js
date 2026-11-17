@@ -13,6 +13,8 @@ import {
   captureExpectedError,
   guardSocketHandler,
   _resetForTests,
+  _throttleKeyCount,
+  _MAX_THROTTLE_KEYS,
 } from '../src/sentry.js';
 
 const FAKE_DSN = 'https://public@o123.ingest.us.sentry.io/456';
@@ -131,6 +133,55 @@ test('repeated captures with the same throttleKey are dropped',
     assert.equal(recorded.length, 2);
   }
 );
+
+test('distinct messages with the same error name still throttle',
+  async (t) => {
+    const recorded = [];
+    cleanup(t, recorded);
+    initWithRecorder(recorded);
+
+    // Throttle keys are built from err.name — variable message text
+    // must not bypass the throttle (and must not grow the key map).
+    const handler = guardSocketHandler(async (msg) => {
+      throw new TypeError(msg);
+    }, { event: 'tick' });
+    await handler('message one');
+    await handler('a different message');
+    await settle(recorded);
+    await settle(recorded, 2, 150);
+    assert.equal(recorded.length, 1,
+      'same name + event throttles across message text');
+
+    // A different error name is a different failure — still sends.
+    const rangeHandler = guardSocketHandler(async () => {
+      throw new RangeError('out of bounds');
+    }, { event: 'tick' });
+    await rangeHandler();
+    await settle(recorded, 2);
+    assert.equal(recorded.length, 2);
+  }
+);
+
+test('the throttle map stays bounded under unbounded keys', (t) => {
+  cleanup(t);
+  for (let i = 0; i < _MAX_THROTTLE_KEYS + 25; i += 1) {
+    captureInternalError(
+      new Error('x'), {}, { throttleKey: `flood-${i}` }
+    );
+  }
+  assert.equal(_throttleKeyCount(), _MAX_THROTTLE_KEYS);
+});
+
+test('expired throttle keys are evicted on access', (t) => {
+  cleanup(t);
+  t.mock.timers.enable({ apis: ['Date'], now: 0 });
+  captureInternalError(new Error('x'), {}, { throttleKey: 'old' });
+  assert.equal(_throttleKeyCount(), 1);
+  t.mock.timers.tick(61_000); // past _THROTTLE_MS (60s)
+  captureInternalError(new Error('x'), {}, { throttleKey: 'new' });
+  assert.equal(_throttleKeyCount(), 1,
+    'the expired key was evicted instead of accumulating');
+});
 
 test('guardSocketHandler captures a throw and swallows it', async (t) => {
   const recorded = [];

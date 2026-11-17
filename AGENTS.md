@@ -243,10 +243,15 @@ this model in mind for every gameplay change:
   tick/handler failures), `captureExpectedError` at `warning` behind
   an allowlist of `errorCode`s for routine upstream noise (Valkey,
   Esri). Expected gameplay rejects never report. Events are tagged
-  `environment` from `NODE_ENV`/`import.meta.env.MODE`; the fix queue
-  is `is:unresolved level:error`. DSNs are public-by-design — wire
-  them via GitHub *variables* (`SENTRY_DSN`, `VITE_SENTRY_DSN`), never
-  Secret Manager or committed files.
+  `environment` from `NODE_ENV` (server) /
+  `VITE_SENTRY_ENVIRONMENT` || `import.meta.env.MODE` (client —
+  Vite builds always emit `production`, so the staging image/preview
+  must set the var explicitly). Client `@sentry/react` lazy-loads
+  inside `initSentry` — never static-import it, or the SDK ships in
+  DSN-free bundles. The fix queue is `is:unresolved level:error`.
+  DSNs are public-by-design — wire them via GitHub *variables*
+  (`SENTRY_DSN`, `VITE_SENTRY_DSN`), never Secret Manager or
+  committed files.
 
 ## Common commands
 ```bash
