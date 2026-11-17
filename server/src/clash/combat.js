@@ -3,7 +3,7 @@
 // keeps store/timer ownership and emits; this module owns the rules.
 
 import { distanceMeters } from '../shared/gridUtils.js';
-import { captureInternalError } from '../sentry.js';
+import { captureStoreOrInternalError } from '../sentry.js';
 import {
   spawnProjectile,
   targetFromHeading,
@@ -102,7 +102,12 @@ export function scheduleResolution(state, proj) {
     state._projectileTimers?.delete(proj.id);
     resolveProjectile(state, proj.id).catch((err) => {
       console.error('[clash/combat] resolve error:', err.message);
-      captureInternalError(err, { roomId: state.roomId });
+      // A Valkey outage fails every arrow resolution — warning-level,
+      // throttled; non-store failures stay in the error queue.
+      captureStoreOrInternalError(err, { roomId: state.roomId }, {
+        // err.name, not err.message — see capture.js recountScores.
+        throttleKey: `store:combat:${err.name}`,
+      });
     });
   }, delay);
   if (typeof handle.unref === 'function') handle.unref();

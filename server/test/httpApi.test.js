@@ -110,6 +110,28 @@ test('GET /api/leaderboard clamps limit and passes gameType', async (t) => {
   );
 });
 
+test('GET /api/leaderboard store outage → 503, bug → 500', async (t) => {
+  // A store-shaped rejection (Valkey down) is routine noise — the
+  // route classifies it and answers 503 without hitting the Express
+  // error handler.
+  const storeErr = new Error('read ECONNRESET');
+  storeErr.code = 'ECONNRESET';
+  const down = await startServer(t, {
+    leaderboard: { async top() { throw storeErr; } },
+  });
+  let res = await fetch(`${down.base}/api/leaderboard`);
+  assert.equal(res.status, 503);
+  assert.deepEqual(await res.json(), { error: 'leaderboard-unavailable' });
+
+  // A non-store failure stays a real bug: rethrown to the error
+  // middleware → 500.
+  const buggy = await startServer(t, {
+    leaderboard: { async top() { throw new TypeError('forced'); } },
+  });
+  res = await fetch(`${buggy.base}/api/leaderboard`);
+  assert.equal(res.status, 500);
+});
+
 test('CORS origin handling: reflect-all, single, list, blocked', async (t) => {
   // Fail-closed default (unset CORS_ORIGIN): no CORS headers at all,
   // so cross-origin browser requests are denied.

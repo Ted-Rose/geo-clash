@@ -3,7 +3,7 @@
 // Takes the GameState instance — the class keeps the method surface.
 
 import { leaderboardStore } from '../shared/memoryStore.js';
-import { captureInternalError } from '../sentry.js';
+import { captureStoreOrInternalError } from '../sentry.js';
 import { recountScores, scores } from './capture.js';
 
 // Idempotent match end. Flips status to 'ending', clears tick/ammo/
@@ -61,7 +61,12 @@ export async function endMatch(state) {
     archived.sort((a, b) => b.squares - a.squares);
   } catch (err) {
     console.error('[clash/lifecycle] archive error:', err.message);
-    captureInternalError(err, { roomId: state.roomId, phase: 'archive' });
+    captureStoreOrInternalError(
+      err, { roomId: state.roomId, phase: 'archive' },
+      // Once per match end, but an outage fails every room the same
+      // way — key on err.name, not err.message (see capture.js).
+      { throttleKey: `store:clash-archive:${err.name}` },
+    );
   }
 
   try {
@@ -72,7 +77,10 @@ export async function endMatch(state) {
     ]);
   } catch (err) {
     console.error('[clash/lifecycle] purge error:', err.message);
-    captureInternalError(err, { roomId: state.roomId, phase: 'purge' });
+    captureStoreOrInternalError(
+      err, { roomId: state.roomId, phase: 'purge' },
+      { throttleKey: `store:clash-purge:${err.name}` },
+    );
   }
 
   state._emit('match-end', { scores: scores(state), leaderboard: archived });

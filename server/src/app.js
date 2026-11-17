@@ -13,7 +13,11 @@ import rateLimit from 'express-rate-limit';
 import * as Sentry from '@sentry/node';
 import { Server as IOServer } from 'socket.io';
 import { RoomRegistry } from './roomRegistry.js';
-import { captureInternalError } from './sentry.js';
+import {
+  captureExpectedError,
+  captureInternalError,
+  isStoreError,
+} from './sentry.js';
 import { registerSocketHandlers } from './socketHandlers.js';
 import { leaderboardStore } from './shared/memoryStore.js';
 import tileProxy from './tileProxy.js';
@@ -125,8 +129,24 @@ export async function buildServer({
       100, Math.max(1, parseInt(req.query.limit, 10) || 25)
     );
     const gameType = req.query.gameType || undefined;
-    const top = await leaderboard.top(limit, { gameType });
-    res.json({ top });
+    try {
+      const top = await leaderboard.top(limit, { gameType });
+      res.json({ top });
+    } catch (err) {
+      if (!isStoreError(err)) {
+        // A real bug — let it reach the Sentry error handler + 500.
+        throw err;
+      }
+      // Valkey down: routine upstream noise — warning-level,
+      // throttled; answer 503 instead of leaking a 500.
+      captureExpectedError(err, {
+        errorCode: 'store_error', route: 'GET /api/leaderboard',
+      }, {
+        // err.name, not err.message — see sentry.js throttle docs.
+        throttleKey: `api:leaderboard:${err.name}`,
+      });
+      res.status(503).json({ error: 'leaderboard-unavailable' });
+    }
   });
 
   // Room creation is unauthenticated — keep a tighter cap on the one

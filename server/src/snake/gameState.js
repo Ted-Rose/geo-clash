@@ -18,7 +18,10 @@
 
 import { makeRoomStores, leaderboardStore } from '../shared/memoryStore.js';
 import { bboxAround } from '../shared/gridUtils.js';
-import { captureInternalError } from '../sentry.js';
+import {
+  captureInternalError,
+  captureStoreOrInternalError,
+} from '../sentry.js';
 import { replenishFood } from './food.js';
 import { resolveCollisions } from './collisions.js';
 import {
@@ -199,14 +202,22 @@ export class SnakeGameState {
       archived.sort((a, b) => b.score - a.score);
     } catch (err) {
       console.error('[snake/gameState] archive error:', err.message);
-      captureInternalError(err, { roomId: this.roomId, phase: 'archive' });
+      captureStoreOrInternalError(
+        err, { roomId: this.roomId, phase: 'archive' },
+        // Once per match end, but an outage fails every room the
+        // same way — key on err.name (see clash/capture.js).
+        { throttleKey: `store:snake-archive:${err.name}` },
+      );
     }
 
     try {
       await this.playerStore.clear?.();
     } catch (err) {
       console.error('[snake/gameState] purge error:', err.message);
-      captureInternalError(err, { roomId: this.roomId, phase: 'purge' });
+      captureStoreOrInternalError(
+        err, { roomId: this.roomId, phase: 'purge' },
+        { throttleKey: `store:snake-purge:${err.name}` },
+      );
     }
 
     // Final scores come from the pre-purge player list — after clear()

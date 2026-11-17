@@ -3,7 +3,7 @@
 // store ownership and emits; this module owns the per-tick capture rules.
 
 import { cellIdAt } from './gridUtils.js';
-import { captureInternalError } from '../sentry.js';
+import { captureStoreOrInternalError } from '../sentry.js';
 
 const CAPTURE_SECONDS = 5;
 
@@ -101,6 +101,12 @@ export async function recountScores(state) {
     state._lastCellsCache = await state.gridStore.all();
   } catch (err) {
     console.error('[clash/capture] recountScores error:', err.message);
-    captureInternalError(err, { roomId: state.roomId });
+    // A Valkey outage fails every recount — warning-level, throttled;
+    // non-store failures stay in the error queue.
+    captureStoreOrInternalError(err, { roomId: state.roomId }, {
+      // err.name, not err.message — message text varies per failure
+      // and would mint a fresh key each time.
+      throttleKey: `store:recount:${err.name}`,
+    });
   }
 }
