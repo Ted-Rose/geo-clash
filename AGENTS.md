@@ -247,8 +247,10 @@ this model in mind for every gameplay change:
   `VITE_SENTRY_ENVIRONMENT` || `import.meta.env.MODE` (client —
   Vite builds always emit `production`, so the staging image/preview
   must set the var explicitly). Client `@sentry/react` lazy-loads
-  inside `initSentry` — never static-import it, or the SDK ships in
-  DSN-free bundles. The fix queue is `is:unresolved level:error`.
+  inside `initSentry` — never static-import it, or the SDK lands in
+  the main chunk and evaluates on every load (today it's a separate
+  precached chunk that only runs when a DSN is set). The fix queue
+  is `is:unresolved level:error`.
   DSNs are public-by-design — wire them via GitHub *variables*
   (`SENTRY_DSN`, `VITE_SENTRY_DSN`), never Secret Manager or
   committed files.

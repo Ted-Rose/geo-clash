@@ -130,8 +130,8 @@ and in production:
   (`production` on Production, `staging` on Preview) and as a Docker
   `--build-arg` for the bundled SPA (the staging deploy passes
   `staging`; prod leaves it unset → `production`). The DSN-gated SDK
-  also lazy-loads: no `VITE_SENTRY_DSN` means the ~75KB
-  `@sentry/react` chunk is never fetched.
+  also lazy-loads: the ~75KB `@sentry/react` chunk is precached by
+  the service worker but never evaluated without `VITE_SENTRY_DSN`.
 - DSNs are public-by-design client keys — they ride GitHub
   **variables**, not secrets:
   `vars.SENTRY_DSN` → `TF_VAR_sentry_dsn` (terraform env on the prod
