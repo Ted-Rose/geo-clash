@@ -1,6 +1,6 @@
-// Tiny KV facade. Default impl uses an in-process Map; swap with Redis/Valkey
-// later by re-implementing the same async-friendly surface
-// (get/set/del/keys/all).
+// Tiny KV facade. Default impl uses an in-process Map; swap with
+// Redis/Valkey later by re-implementing the same async-friendly
+// surface (get/set/del/keys/all).
 // Calls are written as if they could be async so the consumer never changes.
 //
 // Per-room collections are minted via `makeRoomStores(roomId)` so every
@@ -8,6 +8,7 @@
 // `clear()` (or `SCAN+DEL`) drains it.
 
 import { ValkeyStore, ValkeyZSetStore } from './valkeyStore.js';
+import { captureStoreOrInternalError } from '../sentry.js';
 import Redis from 'ioredis';
 
 export class MemoryStore {
@@ -67,8 +68,8 @@ export class MemoryLeaderboardStore {
     const resolvedScore = score ?? squaresCaptured ?? 0;
     const member = `${playerId}:${matchId}`;
     const meta = {
-      name, color, score: resolvedScore, metric, gameType,
-      finishedAt, roomName,
+      name, color, score: resolvedScore, metric, gameType, finishedAt,
+      roomName,
     };
     const existing = this._index.get(member);
     if (existing != null) {
@@ -119,8 +120,8 @@ export class ValkeyLeaderboardStore {
     const resolvedScore = score ?? squaresCaptured ?? 0;
     const member = `${playerId}:${matchId}`;
     const meta = {
-      name, color, score: resolvedScore, metric, gameType,
-      finishedAt, roomName,
+      name, color, score: resolvedScore, metric, gameType, finishedAt,
+      roomName,
     };
     const zset = new ValkeyZSetStore(this._zsetKey(gameType), this._client);
     const zsetAll = new ValkeyZSetStore(this._zsetKey('all'), this._client);
@@ -169,7 +170,17 @@ function makeRedisClient() {
     // staging user is not possible — the prefix is the isolation.
     keyPrefix: process.env.VALKEY_KEY_PREFIX || '',
   });
-  client.on('error', (err) => console.error('[valkey]', err.message));
+  // ioredis emits an 'error' per failed command/reconnect — throttle so
+  // an outage trends as warnings in Sentry without flooding it. Split on
+  // isStoreError so a command/reply bug still lands at error level.
+  client.on('error', (err) => {
+    console.error('[valkey]', err.message);
+    captureStoreOrInternalError(err, {}, {
+      // err.name, not err.message — ioredis messages embed varying
+      // detail (addresses, commands) that would mint a key per error.
+      throttleKey: `valkey:${err.name}`,
+    });
+  });
   return client;
 }
 
@@ -178,12 +189,11 @@ export const redisClient = makeRedisClient();
 export function makeRoomStores(roomId) {
   if (redisClient) {
     return {
-      playerStore:     new ValkeyStore(`room:${roomId}:players`,
-                       redisClient),
-      gridStore:       new ValkeyStore(`room:${roomId}:grid`,
-                       redisClient),
-      projectileStore: new ValkeyStore(`room:${roomId}:projectiles`,
-                       redisClient),
+      playerStore:     new ValkeyStore(`room:${roomId}:players`, redisClient),
+      gridStore:       new ValkeyStore(`room:${roomId}:grid`, redisClient),
+      projectileStore: new ValkeyStore(
+        `room:${roomId}:projectiles`, redisClient
+      ),
     };
   }
   return {

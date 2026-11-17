@@ -7,6 +7,8 @@
 // listeners close over: a rejoin to the same game is a no-op, while
 // a recovered socket or a different room re-binds cleanly.
 
+import { guardSocketHandler } from '../sentry.js';
+
 // Remove any listeners registered by bindGameHandlers. Safe on bare
 // socket stubs (disconnect-timer fakes, RemoteSocket evictions).
 // Note: under a future multi-node adapter, RemoteSockets carry no
@@ -28,8 +30,11 @@ export function bindGameHandlers(socket, game, listeners) {
   unbindGameHandlers(socket);
   socket._gameListeners = [];
   for (const [ev, cb] of listeners) {
-    socket.on(ev, cb);
-    socket._gameListeners.push([ev, cb]);
+    // Guarded so a handler throw is reported to Sentry and swallowed
+    // instead of surfacing as an unhandled rejection.
+    const guarded = guardSocketHandler(cb, { event: ev });
+    socket.on(ev, guarded);
+    socket._gameListeners.push([ev, guarded]);
   }
   socket._handlersFor = game;
 }
