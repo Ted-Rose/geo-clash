@@ -404,6 +404,8 @@ export class RoomRegistry {
       // noise, not a code bug.
       captureExpectedError(err, {
         errorCode: 'store_error', phase: 'broadcast-list',
+      }, {
+        throttleKey: 'store:broadcast-list',
       });
     }
   }

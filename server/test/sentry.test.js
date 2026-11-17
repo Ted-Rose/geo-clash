@@ -12,6 +12,7 @@ import {
   captureInternalError,
   captureExpectedError,
   guardSocketHandler,
+  isStoreError,
   _resetForTests,
   _throttleKeyCount,
   _MAX_THROTTLE_KEYS,
@@ -199,6 +200,79 @@ test('guardSocketHandler captures a throw and swallows it', async (t) => {
   assert.equal(recorded.length, 1);
   assert.equal(recorded[0].level, 'error');
   assert.equal(recorded[0].tags.event, 'location-update');
+});
+
+test('guardSocketHandler routes store failures to warning store_error',
+  async (t) => {
+    const recorded = [];
+    cleanup(t, recorded);
+    initWithRecorder(recorded);
+
+    // ioredis marks outage failures by name — a Valkey outage through
+    // a socket handler is routine noise, not an error-queue bug.
+    const err = new Error('Command aborted due to connection close');
+    err.name = 'AbortError';
+    const handler = guardSocketHandler(async () => { throw err; },
+      { event: 'room-join' });
+    await handler();
+    await settle(recorded);
+    assert.equal(recorded.length, 1);
+    assert.equal(recorded[0].level, 'warning');
+    assert.equal(recorded[0].tags.error_code, 'store_error');
+    assert.equal(recorded[0].tags.event, 'room-join');
+
+    // Same name + event → throttled like internal errors.
+    await handler();
+    await settle(recorded, 2, 150);
+    assert.equal(recorded.length, 1);
+  }
+);
+
+test('guardSocketHandler classifies "Connection is closed." as store noise',
+  async (t) => {
+    const recorded = [];
+    cleanup(t, recorded);
+    initWithRecorder(recorded);
+
+    // ioredis flushes pending commands with a plain Error.
+    const err = new Error('Connection is closed.');
+    const handler = guardSocketHandler(async () => { throw err; },
+      { event: 'rooms-list' });
+    await handler();
+    await settle(recorded);
+    assert.equal(recorded.length, 1);
+    assert.equal(recorded[0].level, 'warning');
+    assert.equal(recorded[0].tags.error_code, 'store_error');
+  }
+);
+
+test('isStoreError keeps lookalikes and real bugs at error level', (t) => {
+  cleanup(t);
+  // Name must match exactly — a TypeError with the same message is
+  // still a bug.
+  assert.equal(
+    isStoreError(new TypeError('Connection is closed.')), false
+  );
+  assert.equal(isStoreError(new Error('room-full')), false);
+  assert.equal(isStoreError(null), false);
+  assert.equal(isStoreError(undefined), false);
+  // The store answered — command/schema bug, not an outage.
+  const reply = new Error('WRONGTYPE bad key');
+  reply.name = 'ReplyError';
+  assert.equal(isStoreError(reply), false);
+  // Lock contention is our own error class — stays internal.
+  const lockErr = new Error('lock timeout: x');
+  lockErr.name = 'LockTimeoutError';
+  assert.equal(isStoreError(lockErr), false);
+  // ioredis outage names all classify as store noise.
+  for (const name of [
+    'AbortError', 'InterruptError', 'MaxRetriesPerRequestError',
+    'ClusterAllFailedError', 'RedisError',
+  ]) {
+    const e = new Error('x');
+    e.name = name;
+    assert.equal(isStoreError(e), true, `${name} is store noise`);
+  }
 });
 
 test('guardSocketHandler passes return values through', async (t) => {

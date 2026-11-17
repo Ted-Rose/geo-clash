@@ -24,6 +24,35 @@ const _EXPECTED_CODES = new Set([
   'upstream_tile_error',  // Esri metadata/tile fetch failures
 ]);
 
+// Error names ioredis / redis-errors reject commands with when the
+// store is unreachable — connection-close aborts, offline-queue
+// aborts, retry-cap flushes. These are outages, not code bugs, so
+// callers route them to warning-level `store_error` instead of the
+// error queue. ReplyError and ParserError are absent on purpose: a
+// server-side reply or protocol error means the store *answered* —
+// that smells like a schema/command bug, not an outage.
+const _STORE_ERROR_NAMES = new Set([
+  'AbortError',                // command aborted on connection close
+  'InterruptError',            // aborted by disconnect()
+  'MaxRetriesPerRequestError', // offline-queue retry cap hit
+  'ClusterAllFailedError',     // no cluster node reachable
+  'RedisError',                // generic connection discarded/aborted
+]);
+
+// ioredis also flushes pending commands with a *plain* Error carrying
+// this exact message when the socket ends mid-flight.
+const _CONNECTION_CLOSED_MSG = 'Connection is closed.';
+
+// True when `err` looks like a store/Valkey failure (see the name
+// table above) rather than a bug in the calling code. Used to keep a
+// Valkey outage from flooding the error-level fix queue with routine
+// store failures through socket handlers.
+export function isStoreError(err) {
+  if (!err || typeof err !== 'object') return false;
+  if (_STORE_ERROR_NAMES.has(err.name)) return true;
+  return err.name === 'Error' && err.message === _CONNECTION_CLOSED_MSG;
+}
+
 // Minimum interval between two captures sharing the same throttle key.
 // Keeps a persistently failing 200 ms tick loop from flooding the
 // project quota — Sentry still groups the first occurrence.
@@ -140,9 +169,16 @@ export function guardSocketHandler(handler, { event } = {}) {
       // Key on err.name, not err.message: message text varies per
       // error and would mint a new key each time, defeating the
       // throttle and growing _lastSent unboundedly.
-      captureInternalError(err, { event }, {
-        throttleKey: `socket:${event}:${err.name}`,
-      });
+      const throttleKey = `socket:${event}:${err.name}`;
+      if (isStoreError(err)) {
+        // A Valkey outage fails every store-touching handler the
+        // same way — routine noise, trend it as a warning (same
+        // class as the client's own 'error' listener reports).
+        captureExpectedError(err, { errorCode: 'store_error', event },
+          { throttleKey });
+      } else {
+        captureInternalError(err, { event }, { throttleKey });
+      }
       return undefined;
     }
   };

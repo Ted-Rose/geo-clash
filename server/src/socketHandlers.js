@@ -6,8 +6,10 @@ import { registerClashHandlers } from './clash/socketHandlers.js';
 import { registerSnakeHandlers } from './snake/socketHandlers.js';
 import { registerTimeSync } from './shared/timeSync.js';
 import {
+  captureExpectedError,
   captureInternalError,
   guardSocketHandler,
+  isStoreError,
 } from './sentry.js';
 
 const GAME_HANDLERS = {
@@ -65,10 +67,17 @@ export function registerSocketHandlers(io, registry) {
         socket.data.roomsCreated += 1;
         if (typeof ack === 'function') ack({ ok: true, room });
       } catch (err) {
-        // Validation rejects (e.g. `unsupported-game-type:*`) are
-        // routine client errors; anything else is a caught-but-hidden
-        // bug/outage worth reporting.
-        if (!err.message?.startsWith('unsupported-game-type')) {
+        // Store failures (Valkey down) are routine upstream noise —
+        // warning-level, throttled. Validation rejects (e.g.
+        // `unsupported-game-type:*`) are routine client errors;
+        // anything else is a caught-but-hidden bug worth reporting.
+        if (isStoreError(err)) {
+          captureExpectedError(err, {
+            errorCode: 'store_error', event: 'room-create',
+          }, {
+            throttleKey: `socket:room-create:${err.name}`,
+          });
+        } else if (!err.message?.startsWith('unsupported-game-type')) {
           captureInternalError(err, { event: 'room-create' });
         }
         if (typeof ack === 'function') ack({ ok: false, reason: err.message });

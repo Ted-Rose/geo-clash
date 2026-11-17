@@ -53,7 +53,9 @@ export class RoomLock {
       console.error('[roomLock] release failed:', err.message);
       // The lock expires on its TTL anyway — a release failure is
       // upstream store noise, not a bug.
-      captureExpectedError(err, { errorCode: 'store_error' });
+      captureExpectedError(err, { errorCode: 'store_error' }, {
+        throttleKey: 'store:roomlock',
+      });
     }
   }
 
