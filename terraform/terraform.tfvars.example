@@ -6,3 +6,6 @@ image_tag = "latest" # overridden per-deploy
 valkey_url = "rediss://default:<VALKEY_PASSWORD>@geo-clash-industryanalyser.b.aivencloud.com:16068"
 # Exact origin(s) + optional '*' hostname-run wildcards for previews
 cors_origin = "https://geoclashers.vercel.app,https://geo-clash-*-industr-analysers-projects.vercel.app"
+# Sentry client key for the geo-clash-server project (public-by-design).
+# Empty string disables Sentry entirely.
+sentry_dsn = "https://<key>@o<org>.ingest.us.sentry.io/<project>"

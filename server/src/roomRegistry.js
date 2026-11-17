@@ -15,6 +15,7 @@ import { RoomLock } from './shared/roomLock.js';
 import { registerClashHandlers } from './clash/socketHandlers.js';
 import { registerSnakeHandlers } from './snake/socketHandlers.js';
 import { unbindGameHandlers } from './shared/gameHandlers.js';
+import { captureStoreOrInternalError } from './sentry.js';
 
 // Handler map — mirrors GAME_HANDLERS in socketHandlers.js for the
 // reconnect path.
@@ -116,7 +117,21 @@ export class RoomRegistry {
         roomId: id,
         roomName,
         stores,
-        onEnd: () => { this.destroy(id).catch(() => {}); },
+        onEnd: () => {
+          // destroy() catches its own failures — this is the last
+          // resort so a match end during an outage still leaves a
+          // log line + a classified Sentry event instead of going
+          // fully silent and leaking a ghost room row.
+          this.destroy(id).catch((err) => {
+            console.error(
+              '[roomRegistry] onEnd destroy error:', err.message
+            );
+            captureStoreOrInternalError(
+              err, { roomId: id, phase: 'destroy' },
+              { throttleKey: `room:destroy:${err.name}` },
+            );
+          });
+        },
         cellSize,
         squaresPerSide,
         maxAmmo,
@@ -309,9 +324,19 @@ export class RoomRegistry {
         leave: () => {},
         join: () => {},
       };
-      const handle = setTimeout(async () => {
+      const handle = setTimeout(() => {
         this._disconnectTimers.delete(socket.id);
-        await this.leave(roomId, fakeSocket);
+        // A rejection here has no caller — without a catch it is an
+        // unhandled rejection with zero log/Sentry signal.
+        this.leave(roomId, fakeSocket).catch((err) => {
+          console.error(
+            '[roomRegistry] grace-leave error:', err.message
+          );
+          captureStoreOrInternalError(
+            err, { roomId, phase: 'disconnect-leave' },
+            { throttleKey: `room:dc-leave:${err.name}` },
+          );
+        });
       }, graceDurationMs);
       if (typeof handle.unref === 'function') handle.unref();
       this._disconnectTimers.set(socket.id, handle);
@@ -369,6 +394,10 @@ export class RoomRegistry {
     if (game && game.status !== 'ended') {
       try { await game.endMatch(); } catch (err) {
         console.error('[roomRegistry] endMatch error:', err.message);
+        captureStoreOrInternalError(
+          err, { roomId, phase: 'endMatch' },
+          { throttleKey: `room:end-match:${err.name}` },
+        );
       }
     }
     this._rooms.delete(roomId);
@@ -382,9 +411,31 @@ export class RoomRegistry {
       }
     } catch (err) {
       console.error('[roomRegistry] socket evict error:', err.message);
+      captureStoreOrInternalError(
+        err, { roomId, phase: 'socket-evict' },
+        { throttleKey: `room:socket-evict:${err.name}` },
+      );
     }
-    await this._metaStore.del(roomId);
-    await this._index.remove(roomId);
+    // Each purge step is guarded independently — one store failure
+    // must not skip the other cleanup or the lobby rebroadcast.
+    try {
+      await this._metaStore.del(roomId);
+    } catch (err) {
+      console.error('[roomRegistry] meta purge error:', err.message);
+      captureStoreOrInternalError(
+        err, { roomId, phase: 'meta-purge' },
+        { throttleKey: `room:meta-purge:${err.name}` },
+      );
+    }
+    try {
+      await this._index.remove(roomId);
+    } catch (err) {
+      console.error('[roomRegistry] index purge error:', err.message);
+      captureStoreOrInternalError(
+        err, { roomId, phase: 'index-purge' },
+        { throttleKey: `room:index-purge:${err.name}` },
+      );
+    }
     this._broadcastList();
   }
 
@@ -394,6 +445,12 @@ export class RoomRegistry {
       this._io.emit('rooms-updated', { rooms });
     } catch (err) {
       console.error('[roomRegistry] broadcast list error:', err.message);
+      // list() fails when the meta store does — routine Valkey
+      // noise at warning; anything else is a real bug at error.
+      captureStoreOrInternalError(
+        err, { phase: 'broadcast-list' },
+        { throttleKey: `store:broadcast-list:${err.name}` },
+      );
     }
   }
 }

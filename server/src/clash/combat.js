@@ -3,6 +3,7 @@
 // keeps store/timer ownership and emits; this module owns the rules.
 
 import { distanceMeters } from '../shared/gridUtils.js';
+import { captureStoreOrInternalError } from '../sentry.js';
 import {
   spawnProjectile,
   targetFromHeading,
@@ -82,10 +83,21 @@ export function scheduleAmmoRecharge(state, playerId) {
     state._ammoTimers?.delete(key);
     if (state.maxAmmo === null) return;
     const id = rec.playerId; // resolved at fire time, not schedule time
-    const p = await state.playerStore.get(id);
-    if (!p) return;
-    p.ammo = Math.min(state.maxAmmo, (p.ammo ?? 0) + 1);
-    await state.playerStore.set(id, p);
+    // Guarded like scheduleResolution — a rejection inside a timer
+    // has no caller and would escape with zero signal.
+    let p;
+    try {
+      p = await state.playerStore.get(id);
+      if (!p) return;
+      p.ammo = Math.min(state.maxAmmo, (p.ammo ?? 0) + 1);
+      await state.playerStore.set(id, p);
+    } catch (err) {
+      console.error('[clash/combat] ammo recharge error:', err.message);
+      captureStoreOrInternalError(err, { roomId: state.roomId }, {
+        throttleKey: `store:ammo-recharge:${err.name}`,
+      });
+      return;
+    }
     state.io.to(id).emit('ammo-update', {
       ammo: p.ammo, maxAmmo: state.maxAmmo,
     });
@@ -101,6 +113,12 @@ export function scheduleResolution(state, proj) {
     state._projectileTimers?.delete(proj.id);
     resolveProjectile(state, proj.id).catch((err) => {
       console.error('[clash/combat] resolve error:', err.message);
+      // A Valkey outage fails every arrow resolution — warning-level,
+      // throttled; non-store failures stay in the error queue.
+      captureStoreOrInternalError(err, { roomId: state.roomId }, {
+        // err.name, not err.message — see capture.js recountScores.
+        throttleKey: `store:combat:${err.name}`,
+      });
     });
   }, delay);
   if (typeof handle.unref === 'function') handle.unref();

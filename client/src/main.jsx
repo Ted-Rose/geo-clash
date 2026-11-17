@@ -1,11 +1,30 @@
 import React from 'react';
 import ReactDOM from 'react-dom/client';
 import App from './App.jsx';
+import ErrorFallback from './shared/ErrorFallback.jsx';
+import { initSentry, ErrorBoundary } from './sentry.js';
 import 'leaflet/dist/leaflet.css';
 import './index.css';
 
-ReactDOM.createRoot(document.getElementById('root')).render(
-  <React.StrictMode>
-    <App />
-  </React.StrictMode>
-);
+// initSentry must resolve before render so the ErrorBoundary is
+// Sentry-backed from the first paint. The SDK lazy-loads inside
+// initSentry only when VITE_SENTRY_DSN is set — the SDK chunk (a few
+// hundred KB) is precached by the service worker but never executed
+// on DSN-free clients; without a DSN it resolves immediately and the boundary
+// is a passthrough. initSentry never rejects (a failed chunk fetch
+// or throwing init leaves the passthrough in place), so render is
+// unreachable only if React itself is broken. An async bootstrap
+// is used instead of top-level await so the default Vite build
+// target stays valid.
+async function bootstrap() {
+  await initSentry();
+  ReactDOM.createRoot(document.getElementById('root')).render(
+    <React.StrictMode>
+      <ErrorBoundary fallback={<ErrorFallback />}>
+        <App />
+      </ErrorBoundary>
+    </React.StrictMode>
+  );
+}
+
+bootstrap();

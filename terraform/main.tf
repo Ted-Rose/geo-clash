@@ -137,6 +137,18 @@ resource "google_cloud_run_v2_service" "server" {
         value = var.cors_origin
       }
 
+      # Sentry tags events with environment=NODE_ENV — prod must say
+      # "production" or errors land in the dev stream.
+      env {
+        name  = "NODE_ENV"
+        value = "production"
+      }
+
+      env {
+        name  = "SENTRY_DSN"
+        value = var.sentry_dsn
+      }
+
       env {
         name = "VALKEY_URL"
         value_source {

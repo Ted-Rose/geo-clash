@@ -107,6 +107,39 @@ play as usual.
     secret value in the same format (comma-separated, optional `*`
     wildcards).
 
+### Error reporting (Sentry)
+Both deployables report errors to the `geo-clash` Sentry org when a
+DSN is configured — **unset DSN means zero Sentry traffic**, locally
+and in production:
+
+- **Server** (`geo-clash-server` project) — `SENTRY_DSN` on Cloud Run.
+  Uncaught exceptions, rejected socket handlers, and
+  caught-but-unexpected failures (tick loops, store teardown, room
+  registry) report at `error` level; routine upstream noise (Valkey
+  outages, Esri tile failures) reports at `warning` only. Expected
+  gameplay rejects never reach Sentry.
+- **Client** (`geo-clash-client` project) — `VITE_SENTRY_DSN` at build
+  time. Render crashes report via `Sentry.ErrorBoundary` (with a
+  reload fallback); socket `connect_error` and failed leaderboard
+  fetches stay breadcrumbs.
+- Events carry `environment` from `NODE_ENV` (server) and from
+  `VITE_SENTRY_ENVIRONMENT` || `import.meta.env.MODE` (client) —
+  `production`, `staging`, `development`. The client var exists
+  because every Vite build emits `MODE=production`: set
+  `VITE_SENTRY_ENVIRONMENT` as a Vercel project env var
+  (`production` on Production, `staging` on Preview) and as a Docker
+  `--build-arg` for the bundled SPA (the staging deploy passes
+  `staging`; prod leaves it unset → `production`). The DSN-gated SDK
+  also lazy-loads: the `@sentry/react` chunk (a few hundred KB) is
+  precached by the service worker but never evaluated without
+  `VITE_SENTRY_DSN`.
+- DSNs are public-by-design client keys — they ride GitHub
+  **variables**, not secrets:
+  `vars.SENTRY_DSN` → `TF_VAR_sentry_dsn` (terraform env on the prod
+  service + the staging `gcloud run deploy`), `vars.VITE_SENTRY_DSN`
+  → a Docker `--build-arg` for the bundled SPA + a Vercel project
+  env var for the Vercel build.
+
 ### Map tiles
 Tile requests are **same-origin** in every environment: in dev the Vite `/api`
 proxy forwards them to the local server; in production a `vercel.json` rewrite
