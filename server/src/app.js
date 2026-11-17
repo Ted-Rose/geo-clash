@@ -120,8 +120,24 @@ export async function buildServer({
   // ---- REST: lobby --------------------------------------------------------
 
   app.get('/api/rooms', async (_req, res) => {
-    const rooms = await reg.list();
-    res.json({ rooms });
+    try {
+      const rooms = await reg.list();
+      res.json({ rooms });
+    } catch (err) {
+      if (!isStoreError(err)) {
+        // A real bug — let it reach the Sentry error handler + 500.
+        throw err;
+      }
+      // Valkey down: same contract as the leaderboard route —
+      // throttled warning for trending, 503 JSON instead of a
+      // bare 500.
+      captureExpectedError(err, {
+        errorCode: 'store_error', route: 'GET /api/rooms',
+      }, {
+        throttleKey: `api:rooms-list:${err.name}`,
+      });
+      res.status(503).json({ error: 'rooms-unavailable' });
+    }
   });
 
   app.get('/api/leaderboard', async (req, res) => {
@@ -169,11 +185,24 @@ export async function buildServer({
       });
       res.status(201).json({ room });
     } catch (err) {
-      // Validation rejects (e.g. `unsupported-game-type:*`) are
-      // routine client errors and stay local; anything else is a
-      // bug/outage the 500 hides — report it.
+      // Store failures (Valkey down) are routine upstream noise —
+      // throttled warning, answered 503 like the other outage
+      // responses. Validation rejects (e.g.
+      // `unsupported-game-type:*`) are routine client errors and
+      // stay local; anything else is a bug the 500 hides —
+      // report it, throttled on err.name like the socket path.
+      if (isStoreError(err)) {
+        captureExpectedError(err, {
+          errorCode: 'store_error', route: 'POST /api/rooms',
+        }, {
+          throttleKey: `api:rooms-create:${err.name}`,
+        });
+        return res.status(503).json({ error: 'rooms-unavailable' });
+      }
       if (!err.message?.startsWith('unsupported-game-type')) {
-        captureInternalError(err, { route: 'POST /api/rooms' });
+        captureInternalError(err, { route: 'POST /api/rooms' }, {
+          throttleKey: `route:rooms-create:${err.name}`,
+        });
       }
       res.status(500).json({ error: err.message });
     }

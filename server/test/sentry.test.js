@@ -318,10 +318,13 @@ test('captureStoreOrInternalError splits store noise from bugs',
     );
     await settle(recorded, 2);
     assert.equal(recorded.length, 2);
-    assert.equal(recorded[0].level, 'warning');
-    assert.equal(recorded[0].tags.error_code, 'store_error');
-    assert.equal(recorded[1].level, 'error');
-    assert.equal(recorded[1].tags.error_code, 'internal_error');
+    // Key on tags, not arrival order — the SDK processes the two
+    // events async and can reorder them under parallel test load.
+    const byCode = Object.fromEntries(
+      recorded.map((e) => [e.tags.error_code, e.level])
+    );
+    assert.equal(byCode.store_error, 'warning');
+    assert.equal(byCode.internal_error, 'error');
   }
 );
 

@@ -132,6 +132,50 @@ test('GET /api/leaderboard store outage → 503, bug → 500', async (t) => {
   assert.equal(res.status, 500);
 });
 
+test('GET/POST /api/rooms store outage → 503, bug → 500', async (t) => {
+  // A store-shaped rejection (Valkey down) is routine noise — the
+  // routes classify it and answer 503 instead of a bare 500.
+  const storeErr = new Error('read ECONNRESET');
+  storeErr.code = 'ECONNRESET';
+  const down = await startServer(t, {
+    registry: {
+      async init() {},
+      async list() { throw storeErr; },
+      async create() { throw storeErr; },
+    },
+  });
+  let res = await fetch(`${down.base}/api/rooms`);
+  assert.equal(res.status, 503);
+  assert.deepEqual(await res.json(), { error: 'rooms-unavailable' });
+
+  res = await fetch(`${down.base}/api/rooms`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ name: 'x' }),
+  });
+  assert.equal(res.status, 503);
+  assert.deepEqual(await res.json(), { error: 'rooms-unavailable' });
+
+  // A non-store failure is a real bug — GET rethrows to the error
+  // middleware, POST reports it and keeps the 500 + message shape.
+  const buggy = await startServer(t, {
+    registry: {
+      async init() {},
+      async list() { throw new TypeError('forced'); },
+      async create() { throw new TypeError('forced'); },
+    },
+  });
+  res = await fetch(`${buggy.base}/api/rooms`);
+  assert.equal(res.status, 500);
+  res = await fetch(`${buggy.base}/api/rooms`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ name: 'x' }),
+  });
+  assert.equal(res.status, 500);
+  assert.deepEqual(await res.json(), { error: 'forced' });
+});
+
 test('CORS origin handling: reflect-all, single, list, blocked', async (t) => {
   // Fail-closed default (unset CORS_ORIGIN): no CORS headers at all,
   // so cross-origin browser requests are denied.

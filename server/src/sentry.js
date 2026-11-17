@@ -51,7 +51,7 @@ const _CONNECTION_CLOSED_MSG = 'Connection is closed.';
 // must match on err.code.
 const _STORE_SOCKET_CODES = new Set([
   'ECONNREFUSED', 'ECONNRESET', 'ETIMEDOUT',
-  'EPIPE', 'ENOTFOUND', 'EAI_AGAIN',
+  'EPIPE', 'ENOTFOUND', 'EAI_AGAIN', 'EHOSTUNREACH',
 ]);
 
 // The TLS handshake abort surfaces with no err.code at all — match

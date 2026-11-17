@@ -8,7 +8,7 @@
 // `clear()` (or `SCAN+DEL`) drains it.
 
 import { ValkeyStore, ValkeyZSetStore } from './valkeyStore.js';
-import { captureExpectedError } from '../sentry.js';
+import { captureStoreOrInternalError } from '../sentry.js';
 import Redis from 'ioredis';
 
 export class MemoryStore {
@@ -165,10 +165,11 @@ function makeRedisClient() {
     lazyConnect: false,
   });
   // ioredis emits an 'error' per failed command/reconnect — throttle so
-  // an outage trends as warnings in Sentry without flooding it.
+  // an outage trends as warnings in Sentry without flooding it. Split on
+  // isStoreError so a command/reply bug still lands at error level.
   client.on('error', (err) => {
     console.error('[valkey]', err.message);
-    captureExpectedError(err, { errorCode: 'store_error' }, {
+    captureStoreOrInternalError(err, {}, {
       // err.name, not err.message — ioredis messages embed varying
       // detail (addresses, commands) that would mint a key per error.
       throttleKey: `valkey:${err.name}`,

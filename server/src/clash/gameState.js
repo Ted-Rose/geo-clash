@@ -3,7 +3,7 @@
 // and the internal tick(); emits patched updates via the provided io.
 
 import { makeRoomStores } from '../shared/memoryStore.js';
-import { captureInternalError } from '../sentry.js';
+import { captureStoreOrInternalError } from '../sentry.js';
 import {
   buildGrid,
   cellIdAt,
@@ -114,8 +114,10 @@ export class GameState {
       this._tickHandle = setInterval(() => this.tick().catch((err) => {
         console.error('[clash/gameState] tick error:', err.message);
         // A persistent failure fires every 200 ms — throttle so one
-        // stuck room can't flood the Sentry project quota.
-        captureInternalError(err, { roomId: this.roomId }, {
+        // stuck room can't flood the Sentry project quota. The tick
+        // reads the stores, so a Valkey outage lands here too —
+        // classify it as warning noise like the other store paths.
+        captureStoreOrInternalError(err, { roomId: this.roomId }, {
           // err.name, not err.message — message text varies per
           // failure and would mint a fresh key each time.
           throttleKey: `tick:clash:${this.roomId}:${err.name}`,
@@ -320,7 +322,9 @@ export class GameState {
         this._lastTimerSecond = second;
         this._emit('timer', { remainingSeconds: this.remainingSeconds });
       }
-      if (this.remainingSeconds <= 0) this.endMatch();
+      // Awaited so an endMatch rejection reaches the tick catch
+      // above instead of floating as an unhandled rejection.
+      if (this.remainingSeconds <= 0) await this.endMatch();
     }
   }
 

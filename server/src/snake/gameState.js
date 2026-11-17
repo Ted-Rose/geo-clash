@@ -18,10 +18,7 @@
 
 import { makeRoomStores, leaderboardStore } from '../shared/memoryStore.js';
 import { bboxAround } from '../shared/gridUtils.js';
-import {
-  captureInternalError,
-  captureStoreOrInternalError,
-} from '../sentry.js';
+import { captureStoreOrInternalError } from '../sentry.js';
 import { replenishFood } from './food.js';
 import { resolveCollisions } from './collisions.js';
 import {
@@ -137,7 +134,9 @@ export class SnakeGameState {
       this._tickHandle = setInterval(
         () => this._tick().catch((err) => {
           console.error('[snake/gameState] tick error:', err.message);
-          captureInternalError(err, { roomId: this.roomId }, {
+          // The tick reads the stores — a Valkey outage lands here
+          // and is warning noise, not a bug (see clash/gameState.js).
+          captureStoreOrInternalError(err, { roomId: this.roomId }, {
             // err.name, not err.message — see clash/gameState.js.
             throttleKey: `tick:snake:${this.roomId}:${err.name}`,
           });
