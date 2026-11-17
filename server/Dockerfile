@@ -9,7 +9,7 @@
 # VITE_SENTRY_ENVIRONMENT tags the SPA's Sentry events (Vite builds
 # always emit MODE=production, so staging must pass it explicitly);
 # unset falls back to import.meta.env.MODE.
-FROM node:20-alpine AS client-build
+FROM node:26-alpine AS client-build
 ARG VITE_SENTRY_DSN=""
 ENV VITE_SENTRY_DSN=$VITE_SENTRY_DSN
 ARG VITE_SENTRY_ENVIRONMENT=""
@@ -22,7 +22,7 @@ RUN npm run pwa-assets && npm run build
 
 # Stage 2: server runtime + the bundled client at ./public,
 # which src/app.js serves when present.
-FROM node:20-alpine
+FROM node:26-alpine
 WORKDIR /app
 COPY server/package*.json ./
 RUN npm ci --omit=dev
