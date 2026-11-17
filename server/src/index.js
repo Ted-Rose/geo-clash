@@ -1,7 +1,13 @@
 // Geo Clash server entrypoint.
 // Express for /health + /api/rooms; Socket.io for realtime room events.
 
-import { buildServer, parseCorsOrigin } from './app.js';
+// Sentry must init before express/socket.io load so the SDK's module
+// hooks can instrument them; the dynamic imports keep that ordering
+// explicit (static imports would all resolve before any code ran).
+// No SENTRY_DSN → initSentry no-ops and every capture call drops.
+const { initSentry } = await import('./sentry.js');
+initSentry();
+const { buildServer, parseCorsOrigin } = await import('./app.js');
 
 const PORT = process.env.PORT || 3001;
 

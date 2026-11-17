@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { getSocket, getSessionId } from './shared/socket.js';
+import { sentryBreadcrumb } from './sentry.js';
 import { useGeolocation } from './shared/hooks/useGeolocation.js';
 import LobbyScreen from './shared/LobbyScreen.jsx';
 import ClashGameScreen from './clash/GameScreen.jsx';
@@ -92,6 +93,11 @@ export default function App() {
       setConnected(false);
       setConnectError(err?.message || 'connect error');
       console.error('[geo-clash] socket connect_error:', err);
+      // Routine on flaky mobile links — context for real errors, not
+      // an issue of its own.
+      sentryBreadcrumb('socket connect_error', {
+        message: err?.message,
+      });
     }
     socket.on('connect', onConnect);
     socket.on('disconnect', onDisconnect);

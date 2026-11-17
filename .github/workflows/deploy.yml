@@ -37,7 +37,12 @@ jobs:
         run: |
           TAG=$(git rev-parse --short HEAD)
           # Repo-root context: the Dockerfile also builds the client.
+          # VITE_SENTRY_DSN bakes Sentry into the bundled SPA — it's a
+          # public-by-design client key, so a repo variable suffices.
+          # VITE_SENTRY_ENVIRONMENT is deliberately unset here — the
+          # SPA falls back to MODE=production, which is correct.
           docker build -f server/Dockerfile \
+            --build-arg VITE_SENTRY_DSN="${{ vars.VITE_SENTRY_DSN }}" \
             -t ${{ env.IMAGE_BASE }}:${TAG} .
           docker push    ${{ env.IMAGE_BASE }}:${TAG}
           echo "IMAGE_TAG=${TAG}" >> $GITHUB_ENV
@@ -73,6 +78,9 @@ jobs:
           TF_VAR_project: ${{ env.PROJECT }}
           TF_VAR_region: ${{ env.REGION }}
           TF_VAR_valkey_url: ${{ secrets.VALKEY_URL }}
+          # Public-by-design client key — a repo variable, not a
+          # secret. Empty leaves Sentry disabled on the service.
+          TF_VAR_sentry_dsn: ${{ vars.SENTRY_DSN }}
           CORS_ORIGIN_SECRET: ${{ secrets.CORS_ORIGIN }}
 
   # Staging deploy — deliberately NOT terraform-managed (unlike
@@ -109,8 +117,13 @@ jobs:
         run: |
           TAG=staging-$(git rev-parse --short HEAD)
           # Repo-root context: the Dockerfile also builds the
-          # client.
+          # client. VITE_SENTRY_ENVIRONMENT=staging tags the bundled
+          # SPA's Sentry events (its MODE is always production, so
+          # the var must come from here) to match NODE_ENV=staging
+          # on the server side.
           docker build -f server/Dockerfile \
+            --build-arg VITE_SENTRY_DSN="${{ vars.VITE_SENTRY_DSN }}" \
+            --build-arg VITE_SENTRY_ENVIRONMENT=staging \
             -t ${{ env.IMAGE_BASE }}:${TAG} .
           docker push    ${{ env.IMAGE_BASE }}:${TAG}
           echo "IMAGE_TAG=${TAG}" >> $GITHUB_ENV
@@ -127,13 +140,18 @@ jobs:
           cors="https://geoclashers.vercel.app"
           cors="$cors,https://geo-clash-*-industr-analysers-"
           cors="${cors}projects.vercel.app"
+          # NODE_ENV=staging tags Sentry events with the staging
+          # environment; SENTRY_DSN is a public client key (repo
+          # variable). Empty DSN leaves Sentry disabled.
+          envvars="^;^CORS_ORIGIN=$cors;NODE_ENV=staging"
+          envvars="$envvars;SENTRY_DSN=${{ vars.SENTRY_DSN }}"
           gcloud run deploy geo-clash-server-staging \
             --image "${{ env.IMAGE_BASE }}:${{ env.IMAGE_TAG }}" \
             --region "${{ env.REGION }}" \
             --project "${{ env.PROJECT }}" \
             --allow-unauthenticated \
             --min-instances=0 --max-instances=1 \
-            --set-env-vars "^;^CORS_ORIGIN=$cors"
+            --set-env-vars "$envvars"
           url=$(gcloud run services describe \
             geo-clash-server-staging \
             --region "${{ env.REGION }}" \

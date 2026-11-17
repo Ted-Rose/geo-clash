@@ -1,4 +1,5 @@
 import { Router } from 'express';
+import { captureExpectedError } from './sentry.js';
 
 /**
  * Tile Proxy with Imagery Age Enforcement
@@ -80,6 +81,12 @@ async function getImageryCaptureDate(z, x, y) {
         metadataCache.set(cacheKey, { date, timestamp: Date.now() });
         return date;
     } catch (err) {
+        // Esri metadata outages are routine upstream noise — the tile
+        // still proxies (imagery age unknown) and Sentry gets a
+        // throttled warning for trending.
+        captureExpectedError(err, { errorCode: 'upstream_tile_error' }, {
+            throttleKey: 'esri-metadata',
+        });
         return null;
     }
 }
@@ -137,6 +144,9 @@ router.get('/:z/:y/:x', async (req, res) => {
         const buffer = await tileRes.arrayBuffer();
         return res.send(Buffer.from(buffer));
     } catch (err) {
+        captureExpectedError(err, { errorCode: 'upstream_tile_error' }, {
+            throttleKey: 'esri-tile',
+        });
         return res.status(502).json({ error: 'Source fetch failed' });
     }
 });

@@ -4,7 +4,16 @@
 # Stage 1: build the client bundle for SAME-ORIGIN serving.
 # VITE_SERVER_URL is deliberately unset so socket.io and /api calls
 # target the origin that serves this bundle (the Cloud Run URL).
+# VITE_SENTRY_DSN is optional — a public-by-design client key passed
+# via --build-arg; unset means the bundled SPA reports nothing.
+# VITE_SENTRY_ENVIRONMENT tags the SPA's Sentry events (Vite builds
+# always emit MODE=production, so staging must pass it explicitly);
+# unset falls back to import.meta.env.MODE.
 FROM node:20-alpine AS client-build
+ARG VITE_SENTRY_DSN=""
+ENV VITE_SENTRY_DSN=$VITE_SENTRY_DSN
+ARG VITE_SENTRY_ENVIRONMENT=""
+ENV VITE_SENTRY_ENVIRONMENT=$VITE_SENTRY_ENVIRONMENT
 WORKDIR /build/client
 COPY client/package*.json ./
 RUN npm ci

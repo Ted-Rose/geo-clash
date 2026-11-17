@@ -32,3 +32,13 @@ variable "cors_origin" {
   # has no string continuation, so the origin list stays on one line.
   default = "https://geoclashers.vercel.app,https://geo-clash-*-industr-analysers-projects.vercel.app"
 }
+
+# Public Sentry client key (DSN) for the server project — DSNs are
+# public-by-design (they only allow event ingestion), so this rides a
+# plain variable + env var, not Secret Manager. Empty disables Sentry
+# entirely: the server starts clean and every capture call no-ops.
+variable "sentry_dsn" {
+  description = "Sentry DSN for geo-clash-server; empty disables Sentry"
+  type        = string
+  default     = ""
+}
