@@ -88,6 +88,49 @@ describe('initSentry', () => {
         .toBe('test');
     }
   );
+
+  it('stays a passthrough when the SDK chunk fails to load',
+    async () => {
+      // A rejected chunk fetch (flaky link, mid-deploy precache
+      // race) must not take the app down: initSentry resolves
+      // false, _Sentry stays null, the boundary is a passthrough.
+      vi.stubEnv('VITE_SENTRY_DSN', FAKE_DSN);
+      vi.spyOn(console, 'warn').mockImplementation(() => {});
+      const ok = await initSentry({
+        _sdkLoader: () =>
+          Promise.reject(new TypeError('Failed to fetch chunk')),
+      });
+      expect(ok).toBe(false);
+      expect(captureInternalError(new Error('x'))).toBe(false);
+      render(
+        <ErrorBoundary fallback={<ErrorFallback />}>
+          <div>the app</div>
+        </ErrorBoundary>
+      );
+      expect(screen.getByText('the app')).toBeInTheDocument();
+      console.warn.mockRestore();
+    }
+  );
+
+  it('stays a passthrough when Sentry.init itself throws',
+    async () => {
+      vi.stubEnv('VITE_SENTRY_DSN', FAKE_DSN);
+      vi.spyOn(console, 'warn').mockImplementation(() => {});
+      const ok = await initSentry({
+        _sdkLoader: () => Promise.resolve({
+          init: () => { throw new Error('bad options'); },
+        }),
+      });
+      expect(ok).toBe(false);
+      render(
+        <ErrorBoundary fallback={<ErrorFallback />}>
+          <div>the app</div>
+        </ErrorBoundary>
+      );
+      expect(screen.getByText('the app')).toBeInTheDocument();
+      console.warn.mockRestore();
+    }
+  );
 });
 
 describe('capture helpers', () => {

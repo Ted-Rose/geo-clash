@@ -8,10 +8,14 @@ import './index.css';
 
 // initSentry must resolve before render so the ErrorBoundary is
 // Sentry-backed from the first paint. The SDK lazy-loads inside
-// initSentry only when VITE_SENTRY_DSN is set (~75KB never ships to
-// DSN-free builds); without a DSN it resolves immediately and the
-// boundary is a passthrough. An async bootstrap is used instead of
-// top-level await so the default Vite build target stays valid.
+// initSentry only when VITE_SENTRY_DSN is set — the ~75KB chunk is
+// precached by the service worker but never executed on DSN-free
+// clients; without a DSN it resolves immediately and the boundary
+// is a passthrough. initSentry never rejects (a failed chunk fetch
+// or throwing init leaves the passthrough in place), so render is
+// unreachable only if React itself is broken. An async bootstrap
+// is used instead of top-level await so the default Vite build
+// target stays valid.
 async function bootstrap() {
   await initSentry();
   ReactDOM.createRoot(document.getElementById('root')).render(

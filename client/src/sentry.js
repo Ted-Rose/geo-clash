@@ -9,10 +9,13 @@
 // Sentry-free.
 //
 // The SDK itself is lazy-loaded: a static `import '@sentry/react'`
-// would pull ~75KB into the main chunk even for DSN-free builds
-// (sentry.js is statically imported by App.jsx and friends). Instead
-// initSentry dynamic-imports the SDK and stashes the namespace on
-// `_Sentry`; helpers consult that ref and no-op until it arrives.
+// would pull ~75KB into the main chunk and evaluate it on every
+// load (sentry.js is statically imported by App.jsx and friends).
+// Instead initSentry dynamic-imports the SDK and stashes the
+// namespace on `_Sentry`; helpers consult that ref and no-op until
+// it arrives. The dynamic import still emits a separate chunk the
+// service worker precaches — DSN-free clients download it once but
+// it is never parsed or executed.
 
 import { createElement } from 'react';
 
@@ -25,26 +28,39 @@ const _EXPECTED_CODES = new Set([
 ]);
 
 // Initialize the SDK. No VITE_SENTRY_DSN → resolves false without
-// ever fetching @sentry/react. `options` exists so tests can inject
-// a DSN and a `beforeSend` spy that records (and drops) events.
+// ever importing @sentry/react (its precached chunk simply never
+// executes). `options` exists so tests can inject a DSN and a
+// `beforeSend` spy that records (and drops) events; `_sdkLoader`
+// lets tests simulate a failed chunk fetch or a throwing init.
 // Environment comes from VITE_SENTRY_ENVIRONMENT when set — Vite
 // builds always emit MODE=production, so the staging SPA needs the
 // explicit var to stop reporting itself as production.
+//
+// Never rejects: a failed chunk fetch (flaky link, mid-deploy
+// precache race) or a throwing Sentry.init leaves _Sentry null so
+// the ErrorBoundary stays a passthrough and the app still renders.
 export async function initSentry({
   dsn = import.meta.env.VITE_SENTRY_DSN,
   environment =
     import.meta.env.VITE_SENTRY_ENVIRONMENT || import.meta.env.MODE,
   beforeSend,
   transport,
+  _sdkLoader = () => import('@sentry/react'),
 } = {}) {
   if (!dsn) return false;
-  _Sentry = await import('@sentry/react');
-  _Sentry.init({
-    dsn,
-    environment,
-    ...(beforeSend ? { beforeSend } : {}),
-    ...(transport ? { transport } : {}),
-  });
+  try {
+    _Sentry = await _sdkLoader();
+    _Sentry.init({
+      dsn,
+      environment,
+      ...(beforeSend ? { beforeSend } : {}),
+      ...(transport ? { transport } : {}),
+    });
+  } catch (err) {
+    _Sentry = null;
+    console.warn('[sentry] init failed, reporting disabled:', err);
+    return false;
+  }
   return true;
 }
 
@@ -72,6 +88,8 @@ function _capture(err, level, tags) {
 // Report a real bug caught by app code — a caught-but-unexpected
 // failure. Captured at error level under
 // `error_code: internal_error` (overridable via tags).
+// NB: captureInternalError/captureExpectedError have no app-code
+// callers yet — kept for parity with the server helper surface.
 export function captureInternalError(err, tags = {}) {
   return _capture(err, 'error', { error_code: 'internal_error', ...tags });
 }
