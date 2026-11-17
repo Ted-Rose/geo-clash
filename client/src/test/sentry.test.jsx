@@ -1,0 +1,142 @@
+// Tests for the Sentry helpers in src/sentry.js: the DSN gate, the
+// internal/expected capture split, breadcrumbs, and the ErrorBoundary
+// fallback. Events are recorded via an injected beforeSend that
+// returns null, plus a no-op transport — nothing leaves the test
+// process.
+
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import { render, screen } from '@testing-library/react';
+import * as Sentry from '@sentry/react';
+import {
+  initSentry,
+  captureInternalError,
+  captureExpectedError,
+  sentryBreadcrumb,
+} from '../sentry.js';
+import ErrorFallback from '../shared/ErrorFallback.jsx';
+
+const FAKE_DSN = 'https://public@o123.ingest.us.sentry.io/456';
+
+// Sentry constructs the transport via `new`; a function returning an
+// object survives that (constructor return value wins).
+function noopTransport() {
+  return { send: async () => ({}), flush: async () => true };
+}
+
+function initWithRecorder(recorded) {
+  return initSentry({
+    dsn: FAKE_DSN,
+    environment: 'test',
+    transport: noopTransport,
+    beforeSend: (event) => {
+      recorded.push(event);
+      return null; // drop — never hits the transport
+    },
+  });
+}
+
+// The SDK's event pipeline (beforeSend included) runs async — poll
+// until `recorded` reaches `n` events instead of sleeping a fixed
+// amount. Negative assertions pass a short timeoutMs for an event
+// that should never arrive.
+async function settle(recorded, n = 1, timeoutMs = 2000) {
+  const deadline = Date.now() + timeoutMs;
+  while (recorded.length < n && Date.now() < deadline) {
+    await new Promise((r) => setTimeout(r, 5));
+  }
+}
+
+afterEach(async () => {
+  await Sentry.close();
+});
+
+beforeEach(() => {
+  vi.unstubAllEnvs();
+});
+
+describe('initSentry', () => {
+  it('returns false when VITE_SENTRY_DSN is unset', () => {
+    vi.stubEnv('VITE_SENTRY_DSN', '');
+    expect(initSentry()).toBe(false);
+    expect(captureInternalError(new Error('x'))).toBe(false);
+    expect(sentryBreadcrumb('m')).toBe(false);
+  });
+
+  it('returns true when the DSN env var is set', () => {
+    vi.stubEnv('VITE_SENTRY_DSN', FAKE_DSN);
+    expect(initSentry({ transport: noopTransport })).toBe(true);
+  });
+});
+
+describe('capture helpers', () => {
+  it('captureInternalError sends error-level tagged events', async () => {
+    const recorded = [];
+    initWithRecorder(recorded);
+    expect(captureInternalError(new Error('boom'), { area: 'lobby' }))
+      .toBe(true);
+    await settle(recorded);
+    expect(recorded).toHaveLength(1);
+    expect(recorded[0].level).toBe('error');
+    expect(recorded[0].tags.error_code).toBe('internal_error');
+    expect(recorded[0].tags.area).toBe('lobby');
+  });
+
+  it('captureExpectedError sends only allowlisted codes, at warning',
+    async () => {
+      const recorded = [];
+      initWithRecorder(recorded);
+      expect(
+        captureExpectedError(new Error('unreachable'),
+          { errorCode: 'connect_error' })
+      ).toBe(true);
+      await settle(recorded);
+      expect(recorded).toHaveLength(1);
+      expect(recorded[0].level).toBe('warning');
+      expect(recorded[0].tags.error_code).toBe('connect_error');
+
+      expect(
+        captureExpectedError(new Error('typo'),
+          { errorCode: 'not_found' })
+      ).toBe(false);
+      await settle(recorded, 2, 150);
+      expect(recorded).toHaveLength(1);
+    }
+  );
+
+  it('sentryBreadcrumb attaches to the next captured event', async () => {
+    const recorded = [];
+    initWithRecorder(recorded);
+    expect(sentryBreadcrumb('socket connect_error', {
+      message: 'xhr poll error',
+    })).toBe(true);
+    captureInternalError(new Error('boom'));
+    await settle(recorded);
+    const crumbs = recorded[0].breadcrumbs || [];
+    expect(crumbs.some((b) => b.message === 'socket connect_error'))
+      .toBe(true);
+  });
+});
+
+describe('Sentry.ErrorBoundary', () => {
+  it('renders ErrorFallback and captures a render crash', async () => {
+    const recorded = [];
+    initWithRecorder(recorded);
+    // React logs the boundary hit noisily; silence for the test.
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+    const Boom = () => { throw new Error('render exploded'); };
+    render(
+      <Sentry.ErrorBoundary fallback={<ErrorFallback />}>
+        <Boom />
+      </Sentry.ErrorBoundary>
+    );
+    expect(screen.getByRole('alert')).toHaveTextContent(
+      'Something went wrong'
+    );
+    expect(screen.getByRole('button', { name: 'Reload' }))
+      .toBeInTheDocument();
+    await settle(recorded);
+    expect(recorded.length).toBeGreaterThanOrEqual(1);
+    expect(recorded[0].level).toBe('error');
+    console.error.mockRestore();
+  });
+});
