@@ -4,59 +4,49 @@ updates:
   # Root orchestration manifest (dev tooling).
   - package-ecosystem: npm
     directory: /
+    # Staging-first workflow: dep updates soak on `staging`
+    # like every other change, then promote to `main`.
+    target-branch: "staging"
     schedule:
       interval: weekly
     open-pull-requests-limit: 5
-    # Staging-first: dep updates soak on `staging`,
-    # then promote to `main` like any other change.
-    target-branch: "staging"
 
   # Realtime backend (Express + Socket.io).
   - package-ecosystem: npm
     directory: /server
+    target-branch: "staging"
     schedule:
       interval: weekly
     open-pull-requests-limit: 5
-    # Staging-first: dep updates soak on `staging`,
-    # then promote to `main` like any other change.
-    target-branch: "staging"
 
   # React + Vite + Leaflet frontend.
   - package-ecosystem: npm
     directory: /client
+    target-branch: "staging"
     schedule:
       interval: weekly
     open-pull-requests-limit: 5
-    # Staging-first: dep updates soak on `staging`,
-    # then promote to `main` like any other change.
-    target-branch: "staging"
 
   # Server container base image (server/Dockerfile).
   - package-ecosystem: docker
     directory: /server
+    target-branch: "staging"
     schedule:
       interval: weekly
     open-pull-requests-limit: 5
-    # Staging-first: dep updates soak on `staging`,
-    # then promote to `main` like any other change.
-    target-branch: "staging"
 
   # Action version bumps in .github/workflows.
   - package-ecosystem: github-actions
     directory: /
+    target-branch: "staging"
     schedule:
       interval: weekly
     open-pull-requests-limit: 5
-    # Staging-first: dep updates soak on `staging`,
-    # then promote to `main` like any other change.
-    target-branch: "staging"
 
   # GCP infrastructure definitions.
   - package-ecosystem: terraform
     directory: /terraform
+    target-branch: "staging"
     schedule:
       interval: weekly
     open-pull-requests-limit: 5
-    # Staging-first: dep updates soak on `staging`,
-    # then promote to `main` like any other change.
-    target-branch: "staging"

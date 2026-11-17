@@ -1,9 +1,16 @@
 {
   "installCommand": "npm --prefix client install",
-  "buildCommand": "npm --prefix client run pwa-assets && npm --prefix client run build",
+  "buildCommand": "cd client && npm run pwa-assets && npm run build",
   "outputDirectory": "client/dist",
   "cleanUrls": true,
   "framework": null,
+  "git": {
+    "deploymentEnabled": {
+      "main": true,
+      "staging": true,
+      "**": false
+    }
+  },
   "regions": ["arn1"],
   "headers": [
     {

@@ -12,6 +12,91 @@ shields,
 respawn at a base cell. Matches are short (a few minutes). The MVP is purely a
 **web app** — no native mobile code.
 
+## Git workflow — staging-first
+
+`main` is production (`geoclashers.vercel.app` +
+`geo-clash-server` on Cloud Run); `staging` is the integration
+branch — every push auto-deploys a Vercel preview
+(`geo-clash-git-staging-industr-analysers-projects.vercel.app`)
+AND `geo-clash-server-staging` on Cloud Run (shared Aiven
+Valkey under the `staging:` key prefix — VALKEY_KEY_PREFIX,
+applied via ioredis `keyPrefix` in
+`server/src/shared/memoryStore.js`; Aiven's `default` user
+cannot manage ACLs, so the prefix is the isolation — scales
+to zero). The invariant is **`main` ⊆ `staging`**:
+production only receives code that has already soaked on
+staging. The `staging-first` required check
+(`.github/workflows/require-staging.yml`) fails `main` PRs
+whose head SHA was never merged into `staging`, and `main` is
+squash-merge only.
+
+- **Features/fixes**: branch off `origin/main` — never
+  `staging`; the branch must carry no unverified staging
+  noise. Open the PR with `--base staging`, then
+  squash-merge once checks are green and the reviewer loop
+  is clean — agents merge into `staging` without asking.
+  GitHub auto-deletes the head branch on merge; expected.
+- **Staging fixes**: commit them on the ORIGINAL feature
+  branch (push it again if auto-deleted — same SHAs are
+  fine; after auto-delete, restore it with
+  `git push origin <sha>:refs/heads/<branch>` where `<sha>`
+  is the merged staging PR's `headRefOid`), then merge
+  into `staging` via the still-open staging PR or a new
+  one.
+- **Promotion to `main`** — only when the user asks to
+  release or merge to main. The `Promote to main` workflow
+  (`.github/workflows/promote-to-main.yml`) automates it:
+  `gh workflow run "Promote to main"` (or the Actions tab;
+  `-f dry_run=true` lists pending promotions). It opens a
+  `main` PR per staged branch — oldest staging-merge
+  first, original title + body + a promotion footer —
+  squash-merges each, then resets `staging` to `main`
+  (skipped entirely if any promotion fails — staging then
+  still holds unreleased work). Conflicting promotions are
+  resolved from the staging squash commit's tree — the
+  validated integration state, never guessed; a replay is
+  only attempted while all earlier promotions succeeded,
+  since a squash tree also carries their code. A branch
+  whose remote tip moved past its staging merge is skipped
+  — those commits were never staged. The scan covers the
+  200 most recent merged staging PRs. Manual
+  equivalent, per branch: re-push it if auto-deleted
+  (`git push origin <headRefOid>:refs/heads/<branch>`),
+  open a PR with `--base main` (same title + body — keep
+  `Closes #<N>` links so issues auto-close), then
+  `gh pr merge <N> --squash --admin`; then reset staging
+  (`git fetch origin && git push --force-with-lease origin
+  origin/main:refs/heads/staging` — the only sanctioned
+  force-push; the workflow does it via the refs API
+  instead). NEVER open `staging`→`main` PRs — that drags
+  integration noise into prod history. The reset discards
+  anything still on `staging` that was not promoted —
+  reset only once staging matches the release, and
+  re-merge leftovers to `staging` afterwards (re-pushing
+  the same SHAs still satisfies the check). The workflow
+  needs the `AUTOMERGE_TOKEN` admin PAT (the same secret
+  the dependabot automerge uses) — REQUIRED here:
+  `main`'s ruleset demands approving reviews and the
+  staging reset is non-fast-forward, so merges will FAIL
+  with plain GITHUB_TOKEN until the secret exists.
+- **"Merge straight to main" requests**: merge the branch
+  into `staging` first anyway, then the `main` PR — the
+  check blocks anything else, keeping `main` ⊆ `staging`
+  even for urgent merges. If the `main` PR's check already
+  ran red before the staging merge, re-run the failed job
+  after it (`gh run rerun <run-id> --failed` or a push).
+- **Dependabot** targets `staging` and auto-merges there;
+  its branches promote to `main` like any feature branch.
+- **Deployment notes**: `vercel.json`'s
+  `git.deploymentEnabled` whitelists only `main`
+  (production) and `staging` (preview) — feature branches
+  and PRs get NO Vercel deployment. The config is read
+  from the pushed commit, so a branch's own vercel.json
+  edits apply to that branch's deploys. The staging Cloud
+  Run service (`geo-clash-server-staging`) is deployed by
+  the `deploy-staging` job in `deploy.yml`, NOT terraform
+  — don't add it to `terraform/`.
+
 ## Repo shape (monorepo, two workspaces)
 ```
 /                 root: scripts that orchestrate both workspaces
@@ -168,68 +253,6 @@ Server default port: `3001`. Client dev server: `5173`. Both
 are configurable via env if the need arises — don't bake new
 ports into multiple files.
 
-## Git workflow — staging-first
-
-`main` is production (Vercel client + `geo-clash-server` Cloud
-Run); `staging` is the integration branch — every push
-auto-deploys the **`geo-clash-staging` Cloud Run service**
-via `.github/workflows/deploy-staging.yml`. That service
-serves the built client AND the Socket.io API same-origin
-(like prod's image), so the `*.run.app` URL is the complete
-staging environment. The invariant is **`main` ⊆ `staging`**:
-production only receives code that has already soaked on
-staging. The `staging-first` required check
-(`.github/workflows/require-staging.yml`) fails `main` PRs
-whose head SHA was never merged into `staging`.
-
-- **Staging "database"**: `geo-clash-staging` shares the
-  Aiven Valkey with prod but writes under the `staging:` key
-  prefix (`VALKEY_KEY_PREFIX`, applied via ioredis
-  `keyPrefix` in `server/src/shared/memoryStore.js`) — rooms
-  and leaderboard are isolated with zero extra infra. Aiven's
-  `default` user cannot manage ACLs, so a dedicated staging
-  user isn't possible without the Aiven console; the prefix
-  is the boundary.
-- **Features/fixes**: branch off `origin/main` — never
-  `staging`. Open the PR with `--base staging`, then
-  squash-merge once checks are green and the reviewer loop
-  is clean — agents merge into `staging` without asking.
-  GitHub auto-deletes the head branch on merge; expected.
-- **Staging fixes**: commit them on the ORIGINAL feature
-  branch (push it again if auto-deleted — same SHAs are
-  fine; restore with `git push origin
-  <sha>:refs/heads/<branch>` where `<sha>` is the merged
-  staging PR's `headRefOid`), then merge into `staging` via
-  the still-open staging PR or a new one.
-- **Promotion to `main`** — only when the user asks to
-  release or merge to main. The `Promote to main` workflow
-  (`.github/workflows/promote-to-main.yml`) automates it:
-  `gh workflow run "Promote to main"` (`-f dry_run=true`
-  lists pending promotions). It opens a `main` PR per staged
-  branch — oldest staging-merge first, original title +
-  body + a promotion footer — squash-merges each, then
-  resets `staging` to `main` (skipped entirely if any
-  promotion fails). Conflicting promotions are resolved from
-  the staging squash commit's tree — the validated
-  integration state, never guessed. Manual equivalent, per
-  branch: re-push it if auto-deleted, open a PR with
-  `--base main` (same title + body), then
-  `gh pr merge <N> --squash --admin`; then reset staging
-  (`git fetch origin && git push --force-with-lease origin
-  origin/main:refs/heads/staging` — the only sanctioned
-  force-push). NEVER open `staging`→`main` PRs. The workflow
-  needs the `AUTOMERGE_TOKEN` admin PAT (same secret the
-  dependabot automerge uses).
-- **"Merge straight to main" requests**: merge the branch
-  into `staging` first anyway, then the `main` PR — the
-  check blocks anything else, keeping `main` ⊆ `staging`
-  even for urgent merges.
-- **Dependabot** targets `staging` and auto-merges there;
-  its branches promote to `main` like any feature branch.
-- **Vercel previews** of feature branches still point at
-  prod (VITE_SERVER_URL) — the canonical staging env is the
-  `geo-clash-staging` service URL, not a Vercel preview.
-
 ## Conventions / rules
 
 Universal rules — follow exactly:
@@ -291,21 +314,16 @@ Universal rules — follow exactly:
 ### Repo-specific rules
 
 - **Dangerous commands — never run**: `terraform apply` or any
-  mutating `gcloud` command (infra is Terraform-managed — the
-  ad-hoc `geo-clash-staging` service is CI-deployed, not
-  Terraform); `git push` to `main` (work lands via
-  squash-merge PRs); `git push --force` except the
-  post-release `staging` reset in "Git workflow —
-  staging-first" (`--force-with-lease`, `staging` only).
+  mutating `gcloud` command (infra is Terraform-managed);
+  `git push` to `main` (work lands via squash-merge PRs).
   There is no DB migration tool — schema changes are code
   changes.
 - **GitHub targeting**: `origin` = `Ted-Rose/geo-clash` (the
   user's own repo) — all `gh` operations target it.
-- **`staging` is the integration branch** — PRs target
-  `staging` and squash-merge on green; `main` only receives
-  promotions (see "Git workflow — staging-first").
-  `development` is a stale legacy branch (the repo
-  converged on `main`) — do not target it.
+- **Branching model is staging-first** — see "Git workflow —
+  staging-first" above: PRs target `staging` and promotion
+  to `main` is a separate release step. `development` is a
+  stale legacy branch — do not target it.
 - **Work in a git worktree, never the main checkout** —
   `git fetch origin`, then `git worktree add
   ../geo-clash-worktrees/<slug> -b <type>/<slug>
@@ -335,8 +353,11 @@ Universal rules — follow exactly:
 - **Commit style switched to `Type: Capitalized`** (rule 2) —
   older history uses lowercase conventional commits; do not
   rewrite it.
-- **PRs are reviewed by the user before merge** — present the
-  PR URL and wait for explicit approval; do not self-merge.
+- **PRs are reviewed before merge** — present the PR URL and
+  run the reviewer loop. Merges into `staging` may proceed
+  without asking (see "Git workflow — staging-first");
+  promotion to `main` only happens when the user asks to
+  release — do not self-merge to `main`.
 - **Test login**: none — the game has no auth system.
 - Commit in small, themed steps; never commit `node_modules`,
   build artifacts, secrets, or editor scratch files — extend

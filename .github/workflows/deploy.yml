@@ -2,7 +2,7 @@ name: Deploy
 
 on:
   push:
-    branches: [main]
+    branches: [main, staging]
   workflow_dispatch:
 
 env:
@@ -11,7 +11,11 @@ env:
   IMAGE_BASE: europe-north2-docker.pkg.dev/geo-clash-gc798/geo-clash/server
 
 jobs:
+  # Production only — a staging push must never reach the
+  # terraform-managed prod service. workflow_dispatch from the
+  # main branch still matches this guard.
   deploy:
+    if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -70,3 +74,73 @@ jobs:
           TF_VAR_region: ${{ env.REGION }}
           TF_VAR_valkey_url: ${{ secrets.VALKEY_URL }}
           CORS_ORIGIN_SECRET: ${{ secrets.CORS_ORIGIN }}
+
+  # Staging deploy — deliberately NOT terraform-managed (unlike
+  # prod's geo-clash-server). Pushes to `staging` build the same
+  # image and deploy it to a dedicated Cloud Run service that:
+  #   - scales to zero (--min-instances=0) so idle staging costs
+  #     nothing,
+  #   - shares prod's Aiven Valkey under the `staging:` key
+  #     prefix (VALKEY_KEY_PREFIX → ioredis keyPrefix in
+  #     server/src/shared/memoryStore.js) — prod-parity storage
+  #     path with full isolation; Aiven's `default` user cannot
+  #     manage ACLs, so the prefix is the boundary,
+  #   - is public because the Vercel staging preview must reach
+  #     it.
+  deploy-staging:
+    if: github.ref == 'refs/heads/staging'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Authenticate to GCP
+        uses: google-github-actions/auth@v3
+        with:
+          credentials_json: ${{ secrets.GCP_SA_KEY }}
+
+      - name: Configure Docker for Artifact Registry
+        run: >
+          gcloud auth configure-docker
+          ${{ env.REGION }}-docker.pkg.dev --quiet
+
+      - name: Build & push Docker image
+        run: |
+          TAG=staging-$(git rev-parse --short HEAD)
+          # Repo-root context: the Dockerfile also builds the
+          # client.
+          docker build -f server/Dockerfile \
+            -t ${{ env.IMAGE_BASE }}:${TAG} .
+          docker push    ${{ env.IMAGE_BASE }}:${TAG}
+          echo "IMAGE_TAG=${TAG}" >> $GITHUB_ENV
+
+      - name: Deploy staging Cloud Run service
+        run: |
+          # CORS mirrors the terraform-managed prod allowlist
+          # (terraform/variables.tf default): prod domain plus
+          # this project's Vercel preview hostnames. The `^;^`
+          # prefix switches gcloud's key=value pair delimiter to
+          # ';' so the comma INSIDE the value stays literal —
+          # without it gcloud rejects the flag ("Bad syntax for
+          # dict arg").
+          cors="https://geoclashers.vercel.app"
+          cors="$cors,https://geo-clash-*-industr-analysers-"
+          cors="${cors}projects.vercel.app"
+          gcloud run deploy geo-clash-server-staging \
+            --image "${{ env.IMAGE_BASE }}:${{ env.IMAGE_TAG }}" \
+            --region "${{ env.REGION }}" \
+            --project "${{ env.PROJECT }}" \
+            --allow-unauthenticated \
+            --min-instances=0 --max-instances=1 \
+            --set-env-vars \
+              "^;^CORS_ORIGIN=$cors;VALKEY_KEY_PREFIX=staging:" \
+            --set-secrets "VALKEY_URL=geo-clash-valkey-url:latest"
+          url=$(gcloud run services describe \
+            geo-clash-server-staging \
+            --region "${{ env.REGION }}" \
+            --project "${{ env.PROJECT }}" \
+            --format 'value(status.url)')
+          echo "### Staging deployed" >> "$GITHUB_STEP_SUMMARY"
+          echo "$url" >> "$GITHUB_STEP_SUMMARY"
