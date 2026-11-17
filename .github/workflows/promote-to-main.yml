@@ -239,10 +239,14 @@ jobs:
               printf '#%s) by the Promote-to-main workflow._\n' \
                 "$spr"
             } > /tmp/promo-body.md
-            mpr=$(gh pr create --repo "$REPO" --base main \
-              --head "$branch" --title "$title" \
-              --body-file /tmp/promo-body.md \
-              </dev/null 2>/dev/null) || \
+            # REST create, not `gh pr create` — the runner
+            # checkout is detached-HEAD and gh resolves git
+            # state around the head ref, which can fail the
+            # CLI while the API stays fine.
+            mpr=$(gh api -X POST "repos/$REPO/pulls" \
+              -f head="$branch" -f base=main \
+              -f title="$title" -F body=@/tmp/promo-body.md \
+              --jq .html_url </dev/null 2>/dev/null) || \
             mpr=$(gh pr list --repo "$REPO" --state open \
               --base main --head "$branch" \
               --json url --jq '.[0].url // ""' </dev/null) || \
@@ -312,10 +316,11 @@ jobs:
               pending=$(jq -r '[.[]
                   | select((.name // .context)
                     != "staging-first")
-                  | select((.conclusion // .state // "")
-                    == "" or . == "PENDING"
-                    or . == "QUEUED" or . == "IN_PROGRESS"
-                    or . == "WAITING")] | length' \
+                  | ((.conclusion // .state // "")
+                    | if . == "PENDING" or . == "QUEUED"
+                      or . == "IN_PROGRESS" or . == "WAITING"
+                      or . == "" then 1 else empty end)]
+                  | length' \
                 <<<"$checks" || echo "__api_error__")
               # An absent gate is only a pass after ~30s —
               # on a fresh PR the check run may not have
@@ -444,6 +449,19 @@ jobs:
                     "unaccounted staging commits" \
                     >> "$GITHUB_STEP_SUMMARY"
                 else
+                  # Re-fetch immediately before PATCH — a
+                  # staging push between the earlier read
+                  # and now must not be silently dropped.
+                  cur2=$(gh api \
+                    "repos/$REPO/branches/staging" \
+                    --jq .commit.sha </dev/null)
+                  if [ "$cur2" != "$cur" ]; then
+                    echo "::warning::staging moved during" \
+                      "the unaccounted check — NOT resetting"
+                    echo "- staging reset skipped —" \
+                      "staging moved mid-run" \
+                      >> "$GITHUB_STEP_SUMMARY"
+                  else
                   gh api -X PATCH \
                     "repos/$REPO/git/refs/heads/staging" \
                     -f sha="$main_sha" -F force=true \
@@ -451,6 +469,7 @@ jobs:
                   echo "staging reset $cur -> $main_sha"
                   echo "- staging reset to \`$main_sha\`" \
                     >> "$GITHUB_STEP_SUMMARY"
+                  fi
                 fi
               fi
             fi
