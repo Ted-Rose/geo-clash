@@ -133,9 +133,6 @@ jobs:
             --region "${{ env.REGION }}" \
             --project "${{ env.PROJECT }}" \
             --allow-unauthenticated \
-            # Reuse the terraform-managed SA: it holds the
-            # secretAccessor grant on geo-clash-valkey-url
-            # (the default compute SA may not).
             --service-account \
               geo-clash-server@geo-clash-gc798.iam.gserviceaccount.com \
             --min-instances=0 --max-instances=1 \
