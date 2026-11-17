@@ -163,6 +163,12 @@ function makeRedisClient() {
   const client = new Redis(process.env.VALKEY_URL, {
     tls: {},
     lazyConnect: false,
+    // VALKEY_KEY_PREFIX namespaces every key (e.g. `staging:` on the
+    // staging Cloud Run service) so prod and staging share the one
+    // Aiven Valkey without touching each other's rooms/leaderboard.
+    // Aiven's `default` user cannot manage ACLs, so a dedicated
+    // staging user is not possible — the prefix is the isolation.
+    keyPrefix: process.env.VALKEY_KEY_PREFIX || '',
   });
   // ioredis emits an 'error' per failed command/reconnect — throttle so
   // an outage trends as warnings in Sentry without flooding it. Split on

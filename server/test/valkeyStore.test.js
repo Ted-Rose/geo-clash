@@ -57,6 +57,53 @@ test('ValkeyStore del/has/keys with prefix stripping', async () => {
   assert.deepEqual(keys, ['b'], 'only local keys, prefix stripped');
 });
 
+// The real ioredis client prepends `options.keyPrefix` to
+// command key arguments but never to KEYS patterns — this
+// shim models exactly that, mirroring the staging deploy's
+// VALKEY_KEY_PREFIX=staging: behaviour.
+class KeyPrefixedKvRedis extends FakeKvRedis {
+  constructor(keyPrefix) {
+    super();
+    this.options = { keyPrefix };
+  }
+  async get(key) { return super.get(this.options.keyPrefix + key); }
+  async set(key, value) {
+    return super.set(this.options.keyPrefix + key, value);
+  }
+  async del(...keys) {
+    return super.del(...keys.flat().map(k => this.options.keyPrefix + k));
+  }
+  async exists(key) {
+    return super.exists(this.options.keyPrefix + key);
+  }
+  // No keyPrefix on the pattern — matches real ioredis.
+}
+
+test('ValkeyStore keys() honours the client keyPrefix', async () => {
+  const r = new KeyPrefixedKvRedis('staging:');
+  const store = new ValkeyStore('room:1:players', r);
+
+  await store.set('a', 1);
+  await store.set('b', 2);
+  // Prod-namespace keys sharing the physical store must not
+  // leak through — write them raw (unprefixed).
+  await r._kv.set('room:1:players:prod-key', '9');
+  await r.set('other:c', '3'); // lands as staging:other:c
+
+  assert.deepEqual(await store.keys(), ['a', 'b'],
+    'keys() must scan the prefixed namespace');
+  assert.deepEqual(new Map(await store.all()),
+    new Map([['a', 1], ['b', 2]]));
+  assert.equal(await store.size(), 2);
+  assert.equal(await store.get('a'), 1,
+    'get() still works through the prefix');
+
+  await store.clear();
+  assert.equal(await store.size(), 0);
+  assert.equal(r._kv.get('staging:other:c'), '3',
+    'foreign prefixed key untouched');
+});
+
 test('ValkeyStore all()/clear()/size() cover only prefixed keys', async () => {
   const r = new FakeKvRedis();
   const store = new ValkeyStore('pfx', r);
