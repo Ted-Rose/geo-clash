@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useSound } from "../shared/hooks/useSound.js";
 import { getSocket, API_BASE } from "../shared/socket.js";
+import { sentryBreadcrumb } from "../sentry.js";
 
 // Socket subscriptions + gameplay state for the clash GameScreen.
 // Owns every socket.on/off wiring, the snapshot-apply paths, and the
@@ -164,7 +165,12 @@ export function useClashGame({
       fetch(`${API_BASE}/api/leaderboard?limit=10`)
         .then((r) => (r.ok ? r.json() : { top: [] }))
         .then((data) => setGlobalTop(data.top || []))
-        .catch(() => setGlobalTop([]));
+        .catch((err) => {
+          setGlobalTop([]);
+          sentryBreadcrumb('leaderboard fetch failed', {
+            message: err?.message,
+          });
+        });
     }
 
     function onAmmoUpdate({ ammo: a, maxAmmo: m }) {
