@@ -78,7 +78,11 @@ export function registerSocketHandlers(io, registry) {
             throttleKey: `socket:room-create:${err.name}`,
           });
         } else if (!err.message?.startsWith('unsupported-game-type')) {
-          captureInternalError(err, { event: 'room-create' });
+          // Throttled like the guard scheme — a repeatable non-store
+          // failure must not mint an event per request.
+          captureInternalError(err, { event: 'room-create' }, {
+            throttleKey: `socket:room-create:${err.name}`,
+          });
         }
         if (typeof ack === 'function') ack({ ok: false, reason: err.message });
       }
