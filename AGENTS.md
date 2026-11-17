@@ -18,8 +18,12 @@ respawn at a base cell. Matches are short (a few minutes). The MVP is purely a
 `geo-clash-server` on Cloud Run); `staging` is the integration
 branch — every push auto-deploys a Vercel preview
 (`geo-clash-git-staging-industr-analysers-projects.vercel.app`)
-AND `geo-clash-server-staging` on Cloud Run (in-memory store,
-scales to zero). The invariant is **`main` ⊆ `staging`**:
+AND `geo-clash-server-staging` on Cloud Run (shared Aiven
+Valkey under the `staging:` key prefix — VALKEY_KEY_PREFIX,
+applied via ioredis `keyPrefix` in
+`server/src/shared/memoryStore.js`; Aiven's `default` user
+cannot manage ACLs, so the prefix is the isolation — scales
+to zero). The invariant is **`main` ⊆ `staging`**:
 production only receives code that has already soaked on
 staging. The `staging-first` required check
 (`.github/workflows/require-staging.yml`) fails `main` PRs

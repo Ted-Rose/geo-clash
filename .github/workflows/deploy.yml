@@ -88,12 +88,13 @@ jobs:
   # image and deploy it to a dedicated Cloud Run service that:
   #   - scales to zero (--min-instances=0) so idle staging costs
   #     nothing,
-  #   - gets no VALKEY_URL → in-memory store, so staging game
-  #     state is isolated from prod (the vercel.json
-  #     /api/map/tiles rewrite still proxies the prod server —
-  #     read-only),
+  #   - shares prod's Aiven Valkey under the `staging:` key
+  #     prefix (VALKEY_KEY_PREFIX → ioredis keyPrefix in
+  #     server/src/shared/memoryStore.js) — prod-parity storage
+  #     path with full isolation; Aiven's `default` user cannot
+  #     manage ACLs, so the prefix is the boundary,
   #   - is public because the Vercel staging preview must reach
-  #     it — it holds no prod data.
+  #     it.
   deploy-staging:
     if: github.ref == 'refs/heads/staging'
     runs-on: ubuntu-latest
@@ -143,15 +144,22 @@ jobs:
           # NODE_ENV=staging tags Sentry events with the staging
           # environment; SENTRY_DSN is a public client key (repo
           # variable). Empty DSN leaves Sentry disabled.
+          # VALKEY_KEY_PREFIX namespaces keys on the shared Aiven
+          # Valkey (`staging:`); the URL itself comes via
+          # --set-secrets so it never lands in plain env.
           envvars="^;^CORS_ORIGIN=$cors;NODE_ENV=staging"
           envvars="$envvars;SENTRY_DSN=${{ vars.SENTRY_DSN }}"
+          envvars="$envvars;VALKEY_KEY_PREFIX=staging:"
           gcloud run deploy geo-clash-server-staging \
             --image "${{ env.IMAGE_BASE }}:${{ env.IMAGE_TAG }}" \
             --region "${{ env.REGION }}" \
             --project "${{ env.PROJECT }}" \
             --allow-unauthenticated \
+            --service-account \
+              geo-clash-server@geo-clash-gc798.iam.gserviceaccount.com \
             --min-instances=0 --max-instances=1 \
-            --set-env-vars "$envvars"
+            --set-env-vars "$envvars" \
+            --set-secrets "VALKEY_URL=geo-clash-valkey-url:latest"
           url=$(gcloud run services describe \
             geo-clash-server-staging \
             --region "${{ env.REGION }}" \

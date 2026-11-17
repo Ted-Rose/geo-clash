@@ -170,7 +170,8 @@ while offline, but nothing is pre-seeded, so offline coverage is exactly
 We'd love collaborators — designers, gameplay engineers, mobile testers, OSM
 geeks, anyone who finds the idea fun.
 
-- **Code contributions** — fork, branch off `development`, open a PR. Small,
+- **Code contributions** — fork, branch off `main`, open a PR
+  against `staging`. Small,
   themed commits welcome. See `AGENTS.md` for the project's conventions.
 - **Ideas / playtest reports** — open a GitHub Issue. Bug reports with a
   reproduction recipe are gold.
