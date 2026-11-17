@@ -43,14 +43,41 @@ const _STORE_ERROR_NAMES = new Set([
 // this exact message when the socket ends mid-flight.
 const _CONNECTION_CLOSED_MSG = 'Connection is closed.';
 
-// True when `err` looks like a store/Valkey failure (see the name
-// table above) rather than a bug in the calling code. Used to keep a
-// Valkey outage from flooding the error-level fix queue with routine
-// store failures through socket handlers.
+// Raw socket failure codes Node's net layer puts on plain Error
+// objects (name stays 'Error', no ioredis error class). During a
+// rolling outage the retryStrategy reconnects forever and every
+// failed connect flushes the command queue with the *raw* socket
+// error — those rejections never carry a named error class, so they
+// must match on err.code.
+const _STORE_SOCKET_CODES = new Set([
+  'ECONNREFUSED', 'ECONNRESET', 'ETIMEDOUT',
+  'EPIPE', 'ENOTFOUND', 'EAI_AGAIN',
+]);
+
+// The TLS handshake abort surfaces with no err.code at all — match
+// its stable message prefix instead.
+const _TLS_HANDSHAKE_MSG =
+  'Client network socket disconnected before secure TLS connection';
+
+// True when `err` looks like a store/Valkey failure rather than a bug
+// in the calling code — keeps a Valkey outage from flooding the
+// error-level fix queue with routine store failures.
+//
+// The err.code / TLS-message match trades precision for recall: a
+// system socket error thrown by non-store code inside a guarded
+// handler would also classify as store noise. Accepted because the
+// only outbound network client on these paths is the Valkey
+// connection (handler bodies never see socket.io's own socket
+// errors), and err.code only exists on OS-level network failures —
+// the miss risk is low and bounded.
 export function isStoreError(err) {
   if (!err || typeof err !== 'object') return false;
   if (_STORE_ERROR_NAMES.has(err.name)) return true;
-  return err.name === 'Error' && err.message === _CONNECTION_CLOSED_MSG;
+  if (err.name !== 'Error') return false;
+  if (err.message === _CONNECTION_CLOSED_MSG) return true;
+  if (_STORE_SOCKET_CODES.has(err.code)) return true;
+  return typeof err.message === 'string' &&
+    err.message.startsWith(_TLS_HANDSHAKE_MSG);
 }
 
 // Minimum interval between two captures sharing the same throttle key.
@@ -154,6 +181,21 @@ export function captureExpectedError(
   if (!_EXPECTED_CODES.has(errorCode)) return false;
   return _capture(err, 'warning', { error_code: errorCode, ...tags },
     throttleKey);
+}
+
+// Route a caught failure to warning-level `store_error` when it looks
+// like store noise, else to the internal error queue. For catch sites
+// outside socket handlers where a Valkey outage is routine (score
+// recounts, arrow resolution, match-end archive/purge, the
+// leaderboard route) — the same split guardSocketHandler applies.
+export function captureStoreOrInternalError(
+  err, tags = {}, { throttleKey } = {},
+) {
+  if (isStoreError(err)) {
+    return captureExpectedError(err,
+      { errorCode: 'store_error', ...tags }, { throttleKey });
+  }
+  return captureInternalError(err, tags, { throttleKey });
 }
 
 // Wrap a socket event handler so a throw/rejection is captured and

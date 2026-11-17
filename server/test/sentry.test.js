@@ -11,6 +11,7 @@ import {
   initSentry,
   captureInternalError,
   captureExpectedError,
+  captureStoreOrInternalError,
   guardSocketHandler,
   isStoreError,
   _resetForTests,
@@ -243,6 +244,84 @@ test('guardSocketHandler classifies "Connection is closed." as store noise',
     assert.equal(recorded.length, 1);
     assert.equal(recorded[0].level, 'warning');
     assert.equal(recorded[0].tags.error_code, 'store_error');
+  }
+);
+
+test('isStoreError matches raw socket/TLS errors ioredis flushes',
+  (t) => {
+    cleanup(t);
+    // During a rolling outage ioredis retries forever and flushes
+    // command queues with the *raw* Node socket error — a plain
+    // Error with an OS-level err.code, no ioredis error class.
+    for (const code of [
+      'ECONNREFUSED', 'ECONNRESET', 'ETIMEDOUT',
+      'EPIPE', 'ENOTFOUND', 'EAI_AGAIN',
+    ]) {
+      const e = new Error(`connect ${code}`);
+      e.code = code;
+      assert.equal(isStoreError(e), true, `${code} is store noise`);
+    }
+    // TLS handshake abort: no err.code, stable message prefix.
+    const tls = new Error(
+      'Client network socket disconnected before secure TLS ' +
+      'connection was established'
+    );
+    assert.equal(isStoreError(tls), true);
+
+    // The code match is gated on a plain Error name — a custom
+    // error class carrying a .code is still a bug.
+    const typed = new TypeError('connect ECONNRESET');
+    typed.code = 'ECONNRESET';
+    assert.equal(isStoreError(typed), false);
+    // An unknown code on a plain Error is not store noise either.
+    const weird = new Error('something else');
+    weird.code = 'EISDIR';
+    assert.equal(isStoreError(weird), false);
+  }
+);
+
+test('guardSocketHandler routes a raw socket error to warning store_error',
+  async (t) => {
+    const recorded = [];
+    cleanup(t, recorded);
+    initWithRecorder(recorded);
+
+    const err = new Error('read ECONNRESET');
+    err.code = 'ECONNRESET';
+    const handler = guardSocketHandler(async () => { throw err; },
+      { event: 'location-update' });
+    await handler();
+    await settle(recorded);
+    assert.equal(recorded.length, 1);
+    assert.equal(recorded[0].level, 'warning');
+    assert.equal(recorded[0].tags.error_code, 'store_error');
+    assert.equal(recorded[0].tags.event, 'location-update');
+  }
+);
+
+test('captureStoreOrInternalError splits store noise from bugs',
+  async (t) => {
+    const recorded = [];
+    cleanup(t, recorded);
+    initWithRecorder(recorded);
+
+    const storeErr = new Error('read ECONNRESET');
+    storeErr.code = 'ECONNRESET';
+    assert.equal(
+      captureStoreOrInternalError(storeErr, { roomId: 'r1' }),
+      true
+    );
+    const bug = new TypeError('undefined is not a function');
+    assert.equal(
+      captureStoreOrInternalError(bug, { roomId: 'r1' }),
+      true
+    );
+    await settle(recorded, 2);
+    assert.equal(recorded.length, 2);
+    assert.equal(recorded[0].level, 'warning');
+    assert.equal(recorded[0].tags.error_code, 'store_error');
+    assert.equal(recorded[1].level, 'error');
+    assert.equal(recorded[1].tags.error_code, 'internal_error');
   }
 );
 
